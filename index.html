@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=4" />
+  <link rel="stylesheet" href="css/style.css?v=5" />
 </head>
 <body>
   <!-- Faixa institucional (preenchida pelo app.js só com dados reais) -->
@@ -82,7 +82,7 @@
       <div class="hero__glow"></div>
       <div class="container hero__inner">
         <div class="hero__content">
-          <span class="pill">✦ Produtos 100% originais</span>
+          <span class="pill" id="heroPill" hidden></span>
           <h1>Os melhores <span class="grad">importados</span> na rota até você.</h1>
           <p class="hero__sub" id="heroSlogan">Importados originais, direto pra você.</p>
           <div class="hero__actions">
@@ -92,27 +92,19 @@
               Falar no WhatsApp
             </a>
           </div>
-          <ul class="hero__stats">
-            <li><b>+2.000</b><span>clientes atendidos</span></li>
-            <li><b>100%</b><span>originais</span></li>
-            <li><b>24h</b><span>para envio</span></li>
-          </ul>
+          <!-- Números reais do catálogo (preenchidos pelo app.js) -->
+          <ul class="hero__stats" id="heroStats"></ul>
         </div>
-        <div class="hero__visual" aria-hidden="true">
-          <div class="hero__card hero__card--a"><img src="https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&q=80" alt="" /></div>
-          <div class="hero__card hero__card--b"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80" alt="" /></div>
-          <div class="hero__card hero__card--c"><img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80" alt="" /></div>
-        </div>
+        <!-- Fotos reais de produtos (preenchidas pelo app.js; some se não houver fotos) -->
+        <div class="hero__visual" id="heroVisual" aria-hidden="true" hidden></div>
       </div>
     </section>
 
-    <!-- Benefícios -->
-    <section class="perks container">
-      <div class="perk"><span>🔒</span><div><b>Compra segura</b><small>Atendimento humano</small></div></div>
-      <div class="perk"><span>📦</span><div><b>Envio rápido</b><small>Para todo o Brasil</small></div></div>
-      <div class="perk"><span>✅</span><div><b>Originais</b><small>Procedência garantida</small></div></div>
-      <div class="perk"><span>💳</span><div><b>Pix ou cartão</b><small>Combine no WhatsApp</small></div></div>
-    </section>
+    <!-- Diferenciais: só fatos do próprio sistema (preenchidos pelo app.js) -->
+    <section class="perks container" id="perks" aria-label="Diferenciais"></section>
+
+    <!-- Vitrines da página inicial (geradas a partir dos produtos cadastrados) -->
+    <div class="home container" id="home"></div>
 
     <!-- Catálogo -->
     <section class="catalog container" id="catalogo">
@@ -210,7 +202,7 @@
     <symbol id="ico-whats" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.98L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-2.97-.4-4.25-1.17l-.3-.18-3.07.9.92-2.99-.2-.31a8.2 8.2 0 1 1 6.9 3.75Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3c-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.16 1.73 2.64 4.2 3.7 1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.66-1.17.2-.58.2-1.07.15-1.17-.06-.11-.22-.17-.47-.29Z"/></symbol>
   </svg>
 
-  <script src="js/config.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/config.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>
