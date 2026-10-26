@@ -10,7 +10,7 @@
   const fallback = (nome) =>
     "data:image/svg+xml," +
     encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2a36"/><stop offset="1" stop-color="#16161e"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><text x="200" y="225" font-family="Arial" font-weight="700" font-size="120" text-anchor="middle" fill="#f5b642">${esc(String(nome).charAt(0))}</text></svg>`
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef4ff"/><stop offset="1" stop-color="#dce8fb"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><text x="200" y="225" font-family="Arial" font-weight="700" font-size="120" text-anchor="middle" fill="#0055cc">${esc(String(nome).charAt(0))}</text></svg>`
     );
   window.__imgErr = (img) => { img.onerror = null; img.src = fallback(img.alt || "R"); };
 

@@ -5,27 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex" />
   <title>Painel · Rota Importados</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#0b0b0f; --bg-2:#121218; --line:#262631; --text:#f4f3ef; --muted:#9a99a6; --gold:#f5b642; --gold-2:#ff7a3d; --ok:#25d366; --err:#ff5a5a; }
+    :root { --navy:#001b50; --royal:#0055cc; --orange:#ff8900; --bg:#f5f8fc; --surface:#fff; --line:#e2e8f0; --text:#172338; --muted:#64748b; --ok:#00852e; --err:#dc2626; }
     * { box-sizing: border-box; margin: 0; }
     body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
-    .box { width: min(520px, 100%); background: var(--bg-2); border: 1px solid var(--line); border-radius: 22px; padding: 28px; }
-    h1 { font: 800 1.5rem Sora, sans-serif; margin-bottom: 6px; }
+    .box { width: min(520px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 16px 40px -12px rgba(16,37,77,.18); }
+    h1 { font: 700 1.5rem Poppins, sans-serif; margin-bottom: 6px; color: var(--navy); }
     p { color: var(--muted); font-size: .92rem; line-height: 1.5; }
-    label { display: block; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 6px; }
-    input[type=password] { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: inherit; font: inherit; outline: 0; }
-    input[type=password]:focus { border-color: var(--gold); }
-    .drop { border: 2px dashed var(--line); border-radius: 16px; padding: 26px; text-align: center; cursor: pointer; transition: border-color .2s; }
-    .drop:hover, .drop.over { border-color: var(--gold); }
+    label { display: block; font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 18px 0 6px; }
+    input[type=password] { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; outline: 0; transition: border-color .18s, box-shadow .18s; }
+    input[type=password]:focus { border-color: var(--royal); box-shadow: 0 0 0 3px rgba(0,85,204,.22); }
+    .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 26px; text-align: center; cursor: pointer; transition: border-color .18s, background .18s; }
+    .drop:hover, .drop.over { border-color: var(--royal); background: #eef4ff; }
     .drop input { display: none; }
     .files { margin-top: 10px; font-size: .88rem; display: grid; gap: 6px; }
     .files div { display: flex; justify-content: space-between; gap: 8px; }
-    button { margin-top: 20px; width: 100%; height: 50px; border: 0; border-radius: 999px; font: 600 1rem Inter, sans-serif; cursor: pointer; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #140d03; }
+    button { margin-top: 20px; width: 100%; height: 50px; border: 0; border-radius: 12px; font: 600 1rem Inter, sans-serif; cursor: pointer; background: var(--orange); color: #fff; transition: background .18s; }
+    button:hover:not(:disabled) { background: #e67a00; }
     button:disabled { opacity: .5; cursor: wait; }
     .log { margin-top: 16px; font-size: .9rem; display: grid; gap: 6px; }
     .ok { color: var(--ok); } .err { color: var(--err); }
-    a { color: var(--gold); }
+    a { color: var(--royal); }
   </style>
 </head>
 <body>
