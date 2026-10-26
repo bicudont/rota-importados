@@ -80,15 +80,20 @@
           <h2>Catálogo</h2>
           <p class="muted" id="resultInfo"></p>
         </div>
-        <select id="sort" class="sort" aria-label="Ordenar produtos">
-          <option value="destaque">Destaques</option>
-          <option value="menor">Menor preço</option>
-          <option value="maior">Maior preço</option>
-          <option value="nome">Nome (A–Z)</option>
-        </select>
+        <div class="catalog__tools">
+          <select id="brand" class="sort" aria-label="Filtrar por marca" hidden></select>
+          <select id="sort" class="sort" aria-label="Ordenar produtos">
+            <option value="destaque">Destaques</option>
+            <option value="menor">Menor preço</option>
+            <option value="maior">Maior preço</option>
+            <option value="nome">Nome (A–Z)</option>
+          </select>
+        </div>
       </div>
+      <p class="rates" id="rates" hidden></p>
       <div class="chips" id="chips" role="tablist"></div>
       <div class="grid" id="grid"></div>
+      <div class="more"><button class="btn btn--ghost" id="more" hidden>Ver mais produtos</button></div>
       <div class="empty" id="empty" hidden>
         <p>Nenhum produto encontrado 😕</p>
         <a href="#" class="btn btn--ghost" id="emptyWhats">Pergunte no WhatsApp</a>
@@ -142,6 +147,7 @@
     <div class="drawer__items" id="cartItems"></div>
     <div class="drawer__foot" id="cartFoot">
       <div class="drawer__total"><span>Total estimado</span><b id="cartTotal">R$ 0,00</b></div>
+      <p class="cart-note muted" id="cartNote"></p>
       <form id="checkout" class="checkout">
         <input name="nome" placeholder="Seu nome *" required />
         <input name="cidade" placeholder="Cidade / Bairro (opcional)" />
