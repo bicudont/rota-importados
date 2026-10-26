@@ -11,29 +11,70 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=3" />
+  <link rel="stylesheet" href="css/style.css?v=4" />
 </head>
 <body>
-  <!-- Topo -->
-  <div class="topbar">🚚 Enviamos para todo o Brasil · Atendimento rápido pelo WhatsApp</div>
+  <!-- Faixa institucional (preenchida pelo app.js só com dados reais) -->
+  <div class="topbar"><div class="container topbar__inner" id="topbar"><span>Atendimento pelo WhatsApp</span></div></div>
 
   <header class="header" id="header">
     <div class="container header__inner">
+      <button class="icon-btn menu-btn" id="openMenu" aria-label="Abrir menu de departamentos" aria-controls="menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-menu"/></svg>
+      </button>
+
       <a href="#" class="logo" aria-label="Rota Importados — início">
         <img src="img/logo.png" alt="Rota Importados" width="264" height="220" />
       </a>
 
-      <label class="search" for="search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 0 1 5.96 12.06l4.24 4.24-1.4 1.4-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg>
-        <input id="search" type="search" placeholder="Buscar produtos..." autocomplete="off" />
-      </label>
+      <div class="search-wrap" id="searchWrap">
+        <form class="search" id="searchForm" role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-search"/></svg>
+          <input id="search" type="search" placeholder="O que você está procurando?" autocomplete="off" enterkeyhint="search"
+                 role="combobox" aria-label="Buscar produtos" aria-autocomplete="list" aria-controls="suggest" aria-expanded="false" />
+          <button class="search__btn" type="submit" aria-label="Buscar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-search"/></svg></button>
+        </form>
+        <div class="suggest" id="suggest" role="listbox" aria-label="Sugestões de produtos" hidden></div>
+      </div>
+
+      <a href="#" class="head-whats" id="headWhats" aria-label="Atendimento pelo WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>
+        <span><small>Atendimento</small><b>WhatsApp</b></span>
+      </a>
 
       <button class="cart-btn" id="openCart" aria-label="Abrir carrinho">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h-2V2H1v2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 7 17h12v-2H7.42l1.1-2h7.45a2 2 0 0 0 1.75-1.03L21.7 5H7.2L7 4Zm0 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></svg>
         <span class="cart-btn__count" id="cartCount">0</span>
       </button>
     </div>
+
+    <nav class="nav" aria-label="Departamentos">
+      <div class="container nav__inner">
+        <div class="dept" id="dept">
+          <button class="dept__btn" id="deptBtn" aria-expanded="false" aria-controls="deptMenu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-menu"/></svg>
+            Departamentos
+            <svg class="dept__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5H7Z"/></svg>
+          </button>
+          <div class="dept__menu" id="deptMenu" hidden></div>
+        </div>
+        <ul class="nav__links" id="navLinks"></ul>
+      </div>
+    </nav>
   </header>
+
+  <!-- Menu lateral (celular) -->
+  <aside class="menu" id="menu" aria-label="Menu" hidden>
+    <div class="menu__head">
+      <a href="#" class="logo" data-close aria-label="Rota Importados — início"><img src="img/logo.png" alt="Rota Importados" width="264" height="220" loading="lazy" /></a>
+      <button class="icon-btn" data-close aria-label="Fechar menu">✕</button>
+    </div>
+    <p class="menu__title">Departamentos</p>
+    <ul class="menu__list" id="menuList"></ul>
+    <div class="menu__foot">
+      <a href="#" class="btn btn--whats btn--block" id="menuWhats"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>Falar no WhatsApp</a>
+    </div>
+  </aside>
 
   <main>
     <!-- Hero -->
@@ -164,10 +205,12 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <svg width="0" height="0" style="position:absolute">
+    <symbol id="ico-search" viewBox="0 0 24 24"><path fill="currentColor" d="M10.5 3a7.5 7.5 0 0 1 5.96 12.06l4.24 4.24-1.4 1.4-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></symbol>
+    <symbol id="ico-menu" viewBox="0 0 24 24"><path fill="currentColor" d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></symbol>
     <symbol id="ico-whats" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.98L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-2.97-.4-4.25-1.17l-.3-.18-3.07.9.92-2.99-.2-.31a8.2 8.2 0 1 1 6.9 3.75Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3c-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.16 1.73 2.64 4.2 3.7 1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.66-1.17.2-.58.2-1.07.15-1.17-.06-.11-.22-.17-.47-.29Z"/></symbol>
   </svg>
 
-  <script src="js/config.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/config.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

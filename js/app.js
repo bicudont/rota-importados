@@ -95,7 +95,7 @@
   $("#year").textContent = new Date().getFullYear();
   $("#footerInsta").href = S.instagram;
   const hello = `Olá, ${S.nome}! Vim pelo catálogo e gostaria de mais informações.`;
-  ["#heroWhats", "#floatWhats", "#footerWhats", "#emptyWhats"].forEach((s) => {
+  ["#heroWhats", "#floatWhats", "#footerWhats", "#emptyWhats", "#headWhats", "#menuWhats"].forEach((s) => {
     const a = $(s);
     a.href = waLink(hello);
     a.target = "_blank";
@@ -117,6 +117,16 @@
     $("#rates").hidden = false;
   }
 
+  // Faixa superior: só informações reais (cotação do Catálogo Pro e atendimento pelo WhatsApp)
+  {
+    const itens = [`<a href="${waLink(hello)}" target="_blank" rel="noopener">Atendimento pelo WhatsApp</a>`];
+    if (COTACAO) {
+      const c = COTACAO.pix || COTACAO.efetivo;
+      itens.unshift(`<span>Cotação ${COTACAO.pix ? "Pix" : "em dinheiro"}: <b>US$ 1 = ${esc(money(c.rate, "BRL"))}</b></span>`);
+    }
+    $("#topbar").innerHTML = itens.join('<span class="topbar__sep" aria-hidden="true"></span>');
+  }
+
   /* ---------- Filtros ---------- */
   const PAGE = 24;
   let state = { cat: "todos", marca: "", q: "", sort: "destaque", limite: PAGE };
@@ -126,12 +136,58 @@
     .join("");
   $("#chips").addEventListener("click", (e) => {
     const b = e.target.closest(".chip");
-    if (!b) return;
-    document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c === b));
-    state.cat = b.dataset.cat;
-    state.limite = PAGE;
-    render();
+    if (b) selectCategory(b.dataset.cat);
   });
+
+  // Seleciona um departamento em qualquer menu e mantém todos sincronizados
+  function selectCategory(id, scroll) {
+    state.cat = id;
+    state.limite = PAGE;
+    document.querySelectorAll("[data-cat]").forEach((el) => {
+      const on = el.dataset.cat === id;
+      el.classList.toggle("active", on);
+      if (el.matches(".nav__link, .dept__item, .menu__item")) el.setAttribute("aria-current", on ? "true" : "false");
+    });
+    render();
+    if (scroll) $("#catalogo").scrollIntoView({ behavior: "smooth" });
+  }
+
+  /* ---------- Navegação de departamentos (só os setores cadastrados) ---------- */
+  const qtd = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
+  const deptos = [{ id: "todos", nome: "Todos os produtos" }, ...CATS];
+  const deptBtn = $("#deptBtn"), deptMenu = $("#deptMenu");
+
+  $("#navLinks").innerHTML = CATS
+    .map((c) => `<li><a href="#catalogo" class="nav__link" data-cat="${esc(c.id)}">${esc(c.nome)}</a></li>`)
+    .join("");
+  deptMenu.innerHTML = `<ul>${deptos
+    .map((c) => `<li><a href="#catalogo" class="dept__item${c.id === "todos" ? " active" : ""}" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${c.id === "todos" ? PRODUTOS.length : qtd[c.id] || 0}</small></a></li>`)
+    .join("")}</ul>`;
+  $("#menuList").innerHTML = deptos
+    .map((c) => `<li><a href="#catalogo" class="menu__item${c.id === "todos" ? " active" : ""}" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${c.id === "todos" ? PRODUTOS.length : qtd[c.id] || 0}</small></a></li>`)
+    .join("");
+
+  const setDept = (open) => {
+    deptMenu.hidden = !open;
+    deptBtn.setAttribute("aria-expanded", String(open));
+  };
+  deptBtn.addEventListener("click", () => setDept(deptMenu.hidden));
+  document.addEventListener("click", (e) => { if (!e.target.closest("#dept")) setDept(false); });
+  $("#dept").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { setDept(false); deptBtn.focus(); }
+  });
+
+  ["#navLinks", "#deptMenu", "#menuList"].forEach((s) =>
+    $(s).addEventListener("click", (e) => {
+      const a = e.target.closest("[data-cat]");
+      if (!a) return;
+      e.preventDefault();
+      setDept(false);
+      closeAll();
+      selectCategory(a.dataset.cat, true);
+    })
+  );
+  $("#openMenu").addEventListener("click", () => show($("#menu")));
 
   const marcas = [...new Set(PRODUTOS.map((p) => p.marca).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (marcas.length > 1) {
@@ -140,11 +196,84 @@
     $("#brand").addEventListener("change", (e) => { state.marca = e.target.value; state.limite = PAGE; render(); });
   }
 
-  $("#search").addEventListener("input", (e) => {
-    state.q = e.target.value.trim();
+  /* ---------- Busca: mesmo filtro do catálogo + sugestões ---------- */
+  const input = $("#search"), suggest = $("#suggest");
+  let sugIdx = -1, sugList = [];
+  const textoBusca = (p) => norm(`${p.nome} ${p.marca} ${p.sku} ${p.tipo} ${p.descricao} ${catName(p.categoria)}`);
+
+  function fecharSugestoes() {
+    suggest.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    sugIdx = -1;
+  }
+
+  function mostrarSugestoes() {
+    const q = norm(state.q);
+    if (q.length < 2) return fecharSugestoes();
+    const todos = PRODUTOS.filter((p) => textoBusca(p).includes(q));
+    sugList = todos.slice(0, 6);
+    sugIdx = -1;
+    suggest.innerHTML = todos.length
+      ? sugList
+          .map(
+            (p, i) => `<a href="#catalogo" class="sug" id="sug-${i}" role="option" aria-selected="false" data-sug="${esc(p.id)}">
+          <img src="${esc(foto(p))}" alt="" loading="lazy" onerror="__imgErr(this)" />
+          <span class="sug__txt"><b>${esc(p.nome)}</b><small>${esc([p.marca, p.sku ? "Cód. " + p.sku : ""].filter(Boolean).join(" · ") || catName(p.categoria))}</small></span>
+          <span class="sug__price">${p.preco == null ? "Consultar" : esc(fmt(p.preco))}</span>
+        </a>`
+          )
+          .join("") + `<button type="submit" form="searchForm" class="sug__all">Ver todos os ${todos.length} resultados</button>`
+      : `<p class="sug__none">Nenhum produto encontrado para “${esc(state.q)}”.</p>`;
+    suggest.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function marcarSugestao(i) {
+    const itens = suggest.querySelectorAll(".sug");
+    if (!itens.length) return;
+    sugIdx = (i + itens.length) % itens.length;
+    itens.forEach((el, k) => el.setAttribute("aria-selected", String(k === sugIdx)));
+    input.setAttribute("aria-activedescendant", "sug-" + sugIdx);
+  }
+
+  input.addEventListener("input", () => {
+    state.q = input.value.trim();
     state.limite = PAGE;
     render();
-    if (state.q) $("#catalogo").scrollIntoView({ behavior: "smooth" });
+    mostrarSugestoes();
+  });
+  input.addEventListener("focus", mostrarSugestoes);
+  input.addEventListener("keydown", (e) => {
+    if (suggest.hidden) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); marcarSugestao(sugIdx + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); marcarSugestao(sugIdx - 1); }
+    else if (e.key === "Escape") fecharSugestoes();
+    else if (e.key === "Enter" && sugIdx >= 0) { e.preventDefault(); abrirSugestao(sugList[sugIdx].id); }
+  });
+  suggest.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-sug]");
+    if (!a) return;
+    e.preventDefault();
+    abrirSugestao(a.dataset.sug);
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#searchWrap")) fecharSugestoes(); });
+
+  function abrirSugestao(id) {
+    fecharSugestoes();
+    input.blur();
+    openModal(id);
+  }
+
+  // Enviar a busca mostra todos os resultados no catálogo, sem filtro de departamento
+  $("#searchForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    fecharSugestoes();
+    input.blur();
+    state.q = input.value.trim();
+    if (state.cat !== "todos") selectCategory("todos");
+    else { state.limite = PAGE; render(); }
+    $("#catalogo").scrollIntoView({ behavior: "smooth" });
   });
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
   $("#more").addEventListener("click", () => { state.limite += PAGE; render(); });
@@ -223,9 +352,9 @@
   });
 
   /* ---------- Overlay / modal / drawer ---------- */
-  const overlay = $("#overlay"), modal = $("#modal"), drawer = $("#drawer");
+  const overlay = $("#overlay"), modal = $("#modal"), drawer = $("#drawer"), menu = $("#menu");
   function closeAll() {
-    [overlay, modal, drawer].forEach((el) => (el.hidden = true));
+    [overlay, modal, drawer, menu].forEach((el) => (el.hidden = true));
     document.body.style.overflow = "";
   }
   function show(el) {
