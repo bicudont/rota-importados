@@ -84,19 +84,11 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .header.scrolled { box-shadow: var(--shadow); }
 .header__inner { display: flex; align-items: center; gap: var(--s-5); height: 76px; }
 
-/* Logo provisório — substituir por img/logo quando o arquivo oficial chegar */
-.logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.logo__mark {
-  position: relative; width: 42px; height: 42px; border-radius: var(--r); display: grid; place-items: center;
-  background: linear-gradient(145deg, var(--royal), var(--navy));
-  color: #fff; font: 800 1.35rem var(--font-head); overflow: hidden;
-}
-.logo__mark::after {
-  content: ""; position: absolute; left: -6px; right: -6px; bottom: 7px; height: 4px;
-  background: linear-gradient(90deg, var(--yellow), var(--orange)); transform: rotate(-12deg);
-}
-.logo__text { font: 700 1.15rem var(--font-head); color: var(--navy); letter-spacing: -.01em; }
-.logo__text b { font-weight: 800; color: var(--royal); margin-left: 4px; }
+/* Logo oficial (img/logo.png, gerado a partir do arquivo original) */
+.logo { display: flex; align-items: center; flex-shrink: 0; }
+.logo img { height: 60px; width: auto; }
+.logo--footer { display: inline-flex; width: fit-content; background: var(--surface); border-radius: var(--r); padding: 8px 12px; }
+.logo--footer img { height: 72px; }
 
 .search {
   flex: 1; max-width: 640px; margin-left: auto; display: flex; align-items: center; gap: 10px;
@@ -152,11 +144,8 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .link-btn:hover { color: var(--royal); }
 
 /* ---------- Destaque principal ---------- */
-.hero { position: relative; overflow: hidden; padding: var(--s-8) 0 var(--s-7); background: linear-gradient(120deg, var(--navy) 0%, #00327f 55%, var(--royal) 100%); color: #fff; }
-.hero__glow {
-  position: absolute; right: -10%; top: -40%; width: 640px; height: 640px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 184, 255, .28), transparent 65%); pointer-events: none;
-}
+.hero { position: relative; overflow: hidden; padding: var(--s-8) 0 var(--s-7); background: var(--navy); color: #fff; border-bottom: 4px solid var(--royal); }
+.hero__glow { display: none; }
 .hero__inner { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--s-7); align-items: center; position: relative; }
 .pill {
   display: inline-block; padding: 6px 14px; border-radius: var(--r-pill); font-size: .8rem; font-weight: 600;
@@ -271,8 +260,6 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 
 /* ---------- Rodapé ---------- */
 .footer { padding: 44px 0 24px; background: var(--navy); color: #fff; }
-.footer .logo__text { color: #fff; }
-.footer .logo__text b { color: var(--electric); }
 .footer .muted { color: var(--on-dark-muted); }
 .footer__inner { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .footer__inner p { margin-top: 10px; font-size: .9rem; }
@@ -399,7 +386,7 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
   .perk span { width: 36px; height: 36px; font-size: 1.1rem; }
 }
 @media (max-width: 380px) {
-  .logo__text { font-size: 1rem; }
+  .logo img { height: 50px; }
   .perks { grid-template-columns: 1fr; }
   .hero__stats { gap: 20px; }
 }
