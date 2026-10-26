@@ -1,0 +1,15 @@
+{
+  "name": "rota-importados",
+  "version": "1.0.0",
+  "description": "Catálogo Rota Importados com finalização via WhatsApp",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo \"Site estatico, nada para compilar\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
