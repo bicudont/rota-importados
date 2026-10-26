@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rota Importados · Catálogo</title>
+  <meta name="description" content="Rota Importados — catálogo de produtos importados originais. Escolha e finalize seu pedido pelo WhatsApp." />
+  <meta name="theme-color" content="#0b0b0f" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23f5b642'/><text x='32' y='44' font-family='Arial' font-weight='900' font-size='34' text-anchor='middle' fill='%230b0b0f'>R</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Topo -->
+  <div class="topbar">🚚 Enviamos para todo o Brasil · Atendimento rápido pelo WhatsApp</div>
+
+  <header class="header" id="header">
+    <div class="container header__inner">
+      <a href="#" class="logo" aria-label="Rota Importados — início">
+        <span class="logo__mark">R</span>
+        <span class="logo__text">Rota<b>Importados</b></span>
+      </a>
+
+      <label class="search" for="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 0 1 5.96 12.06l4.24 4.24-1.4 1.4-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg>
+        <input id="search" type="search" placeholder="Buscar produtos..." autocomplete="off" />
+      </label>
+
+      <button class="cart-btn" id="openCart" aria-label="Abrir carrinho">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h-2V2H1v2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 7 17h12v-2H7.42l1.1-2h7.45a2 2 0 0 0 1.75-1.03L21.7 5H7.2L7 4Zm0 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></svg>
+        <span class="cart-btn__count" id="cartCount">0</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero__glow"></div>
+      <div class="container hero__inner">
+        <div class="hero__content">
+          <span class="pill">✦ Produtos 100% originais</span>
+          <h1>Os melhores <span class="grad">importados</span> na rota até você.</h1>
+          <p class="hero__sub" id="heroSlogan">Importados originais, direto pra você.</p>
+          <div class="hero__actions">
+            <a href="#catalogo" class="btn btn--primary">Ver catálogo</a>
+            <a href="#" class="btn btn--ghost" id="heroWhats">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>
+              Falar no WhatsApp
+            </a>
+          </div>
+          <ul class="hero__stats">
+            <li><b>+2.000</b><span>clientes atendidos</span></li>
+            <li><b>100%</b><span>originais</span></li>
+            <li><b>24h</b><span>para envio</span></li>
+          </ul>
+        </div>
+        <div class="hero__visual" aria-hidden="true">
+          <div class="hero__card hero__card--a"><img src="https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&q=80" alt="" /></div>
+          <div class="hero__card hero__card--b"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80" alt="" /></div>
+          <div class="hero__card hero__card--c"><img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80" alt="" /></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Benefícios -->
+    <section class="perks container">
+      <div class="perk"><span>🔒</span><div><b>Compra segura</b><small>Atendimento humano</small></div></div>
+      <div class="perk"><span>📦</span><div><b>Envio rápido</b><small>Para todo o Brasil</small></div></div>
+      <div class="perk"><span>✅</span><div><b>Originais</b><small>Procedência garantida</small></div></div>
+      <div class="perk"><span>💳</span><div><b>Pix ou cartão</b><small>Combine no WhatsApp</small></div></div>
+    </section>
+
+    <!-- Catálogo -->
+    <section class="catalog container" id="catalogo">
+      <div class="catalog__head">
+        <div>
+          <h2>Catálogo</h2>
+          <p class="muted" id="resultInfo"></p>
+        </div>
+        <select id="sort" class="sort" aria-label="Ordenar produtos">
+          <option value="destaque">Destaques</option>
+          <option value="menor">Menor preço</option>
+          <option value="maior">Maior preço</option>
+          <option value="nome">Nome (A–Z)</option>
+        </select>
+      </div>
+      <div class="chips" id="chips" role="tablist"></div>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" hidden>
+        <p>Nenhum produto encontrado 😕</p>
+        <a href="#" class="btn btn--ghost" id="emptyWhats">Pergunte no WhatsApp</a>
+      </div>
+    </section>
+
+    <!-- Como comprar -->
+    <section class="how container">
+      <h2>Como comprar</h2>
+      <div class="how__steps">
+        <div class="step"><span>1</span><b>Escolha</b><p>Navegue pelo catálogo e adicione os produtos ao carrinho.</p></div>
+        <div class="step"><span>2</span><b>Envie</b><p>Clique em “Finalizar no WhatsApp” — o pedido vai pronto pra gente.</p></div>
+        <div class="step"><span>3</span><b>Receba</b><p>Combinamos pagamento e entrega, e seu pedido segue a rota.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div>
+        <a href="#" class="logo"><span class="logo__mark">R</span><span class="logo__text">Rota<b>Importados</b></span></a>
+        <p class="muted" id="footerInfo"></p>
+      </div>
+      <div class="footer__links">
+        <a href="#" id="footerWhats">WhatsApp</a>
+        <a href="#" id="footerInsta" target="_blank" rel="noopener">Instagram</a>
+        <a href="#catalogo">Catálogo</a>
+      </div>
+    </div>
+    <div class="container footer__copy muted">© <span id="year"></span> Rota Importados. Todos os direitos reservados.</div>
+  </footer>
+
+  <!-- WhatsApp flutuante -->
+  <a href="#" class="float-whats" id="floatWhats" aria-label="Falar no WhatsApp">
+    <svg viewBox="0 0 24 24"><use href="#ico-whats"/></svg>
+  </a>
+
+  <!-- Modal produto -->
+  <div class="overlay" id="overlay" hidden></div>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden>
+    <button class="icon-btn modal__close" data-close aria-label="Fechar">✕</button>
+    <div class="modal__body" id="modalBody"></div>
+  </div>
+
+  <!-- Carrinho -->
+  <aside class="drawer" id="drawer" aria-label="Carrinho" hidden>
+    <div class="drawer__head">
+      <h3>Seu carrinho</h3>
+      <button class="icon-btn" data-close aria-label="Fechar carrinho">✕</button>
+    </div>
+    <div class="drawer__items" id="cartItems"></div>
+    <div class="drawer__foot" id="cartFoot">
+      <div class="drawer__total"><span>Total estimado</span><b id="cartTotal">R$ 0,00</b></div>
+      <form id="checkout" class="checkout">
+        <input name="nome" placeholder="Seu nome *" required />
+        <input name="cidade" placeholder="Cidade / Bairro (opcional)" />
+        <textarea name="obs" rows="2" placeholder="Observações (opcional)"></textarea>
+        <button type="submit" class="btn btn--whats btn--block">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>
+          Finalizar no WhatsApp
+        </button>
+      </form>
+      <button class="link-btn" id="clearCart">Esvaziar carrinho</button>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="ico-whats" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.98L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-2.97-.4-4.25-1.17l-.3-.18-3.07.9.92-2.99-.2-.31a8.2 8.2 0 1 1 6.9 3.75Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3c-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.16 1.73 2.64 4.2 3.7 1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.66-1.17.2-.58.2-1.07.15-1.17-.06-.11-.22-.17-.47-.29Z"/></symbol>
+  </svg>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
