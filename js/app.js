@@ -443,7 +443,7 @@
     return `
       <article class="card${esgotado(p) ? " card--out" : ""}" style="animation-delay:${delay}ms">
         <a class="card__media" href="${prodHref(p)}" tabindex="-1" aria-hidden="true">
-          <img src="${esc(foto(p))}" alt="" loading="lazy" onerror="__imgErr(this)" />
+          <img src="${esc(foto(p))}" alt="" loading="lazy" decoding="async" onerror="__imgErr(this)" />
           ${esgotado(p) ? `<span class="badge badge--out">Esgotado</span>` : p.tag ? `<span class="badge">${esc(p.tag)}</span>` : ""}
           ${off(p) ? `<span class="badge badge--off">-${off(p)}%</span>` : ""}
         </a>

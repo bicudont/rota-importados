@@ -668,8 +668,8 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
   .filters__foot .btn { display: inline-flex; }
   .fgroup__list { max-height: none; }
   .fopt { min-height: 44px; }
-  .pdp { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
-  .pdp__gallery { position: static; }
+  .pdp { gap: var(--s-4); }
+  .pdp__gallery { top: 100px; }
   .hero__inner { grid-template-columns: 1fr; }
   .hero__visual { display: none; }
   .perks { grid-template-columns: repeat(2, 1fr); }
@@ -701,6 +701,8 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
   .catalog__tools .sort { flex: 1; min-width: 0; height: 44px; }
   .crumbs ol { margin: var(--s-4) 0 var(--s-3); }
   .crumbs [aria-current] { max-width: 24ch; }
+  .pdp { grid-template-columns: minmax(0, 1fr); }
+  .pdp__gallery { position: static; width: 100%; max-width: 480px; margin-inline: auto; }
   .pdp__main { padding: var(--s-4); }
   .pdp__info { padding: var(--s-4); }
   .pdp__price .price b { font-size: 1.7rem; }
