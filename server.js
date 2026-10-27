@@ -298,7 +298,15 @@ function adminApi(req, res, rota) {
   if (r === "POST foto") return enviarFoto(req, res);
   if (r === "PUT site") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
-  if (r === "POST pedido") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, pedidoManual(d)));
+  if (r === "POST ia/descricao") {
+    return lerCorpoJSON(req, res, 4096, (d) =>
+      gerarDescricao(d.sku).then(
+        (texto) => json(res, 200, { ok: true, texto }),
+        (e) => { const [st, msg] = erroIA(e); json(res, st, { erro: msg }); }
+      )
+    );
+  }
+  if (r === "POST pedido")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, pedidoManual(d)));
   if (r === "PUT pedido")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, alterarPedido(d)));
   if (r === "DELETE pedido") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirPedido(d.id)));
   json(res, 404, { erro: "Rota desconhecida." });
@@ -315,7 +323,73 @@ function dadosPainel(res) {
     ajustes: lerAjustes(),
     site: lerJSON(F.site, null) || {},
     pedidos: lerJSON(F.pedidos, []),
+    ia: !!process.env.ANTHROPIC_API_KEY,
   });
+}
+
+/* ---------- IA: descrição de produtos (Claude, pelo SDK oficial da Anthropic) ---------- */
+// Precisa da variável ANTHROPIC_API_KEY na hospedagem. O texto volta para o painel revisar; nada é salvo aqui.
+const IA_MODELO = process.env.IA_MODELO || "claude-opus-5-5";
+const SISTEMA_IA = `Você escreve descrições de produtos para o catálogo online da Rota Importados, uma loja de produtos importados (perfumes, cosméticos, eletrônicos e outros) que vende pelo WhatsApp.
+
+Escreva em português do Brasil uma descrição de venda com 2 a 4 frases (cerca de 40 a 90 palavras), em tom profissional e acolhedor.
+
+Use somente as informações dos dados do produto. Não invente características técnicas, ingredientes, notas olfativas, duração, rendimento, composição, garantia, origem, autenticidade, preço, promoções ou prazos: o cliente pode comprar com base nesse texto, e uma informação errada gera reclamação e devolução. Se os dados forem poucos, descreva o produto de forma geral a partir do nome, da marca e do departamento, sem afirmar detalhes que não estão nos dados.
+
+Responda apenas com o texto da descrição, sem título, listas, markdown, emojis ou aspas.`;
+
+let sdkIA = null, clienteIA = null;
+function ia() {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error("IA desativada: defina a variável ANTHROPIC_API_KEY na hospedagem.");
+  if (!clienteIA) {
+    // Carregado só quando usado: se a biblioteca faltar, o resto do site continua funcionando
+    try { sdkIA = require("@anthropic-ai/sdk"); } catch { throw new Error("Biblioteca da IA não instalada no servidor (npm install)."); }
+    const Anthropic = sdkIA.default || sdkIA;
+    clienteIA = new Anthropic();
+  }
+  return clienteIA;
+}
+
+function erroIA(e) {
+  const A = sdkIA && (sdkIA.default || sdkIA);
+  if (A && e instanceof A.AuthenticationError) return [502, "Chave da IA (ANTHROPIC_API_KEY) inválida."];
+  if (A && e instanceof A.PermissionDeniedError) return [502, "A chave da IA não tem permissão para este modelo."];
+  if (A && e instanceof A.RateLimitError) return [429, "Limite de uso da IA atingido. Aguarde um pouco e tente de novo."];
+  if (A && e instanceof A.APIConnectionError) return [502, "Não foi possível conectar à IA. Tente de novo."];
+  if (A && e instanceof A.APIError) return [502, `Erro da IA (${e.status || "desconhecido"}). Tente de novo.`];
+  return [400, e.message];
+}
+
+// Produto como aparece no site (Catálogo Pro + edições do painel)
+function produtoEfetivo(sku) {
+  const aj = lerAjustes();
+  const novo = aj.novos.find((p) => p.sku === sku);
+  if (novo) return novo;
+  const loja = lerJSON(F.loja, null);
+  const p = loja && Array.isArray(loja.products) && loja.products.find((x) => x.sku === sku);
+  return p ? aplicarAjuste(p, aj.produtos[sku]) : null;
+}
+
+async function gerarDescricao(skuIn) {
+  const p = produtoEfetivo(texto(skuIn, 120));
+  if (!p) throw new Error("Produto não encontrado.");
+  const dados = [["Nome", p.name], ["Marca", p.brand], ["Departamento", p.sector], ["Tipo", p.tipo], ["Notas", p.notes], ["Volume (como cadastrado)", p.volume], ["Etiquetas", p.tags]]
+    .filter(([, v]) => v != null && String(v).trim())
+    .map(([k, v]) => `${k}: ${String(v).trim()}`)
+    .join("\n");
+  const r = await ia().beta.messages.create({
+    model: IA_MODELO,
+    max_tokens: 4000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default", // se o modelo recusar, a API tenta automaticamente outro modelo
+    output_config: { effort: "low" },
+    system: SISTEMA_IA,
+    messages: [{ role: "user", content: `Dados do produto:\n${dados}` }],
+  });
+  if (r.stop_reason === "refusal") throw new Error("A IA não gerou texto para este produto.");
+  const txt = r.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+  if (!txt) throw new Error("A IA não retornou texto.");
+  return txt.slice(0, 2000);
 }
 
 /* ---------- Produtos ---------- */

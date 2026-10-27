@@ -22,6 +22,7 @@ Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina 
 | **Visão geral** | Pedidos novos, produtos no site, esgotados, sem foto, sem preço, ocultos, editados; data da última importação e cotações |
 | **Pedidos** | Pedidos feitos pelo carrinho do site e lançados no painel (**+ Novo pedido**), com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
 | **Produtos** | Busca e filtros; editar nome, marca, departamento, preço (US$), estoque, etiquetas, descrição, fotos e visibilidade; criar produtos; ocultar/mostrar vários de uma vez |
+| **Pendências** | Produtos visíveis sem foto e/ou sem descrição, com busca e filtro por departamento. **IA de descrições**: gera textos para os produtos sem descrição (selecionados ou a página inteira); cada texto aparece para revisar e editar, e só vai para o site quando você clica em Salvar |
 | **Importar** | Envio do ZIP do Catálogo Pro (mesma função de antes) |
 | **Exportar** | Catálogo em PDF (A4) para enviar a clientes: filtros com/sem estoque, com/sem foto e por departamento; PDF completo, um PDF por departamento ou o de um departamento só. Capa com sumário, 9 produtos por página, preço igual ao do site (opcional) e link de cada produto para o site |
 | **Loja** | Nome, slogan, WhatsApp, Instagram, cidade, horário e cotação manual do dólar |
@@ -59,6 +60,10 @@ Em **Websites → rotaimportados.com → Node.js → Variáveis de ambiente**:
 |---|---|
 | `ADMIN_SENHA` | a senha do painel `/admin` (sem ela o painel fica desativado) |
 | `DATA_DIR` | opcional: pasta onde salvar `loja.json` e fotos (padrão: `data/` dentro do app) |
+| `ANTHROPIC_API_KEY` | opcional: chave da API da Anthropic (console.anthropic.com) para a IA de descrições. Sem ela, a IA fica desativada e o resto funciona normalmente |
+| `IA_MODELO` | opcional: modelo do Claude usado pela IA (padrão: `claude-opus-5-5`) |
+
+A IA usa a biblioteca oficial `@anthropic-ai/sdk` (em `package.json`); a Hostinger a instala no deploy. Ela escreve só com os dados do produto (nome, marca, departamento, tipo, notas, volume, etiquetas) e é instruída a não inventar características; mesmo assim, revise cada texto. O custo é cobrado pela Anthropic na conta da chave, por descrição gerada.
 
 ⚠️ Se um novo deploy apagar a pasta `data/`, você perde também os **pedidos, edições e fotos enviadas pelo painel** (o ZIP do Catálogo Pro pode ser reenviado). Para evitar isso, aponte `DATA_DIR` para uma pasta fora da pasta do app.
 

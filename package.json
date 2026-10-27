@@ -7,6 +7,9 @@
     "start": "node server.js",
     "build": "echo \"Site estatico, nada para compilar\""
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.2.0"
+  },
   "engines": {
     "node": ">=18"
   },

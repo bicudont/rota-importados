@@ -146,6 +146,15 @@
     .ped-total b { font: 700 1.25rem Poppins, sans-serif; color: var(--navy); }
     @media (max-width: 560px) { .it { grid-template-columns: minmax(0,1fr) 64px 34px; } .it__preco { grid-column: 1 / 3; } }
 
+    /* Pendências */
+    .rev { background: #fffdf5; border: 1px solid #f3dfb0; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    .rv { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 12px; padding: 12px 0; border-top: 1px solid #f3dfb0; }
+    .rv img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; background: #eef4ff; }
+    .rv textarea.field { min-height: 92px; margin-top: 6px; }
+    .rv__acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
+    .row--pd { grid-template-columns: 28px 52px minmax(0, 1fr) auto; }
+    @media (max-width: 560px) { .row--pd { grid-template-columns: 24px 44px minmax(0,1fr); } .row--pd .c-vis { grid-column: 3; } }
+
     /* Exportar */
     .exp { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
     .exp .card + .card { margin-top: 0; }
@@ -223,6 +232,7 @@
       <button class="tab" data-tab="geral">📊 <span>Visão geral</span></button>
       <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
       <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
+      <button class="tab" data-tab="pendencias">⚠️ <span>Pendências</span><b class="count" id="nPend" hidden></b></button>
       <button class="tab" data-tab="importar">⬆️ <span>Importar</span></button>
       <button class="tab" data-tab="exportar">📄 <span>Exportar</span></button>
       <button class="tab" data-tab="loja">⚙️ <span>Loja</span></button>
@@ -277,6 +287,31 @@
         </div>
         <div class="list" id="pLista"></div>
         <div class="pager"><span class="muted small" id="pInfo"></span><div style="display:flex;gap:8px"><button class="btn btn--sm" id="pPrev">← Anterior</button><button class="btn btn--sm" id="pNext">Próxima →</button></div></div>
+      </section>
+
+      <!-- Pendências -->
+      <section data-sec="pendencias" hidden>
+        <div class="head"><h1>Pendências</h1></div>
+        <p class="muted small" style="margin:-8px 0 14px">Produtos visíveis no site que estão sem foto ou sem descrição. Clique em um produto para editar e adicionar fotos; use a IA para escrever as descrições que faltam.</p>
+        <div class="chips" id="pdChips"></div>
+        <div class="toolbar">
+          <input class="field search" id="pdBusca" type="search" placeholder="Buscar por nome, SKU ou marca" aria-label="Buscar pendências" />
+          <select class="field" id="pdSetor" aria-label="Departamento"></select>
+          <div></div>
+        </div>
+        <div class="bulk" id="pdIA">
+          <span>✨ <b>IA de descrições</b> <span class="muted small" id="pdIAinfo"></span></span>
+          <button class="btn btn--sm btn--navy" id="pdGerarSel" disabled>Gerar para selecionados</button>
+          <button class="btn btn--sm" id="pdGerarPag">Gerar para esta página</button>
+        </div>
+        <div class="msg warn small" id="pdSemIA" hidden style="margin-bottom:12px">A IA ainda não está ativada. Na Hostinger, em <b>Variáveis de ambiente</b>, crie <code>ANTHROPIC_API_KEY</code> com a chave da API da Anthropic (console.anthropic.com) e reinicie o app.</div>
+        <div id="pdRev" class="rev" hidden>
+          <div class="head" style="margin-bottom:8px"><h2>Descrições geradas — revise antes de salvar</h2><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn--sm" id="pdDescartar">Descartar todas</button><button class="btn btn--sm btn--primary" id="pdSalvarTodas">Salvar todas</button></div></div>
+          <p class="muted small" id="pdRevInfo" aria-live="polite"></p>
+          <div id="pdRevLista"></div>
+        </div>
+        <div class="list" id="pdLista"></div>
+        <div class="pager"><span class="muted small" id="pdInfo"></span><div style="display:flex;gap:8px"><button class="btn btn--sm" id="pdPrev">← Anterior</button><button class="btn btn--sm" id="pdNext">Próxima →</button></div></div>
       </section>
 
       <!-- Importar -->
@@ -613,6 +648,7 @@
       $("#ultimos").innerHTML = ult.length
         ? `<div class="facts">${ult.map((p) => `<div><span>#${p.id} · ${esc(p.cliente.nome || "Sem nome")} <span class="muted small">${dataBR(p.data, true)}</span></span><span class="st st-${p.status}">${STATUS[p.status]}</span></div>`).join("")}</div><button class="btn btn--sm" data-ir="pedidos" style="margin-top:12px">Ver todos</button>`
         : `<p class="muted">Nenhum pedido registrado ainda.</p>`;
+      renderPendencias(); // contagem e lista de pendências acompanham qualquer alteração
     }
     document.addEventListener("click", (e) => {
       const b = e.target.closest("[data-ir]");
@@ -1038,6 +1074,180 @@
       if (last) { try { await carregar(); } catch {} }
       $("#send").disabled = false;
     };
+
+    /* ---------- Pendências (sem foto / sem descrição) e IA de descrições ---------- */
+    const semDesc = (p) => !String(p.description || "").trim();
+    const semFoto = (p) => !p._fotos.length;
+    const PD = {
+      desc: ["Sem descrição", semDesc],
+      foto: ["Sem foto", semFoto],
+      ambos: ["Sem foto e sem descrição", (p) => semDesc(p) && semFoto(p)],
+      qualquer: ["Todas as pendências", (p) => semDesc(p) || semFoto(p)],
+    };
+    let pdTipo = "desc", pdPag = 0;
+    const pdSel = new Set();
+    const rev = new Map(); // sku -> { estado: gerando | pronto | erro | salvo, texto, erro }
+
+    function pdFiltrados() {
+      const q = norm($("#pdBusca").value).trim().split(/\s+/).filter(Boolean);
+      const setor = $("#pdSetor").value;
+      return PROD.filter((p) => p.active !== false && PD[pdTipo][1](p) && (!setor || (p.sector || "Outros") === setor) && q.every((t) => p._busca.includes(t)));
+    }
+    function renderPendencias() {
+      if (!D) return;
+      const vis = PROD.filter((p) => p.active !== false);
+      $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${vis.filter(fn).length.toLocaleString("pt-BR")})</button>`).join("");
+      const nPend = vis.filter(PD.qualquer[1]).length;
+      $("#nPend").hidden = !nPend;
+      $("#nPend").textContent = nPend > 999 ? "999+" : nPend;
+      const atual = $("#pdSetor").value;
+      $("#pdSetor").innerHTML = `<option value="">Todos os departamentos</option>` + [...new Set(vis.map((p) => p.sector || "Outros"))].sort((a, b) => a.localeCompare(b)).map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
+
+      const lista = pdFiltrados();
+      const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
+      pdPag = Math.min(pdPag, total - 1);
+      const pagina = lista.slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
+      $("#pdLista").innerHTML = pagina.length
+        ? pagina.map((p) => {
+            const sd = semDesc(p), sf = semFoto(p);
+            return `<div class="row row--pd" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
+              <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)} para a IA"${sd ? "" : " disabled title=\"Já tem descrição\""}${pdSel.has(p.sku) ? " checked" : ""} />
+              <img src="${sf ? SEMFOTO : fotoURL(p._fotos[0])}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
+              <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
+              <div class="c-vis">${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
+            </div>`;
+          }).join("")
+        : `<div class="empty">${PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
+      $("#pdInfo").textContent = lista.length ? `${(pdPag * POR_PAG + 1).toLocaleString("pt-BR")}–${Math.min(lista.length, (pdPag + 1) * POR_PAG).toLocaleString("pt-BR")} de ${lista.length.toLocaleString("pt-BR")} produtos` : "";
+      $("#pdPrev").disabled = pdPag === 0;
+      $("#pdNext").disabled = pdPag >= total - 1;
+
+      $("#pdSemIA").hidden = !!D.ia;
+      const semDescPag = pagina.filter(semDesc).length;
+      $("#pdIAinfo").textContent = D.ia ? (pdSel.size ? `${pdSel.size} selecionado(s)` : "Selecione produtos sem descrição ou gere para a página inteira.") : "(desativada)";
+      $("#pdGerarSel").disabled = !D.ia || !pdSel.size;
+      $("#pdGerarPag").disabled = !D.ia || !semDescPag;
+      $("#pdGerarPag").textContent = `Gerar para esta página (${semDescPag})`;
+    }
+
+    // Gera em paralelo (3 por vez); o resultado fica para revisão, nada é salvo sozinho
+    async function gerarIA(skus) {
+      skus = skus.filter((s) => !rev.has(s) || ["erro", "salvo"].includes(rev.get(s).estado));
+      if (!skus.length) return toast("Esses produtos já têm texto gerado aguardando revisão.");
+      skus.forEach((s) => rev.set(s, { estado: "gerando" }));
+      pdSel.clear();
+      renderRev();
+      renderPendencias();
+      $("#pdRev").scrollIntoView({ block: "start", behavior: "smooth" });
+      const fila = [...skus];
+      let parar = false;
+      await Promise.all(Array.from({ length: 3 }, async () => {
+        while (fila.length && !parar) {
+          const s = fila.shift();
+          try {
+            const r = await api("POST", "ia/descricao", { sku: s });
+            rev.set(s, { estado: "pronto", texto: r.texto });
+          } catch (err) {
+            rev.set(s, { estado: "erro", erro: err.message });
+            if (/limite|inválida|desativada|permissão|não instalada/i.test(err.message)) parar = true; // não adianta continuar
+          }
+          renderRev();
+        }
+      }));
+      fila.forEach((s) => rev.set(s, { estado: "erro", erro: "Não gerado (a geração foi interrompida)." }));
+      renderRev();
+      renderPendencias();
+    }
+
+    function itemRev(sku, r) {
+      const p = PROD.find((x) => x.sku === sku) || { name: sku, _fotos: [] };
+      const corpo =
+        r.estado === "gerando" ? `<p class="muted small" style="margin-top:6px">⏳ Gerando…</p>`
+        : r.estado === "erro" ? `<p class="small" style="color:var(--err);margin-top:6px">${esc(r.erro)}</p><div class="rv__acts"><button class="btn btn--sm" data-rv-retry>Tentar de novo</button><button class="btn btn--sm" data-rv-desc>Remover</button></div>`
+        : r.estado === "salvo" ? `<p class="small" style="color:var(--ok);margin-top:6px">✓ Descrição salva no produto (já aparece no site).</p>`
+        : `<textarea class="field" data-rv-txt maxlength="5000" aria-label="Descrição gerada para ${esc(p.name)}">${esc(r.texto)}</textarea>
+           <div class="rv__acts"><button class="btn btn--sm btn--primary" data-rv-salvar>Salvar</button><button class="btn btn--sm" data-rv-retry>Gerar outra</button><button class="btn btn--sm" data-rv-desc>Descartar</button></div>`;
+      return `<img src="${p._fotos.length ? fotoURL(p._fotos[0]) : SEMFOTO}" alt="" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
+        <div style="min-width:0"><div class="nm" style="font-weight:600">${esc(p.name)}</div><div class="meta">${esc(sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div>${corpo}</div>`;
+    }
+    // Atualiza só os itens que mudaram, para não apagar o que você está editando
+    function renderRev() {
+      const lista = $("#pdRevLista");
+      $("#pdRev").hidden = !rev.size;
+      $$("[data-rv]", lista).forEach((el) => { if (!rev.has(el.dataset.rv)) el.remove(); });
+      for (const [sku, r] of rev) {
+        const chave = r.estado + (r.erro || "");
+        const el = $$("[data-rv]", lista).find((x) => x.dataset.rv === sku);
+        if (el && el.dataset.k === chave) continue;
+        const novo = document.createElement("div");
+        novo.className = "rv";
+        novo.dataset.rv = sku;
+        novo.dataset.k = chave;
+        novo.innerHTML = itemRev(sku, r);
+        el ? el.replaceWith(novo) : lista.appendChild(novo);
+      }
+      const n = (e) => [...rev.values()].filter((r) => r.estado === e).length;
+      $("#pdRevInfo").textContent = [n("gerando") && `${n("gerando")} gerando`, n("pronto") && `${n("pronto")} para revisar`, n("salvo") && `${n("salvo")} salva(s)`, n("erro") && `${n("erro")} com erro`].filter(Boolean).join(" · ") +
+        ". Confira cada texto: a IA usa só os dados do produto, mas pode errar.";
+      $("#pdSalvarTodas").disabled = !n("pronto");
+    }
+    async function salvarDesc(sku) {
+      const r = rev.get(sku);
+      const txt = String(r.texto || "").trim();
+      if (!txt) return toast("A descrição está vazia.", true);
+      try {
+        const resp = await api("PUT", "produto", { sku, campos: { description: txt } });
+        D.ajustes = resp.ajustes;
+        rev.set(sku, { estado: "salvo" });
+        return true;
+      } catch (err) { toast(err.message, true); return false; }
+    }
+    function aposSalvar() { montar(); renderRev(); renderPendencias(); renderProdutos(); renderGeral(); }
+
+    $("#pdChips").addEventListener("click", (e) => { const b = e.target.closest("[data-pd]"); if (b) { pdTipo = b.dataset.pd; pdPag = 0; renderPendencias(); } });
+    let tPd;
+    $("#pdBusca").addEventListener("input", () => { clearTimeout(tPd); tPd = setTimeout(() => { pdPag = 0; renderPendencias(); }, 200); });
+    $("#pdSetor").addEventListener("change", () => { pdPag = 0; renderPendencias(); });
+    $("#pdPrev").addEventListener("click", () => { pdPag--; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
+    $("#pdNext").addEventListener("click", () => { pdPag++; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
+    $("#pdLista").addEventListener("click", (e) => {
+      const row = e.target.closest("[data-sku]");
+      if (!row) return;
+      if (e.target.matches("[data-pdsel]")) { e.target.checked ? pdSel.add(row.dataset.sku) : pdSel.delete(row.dataset.sku); return renderPendencias(); }
+      abrirEditor(row.dataset.sku);
+    });
+    $("#pdLista").addEventListener("keydown", (e) => {
+      const row = e.target.closest("[data-sku]");
+      if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirEditor(row.dataset.sku); }
+    });
+    $("#pdGerarSel").addEventListener("click", () => gerarIA([...pdSel]));
+    $("#pdGerarPag").addEventListener("click", () => gerarIA(pdFiltrados().slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG).filter(semDesc).map((p) => p.sku)));
+    $("#pdRevLista").addEventListener("input", (e) => {
+      if (!e.target.matches("[data-rv-txt]")) return;
+      rev.get(e.target.closest("[data-rv]").dataset.rv).texto = e.target.value;
+    });
+    $("#pdRevLista").addEventListener("click", async (e) => {
+      const item = e.target.closest("[data-rv]");
+      if (!item) return;
+      const sku = item.dataset.rv;
+      if (e.target.matches("[data-rv-salvar]")) { e.target.disabled = true; if (await salvarDesc(sku)) { toast("Descrição salva"); aposSalvar(); } else e.target.disabled = false; }
+      if (e.target.matches("[data-rv-retry]")) { rev.set(sku, { estado: "erro", erro: "" }); gerarIA([sku]); }
+      if (e.target.matches("[data-rv-desc]")) { rev.delete(sku); renderRev(); renderPendencias(); }
+    });
+    $("#pdSalvarTodas").addEventListener("click", async () => {
+      const b = $("#pdSalvarTodas");
+      b.disabled = true;
+      let ok = 0;
+      for (const [sku, r] of [...rev]) if (r.estado === "pronto" && (await salvarDesc(sku))) ok++;
+      aposSalvar();
+      toast(`${ok} descrição(ões) salva(s)`);
+    });
+    $("#pdDescartar").addEventListener("click", () => {
+      const pendentes = [...rev.values()].filter((r) => r.estado === "pronto").length;
+      if (pendentes && !confirm(`Descartar ${pendentes} texto(s) ainda não salvo(s)?`)) return;
+      [...rev].forEach(([s, r]) => { if (r.estado !== "gerando") rev.delete(s); });
+      renderRev(); renderPendencias();
+    });
 
     /* ---------- Exportar catálogo em PDF ---------- */
     const eFora = new Set(); // departamentos desmarcados
