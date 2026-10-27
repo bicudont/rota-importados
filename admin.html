@@ -273,6 +273,7 @@
             <option value="">Todas as situações</option>
             <option value="visivel">Visíveis no site</option>
             <option value="oculto">Ocultos</option>
+            <option value="fora">Fora do site pelas regras de exibição</option>
             <option value="esgotado">Esgotados</option>
             <option value="semfoto">Sem foto</option>
             <option value="sempreco">Sem preço</option>
@@ -293,7 +294,17 @@
       <!-- Pendências -->
       <section data-sec="pendencias" hidden>
         <div class="head"><h1>Pendências</h1></div>
-        <p class="muted small" style="margin:-8px 0 14px">Produtos visíveis no site que estão sem foto ou sem descrição. Clique em um produto para editar e adicionar fotos; use a IA para escrever as descrições que faltam.</p>
+        <p class="muted small" style="margin:-8px 0 14px">Produtos ativos que estão sem foto ou sem descrição. Clique em um produto para editar e adicionar fotos; use a IA para escrever as descrições que faltam.</p>
+        <div class="card" style="margin-bottom:16px">
+          <h2>Exibição no site</h2>
+          <p class="muted small" style="margin:4px 0 12px">Desmarque para tirar esses produtos do site. Nada é apagado: ao marcar de novo, eles voltam. Vale na hora.</p>
+          <div class="stack" style="gap:10px">
+            <label class="switch"><input type="checkbox" data-exib="semFoto" /> Mostrar produtos sem foto <span class="muted small" data-exib-n="semFoto"></span></label>
+            <label class="switch"><input type="checkbox" data-exib="semDescricao" /> Mostrar produtos sem descrição <span class="muted small" data-exib-n="semDescricao"></span></label>
+            <label class="switch"><input type="checkbox" data-exib="semEstoque" /> Mostrar produtos sem estoque (esgotados) <span class="muted small" data-exib-n="semEstoque"></span></label>
+          </div>
+          <p class="small" id="exibResumo" style="margin-top:12px"></p>
+        </div>
         <div class="chips" id="pdChips"></div>
         <div class="toolbar">
           <input class="field search" id="pdBusca" type="search" placeholder="Buscar por nome, SKU ou marca" aria-label="Buscar pendências" />
@@ -639,8 +650,9 @@
     function renderGeral() {
       const vis = PROD.filter((p) => p.active !== false);
       const n = {
-        visiveis: vis.length,
+        visiveis: PROD.filter(noSite).length,
         ocultos: PROD.length - vis.length,
+        fora: vis.filter((p) => motivoFora(p)).length,
         esgotados: vis.filter((p) => p.stock === 0).length,
         semfoto: vis.filter((p) => !p._fotos.length).length,
         sempreco: vis.filter((p) => !(p.price > 0)).length,
@@ -655,6 +667,7 @@
         st(n.semfoto, "Sem foto", "produtos:semfoto", true),
         st(n.sempreco, "Sem preço (sob consulta)", "produtos:sempreco", true),
         st(n.ocultos, "Ocultos do site", "produtos:oculto"),
+        n.fora ? st(n.fora, "Fora do site pelas regras de exibição", "pendencias") : "",
         st(n.editados, "Editados no painel", "produtos:editado"),
       ].join("");
       $("#semLoja").hidden = !!D.loja;
@@ -884,7 +897,8 @@
     let pag = 0, filtrados = [];
     const sel = new Set();
     const FILTROS = {
-      visivel: (p) => p.active !== false,
+      visivel: (p) => noSite(p),
+      fora: (p) => p.active !== false && !!motivoFora(p),
       oculto: (p) => p.active === false,
       esgotado: (p) => p.stock === 0,
       semfoto: (p) => !p._fotos.length,
@@ -909,7 +923,7 @@
               <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
               <div class="num c-price">${preco}</div>
               <div class="num c-stock">${p.stock == null ? "—" : p.stock === 0 ? '<span class="badge b-out">0</span>' : p.stock}</div>
-              <div class="c-vis">${p.active === false ? '<span class="badge b-off">Oculto</span>' : p.stock === 0 ? '<span class="badge b-out">Esgotado</span>' : '<span class="badge b-new">Visível</span>'}</div>
+              <div class="c-vis">${p.active === false ? '<span class="badge b-off">Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição (aba Pendências)">Fora do site: ${motivoFora(p)}</span>` : p.stock === 0 ? '<span class="badge b-out">Esgotado</span>' : '<span class="badge b-new">Visível</span>'}</div>
             </div>`;
           }).join("")
         : `<div class="empty">${PROD.length ? "Nenhum produto encontrado com esses filtros." : "Nenhum produto ainda. Importe o ZIP do Catálogo Pro ou crie um produto."}</div>`;
@@ -1105,6 +1119,37 @@
     /* ---------- Pendências (sem foto / sem descrição) e IA de descrições ---------- */
     const semDesc = (p) => !String(p.description || "").trim();
     const semFoto = (p) => !p._fotos.length;
+    // Regras de exibição (mesma lógica do servidor): produto ativo que fica fora do site
+    function motivoFora(p) {
+      const o = (D && D.site.ocultar) || {};
+      return o.semFoto && semFoto(p) ? "sem foto" : o.semDescricao && semDesc(p) ? "sem descrição" : o.semEstoque && p.stock === 0 ? "sem estoque" : "";
+    }
+    const noSite = (p) => p.active !== false && !motivoFora(p);
+    const REGRAS = { semFoto, semDescricao: semDesc, semEstoque: (p) => p.stock === 0 };
+    function renderExibicao() {
+      const o = D.site.ocultar || {};
+      const ativos = PROD.filter((p) => p.active !== false);
+      $$("[data-exib]").forEach((i) => (i.checked = !o[i.dataset.exib]));
+      $$("[data-exib-n]").forEach((s) => (s.textContent = `(${ativos.filter(REGRAS[s.dataset.exibN]).length.toLocaleString("pt-BR")})`));
+      const fora = ativos.filter((p) => motivoFora(p)).length;
+      $("#exibResumo").innerHTML = fora
+        ? `<b>${fora.toLocaleString("pt-BR")}</b> produto(s) fora do site por essas regras · <b>${(ativos.length - fora).toLocaleString("pt-BR")}</b> aparecem no site.`
+        : `Todos os ${ativos.length.toLocaleString("pt-BR")} produtos ativos aparecem no site.`;
+    }
+    document.addEventListener("change", async (e) => {
+      if (!e.target.matches("[data-exib]")) return;
+      const caixas = $$("[data-exib]");
+      const ocultar = {};
+      caixas.forEach((i) => (ocultar[i.dataset.exib] = !i.checked));
+      caixas.forEach((i) => (i.disabled = true));
+      try {
+        const r = await api("PUT", "exibicao", ocultar);
+        D.site = r.site;
+        renderGeral(); renderProdutos();
+        toast(e.target.checked ? "Esses produtos voltaram ao site" : "Esses produtos saíram do site");
+      } catch (err) { toast(err.message, true); renderExibicao(); }
+      caixas.forEach((i) => (i.disabled = false));
+    });
     const PD = {
       desc: ["Sem descrição", semDesc],
       foto: ["Sem foto", semFoto],
@@ -1122,6 +1167,7 @@
     }
     function renderPendencias() {
       if (!D) return;
+      renderExibicao();
       const vis = PROD.filter((p) => p.active !== false);
       $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${vis.filter(fn).length.toLocaleString("pt-BR")})</button>`).join("");
       const nPend = vis.filter(PD.qualquer[1]).length;

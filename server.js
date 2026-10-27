@@ -171,9 +171,18 @@ function montarLoja() {
     if (c && c.rate > 0) rates[k] = { rate: c.rate, date: c.date || "" };
   }
   out.rates = rates;
-  const body = Buffer.from(JSON.stringify(out));
+  // O site recebe só o que deve aparecer (regras de exibição do painel); o backup usa a lista completa
+  const pub = { ...out, products: out.products.filter((p) => !foraDoSite(p, site.ocultar)) };
+  const body = Buffer.from(JSON.stringify(pub));
   const etag = `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
-  return (lojaCache = { body, etag });
+  return (lojaCache = { completo: out, body, etag });
+}
+
+// Regras de exibição definidas na aba Pendências (os produtos continuam salvos, só não aparecem)
+const temFoto = (p) => (Array.isArray(p.photos) ? p.photos : [p.photos]).some((id) => (typeof id === "string" && id.trim()) || typeof id === "number");
+function foraDoSite(p, o) {
+  if (!o) return false;
+  return (o.semFoto && !temFoto(p)) || (o.semDescricao && !String(p.description || "").trim()) || (o.semEstoque && p.stock === 0);
 }
 
 function sendLoja(req, res) {
@@ -299,7 +308,8 @@ function adminApi(req, res, rota) {
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
   if (r === "POST foto") return enviarFoto(req, res);
-  if (r === "PUT site") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
+  if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
+  if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
   if (r === "POST ia/descricao") {
     return lerCorpoJSON(req, res, 4096, (d) =>
@@ -511,6 +521,16 @@ function salvarSite(d) {
     if (!(n > 0 && n < 100)) throw new Error("Cotação inválida.");
     site.cotacao[k] = { rate: Math.round(n * 10000) / 10000, date: new Date().toISOString().slice(0, 10) };
   }
+  const atual = lerJSON(F.site, null) || {};
+  if (atual.ocultar) site.ocultar = atual.ocultar; // regras de exibição são salvas pela aba Pendências
+  gravarJSON(F.site, site);
+  return { ok: true, site };
+}
+
+// Mostrar/ocultar no site os produtos sem foto, sem descrição ou sem estoque
+function salvarExibicao(d) {
+  const site = lerJSON(F.site, null) || {};
+  site.ocultar = { semFoto: d.semFoto === true, semDescricao: d.semDescricao === true, semEstoque: d.semEstoque === true };
   gravarJSON(F.site, site);
   return { ok: true, site };
 }
@@ -689,8 +709,7 @@ async function exportarZip(req, res) {
   try { loja = montarLoja(); } catch { loja = { vazio: true }; }
   if (loja.vazio) return json(res, 404, { erro: "Ainda não há produtos para exportar." });
   const comFotos = new URL(req.url, "http://x").searchParams.get("fotos") === "1";
-  const dados = JSON.parse(loja.body.toString("utf8"));
-  dados.generated = new Date().toISOString();
+  const dados = { ...loja.completo, generated: new Date().toISOString() };
   const arquivos = [{ nome: "loja.json", dados: Buffer.from(JSON.stringify(dados)) }];
   if (comFotos) {
     const ids = new Set(dados.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])).map(String).filter((id) => ID_FOTO.test(id)));
