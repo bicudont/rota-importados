@@ -355,6 +355,7 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
   transition: border-color var(--t), color var(--t), box-shadow var(--t);
 }
 .brand-chip small { color: var(--muted); font-weight: 500; font-size: .76rem; }
+.brands__rest { margin-top: var(--s-2); }
 .brand-chip:hover { border-color: var(--royal); color: var(--royal); box-shadow: var(--shadow-sm); }
 
 /* ---------- Navegação estrutural (breadcrumb) ---------- */
@@ -404,6 +405,13 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .fopt small { color: var(--muted); font-size: .78rem; }
 .fopt input:checked + span { color: var(--royal); font-weight: 600; }
 .fopt--zero { opacity: .5; }
+.fopt[hidden] { display: none; }
+.fsearch {
+  width: 100%; height: 38px; padding: 0 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); font-size: .88rem; outline: 0; transition: border-color var(--t), box-shadow var(--t);
+}
+.fsearch:focus { border-color: var(--royal); box-shadow: var(--focus); }
+.fgroup__none { font-size: .85rem; color: var(--muted); padding: 6px 8px; }
 .filters__foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .filters__foot .link-btn { margin: 0; }
 .filters__foot .btn { display: none; }

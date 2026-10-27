@@ -38,31 +38,45 @@ http
       return redirectHome(res);
     }
 
-    if (rel === "admin" || rel === "admin/") return sendFile(res, path.join(ROOT, "admin.html"), "no-store");
+    if (rel === "admin" || rel === "admin/") return sendFile(res, path.join(ROOT, "admin.html"), "no-store", false, req);
     if (rel === "admin/importar") return importar(req, res);
 
     if (rel.startsWith("data/")) {
       const file = path.normalize(path.join(DATA_DIR, rel.slice(5)));
       if (!inside(DATA_DIR, file)) return notFound(res);
-      return sendFile(res, file, rel.endsWith(".json") ? "no-cache" : "public, max-age=86400", true);
+      return sendFile(res, file, rel.endsWith(".json") ? "no-cache" : "public, max-age=86400", true, req);
     }
 
     if (rel === "") rel = "index.html";
     const file = path.normalize(path.join(ROOT, rel));
     const allowed = PUBLIC.some((p) => inside(path.join(ROOT, p), file));
     if (!allowed) return redirectHome(res);
-    sendFile(res, file, rel === "index.html" ? "no-cache" : "public, max-age=3600");
+    sendFile(res, file, rel === "index.html" ? "no-cache" : "public, max-age=3600", false, req);
   })
   .listen(PORT, () => console.log(`Rota Importados rodando na porta ${PORT}`));
 
-function sendFile(res, file, cache, plain404) {
-  fs.readFile(file, (err, data) => {
-    if (err) return plain404 ? notFound(res) : redirectHome(res);
-    res.writeHead(200, {
+// Envia o arquivo com ETag: se o navegador já tem a mesma versão, responde 304 (sem reenviar o conteúdo).
+// A compressão (Brotli/gzip) fica a cargo da CDN da Hostinger.
+function sendFile(res, file, cache, plain404, req) {
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) return plain404 ? notFound(res) : redirectHome(res);
+    const etag = `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+    const headers = {
       "Content-Type": TYPES[path.extname(file).toLowerCase()] || "application/octet-stream",
       "Cache-Control": cache,
+      ETag: etag,
+      "Last-Modified": st.mtime.toUTCString(),
+    };
+    const inm = req && req.headers["if-none-match"];
+    if (inm && inm.split(",").some((t) => t.trim() === etag)) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    fs.readFile(file, (err2, data) => {
+      if (err2) return plain404 ? notFound(res) : redirectHome(res);
+      res.writeHead(200, headers);
+      res.end(req && req.method === "HEAD" ? undefined : data);
     });
-    res.end(data);
   });
 }
 

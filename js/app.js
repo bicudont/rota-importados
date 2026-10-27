@@ -64,7 +64,10 @@
           tag: tags[0] || (novo ? "Novo" : ""),
           tags,
           adicionado: p.added ? Date.parse(p.added) || 0 : 0,
-          imagens: (p.photos || []).map((id) => `data/fotos/${encodeURIComponent(id)}.jpg`),
+          // Tolerante a formatos inesperados (texto em vez de lista) para um campo ruim não derrubar o site
+          imagens: (Array.isArray(p.photos) ? p.photos : [p.photos])
+            .filter((id) => (typeof id === "string" && id.trim()) || typeof id === "number")
+            .map((id) => `data/fotos/${encodeURIComponent(id)}.jpg`),
         };
       });
 
@@ -339,6 +342,7 @@
     $("#fMarcas").innerHTML =
       opcao("fmarca", "", "Todas as marcas", conta("marca", () => true), !state.marca) +
       marcas.map((m) => opcao("fmarca", m, m, conta("marca", (p) => p.marca === m), state.marca === m)).join("");
+    aplicarBuscaMarca();
     $("#fDispBox").hidden = !temEstoque;
     $("#fDisp").checked = state.disp;
     $("#fDispN").textContent = conta("disp", (p) => !esgotado(p));
@@ -358,14 +362,32 @@
     $("#filtersN").hidden = !n;
   }
 
+  // Busca dentro do filtro de marcas (só esconde opções; "Todas" e a marca marcada continuam visíveis)
+  function aplicarBuscaMarca() {
+    const q = norm($("#fMarcaBusca").value.trim());
+    let visiveis = 0;
+    $("#fMarcas").querySelectorAll(".fopt").forEach((l) => {
+      const inp = l.querySelector("input");
+      const ok = !q || inp.value === "" || inp.checked || norm(inp.value).includes(q);
+      l.hidden = !ok;
+      if (ok && inp.value) visiveis++;
+    });
+    $("#fMarcasNone").hidden = !q || visiveis > 0;
+  }
+  $("#fMarcaBusca").addEventListener("input", aplicarBuscaMarca);
+  // Enter na busca de marca não deve enviar nada
+  $("#fMarcaBusca").addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+
   $("#filters").addEventListener("change", (e) => {
     const t = e.target;
     if (t.name === "fcat") setFiltro({ cat: t.value });
     else if (t.name === "fmarca") setFiltro({ marca: t.value });
     else if (t.id === "fDisp") setFiltro({ disp: t.checked });
+    else return; // digitar na busca de marca não refaz a listagem
   });
   const limparFiltros = () => {
     input.value = "";
+    $("#fMarcaBusca").value = "";
     setFiltro({ cat: "todos", marca: "", q: "", disp: false });
   };
   $("#activeFilters").addEventListener("click", (e) => {
@@ -513,7 +535,8 @@
 
   /* ---------- Página inicial: vitrines geradas só com dados reais ---------- */
   function buildHome() {
-    const disponiveisPrimeiro = (a, b) => esgotado(a) - esgotado(b);
+    // Vitrines: disponíveis primeiro e, entre eles, os que têm foto (catálogo grande tem muitos itens sem foto)
+    const disponiveisPrimeiro = (a, b) => esgotado(a) - esgotado(b) || !a.imagens.length - !b.imagens.length;
     const verTodos = (href, n) => `<a href="${href}" class="shelf__all">Ver todos${n ? ` (${n})` : ""}</a>`;
     const html = [];
 
@@ -530,7 +553,11 @@
     }
 
     // Lançamentos: pela data de cadastro no Catálogo Pro
-    const lancamentos = PRODUTOS.filter((p) => p.adicionado && !esgotado(p)).sort((a, b) => b.adicionado - a.adicionado);
+    // (entre os 48 mais recentes, os que têm foto aparecem primeiro)
+    const lancamentos = PRODUTOS.filter((p) => p.adicionado && !esgotado(p))
+      .sort((a, b) => b.adicionado - a.adicionado)
+      .slice(0, 48)
+      .sort((a, b) => !a.imagens.length - !b.imagens.length);
     if (lancamentos.length >= 4) html.push(shelfHTML("Lançamentos", lancamentos, verTodos(catalogHref({ sort: "recentes" })), "novo"));
 
     // Ofertas: só produtos com preço anterior maior que o atual
@@ -544,12 +571,21 @@
       .filter(([, ps]) => ps.length >= 2)
       .forEach(([t, ps]) => html.push(shelfHTML(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
 
-    // Marcas
+    // Marcas: as com mais produtos disponíveis primeiro; o restante aparece em "Ver todas"
     if (marcas.length > 1) {
-      const n = (m) => PRODUTOS.filter((p) => p.marca === m).length;
-      html.push(`<section class="brands" aria-label="Marcas"><div class="shelf__head"><h2>Marcas</h2></div><div class="brands__list">${marcas
-        .map((m) => `<a href="${catalogHref({ marca: m })}" class="brand-chip">${esc(m)}<small>${n(m)}</small></a>`)
-        .join("")}</div></section>`);
+      const TOP_MARCAS = 24;
+      const conta = {};
+      PRODUTOS.forEach((p) => { if (p.marca) conta[p.marca] = (conta[p.marca] || 0) + (esgotado(p) ? 0 : 1); });
+      const total = (m) => PRODUTOS.filter((p) => p.marca === m).length;
+      const chip = (m) => `<a href="${catalogHref({ marca: m })}" class="brand-chip">${esc(m)}<small>${total(m)}</small></a>`;
+      const top = [...marcas].sort((a, b) => conta[b] - conta[a] || a.localeCompare(b)).slice(0, TOP_MARCAS);
+      const resto = marcas.filter((m) => !top.includes(m));
+      html.push(`<section class="brands" aria-label="Marcas"><div class="shelf__head"><h2>Marcas</h2>${
+        resto.length ? `<button class="shelf__all" id="brandsMore" aria-expanded="false" aria-controls="brandsRest">Ver todas (${marcas.length})</button>` : ""
+      }</div><div class="brands__list">${top.map(chip).join("")}</div>${
+        resto.length ? `<div class="brands__list brands__rest" id="brandsRest" hidden></div>` : ""
+      }</section>`);
+      buildHome.marcasResto = resto.map(chip).join("");
     }
 
     // Uma vitrine por departamento
@@ -560,6 +596,15 @@
 
     $("#home").innerHTML = html.join("");
     iniciarVitrines($("#home"));
+    // "Ver todas" as marcas: só monta a lista completa quando o cliente pede
+    const more = $("#brandsMore");
+    if (more) more.addEventListener("click", () => {
+      const rest = $("#brandsRest");
+      if (!rest.innerHTML) rest.innerHTML = buildHome.marcasResto;
+      rest.hidden = !rest.hidden;
+      more.setAttribute("aria-expanded", String(!rest.hidden));
+      more.textContent = rest.hidden ? `Ver todas (${marcas.length})` : "Mostrar menos";
+    });
   }
 
   /* ---------- Página de produto ---------- */
