@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=6" />
+  <link rel="stylesheet" href="css/style.css?v=7" />
 </head>
 <body>
   <!-- Faixa institucional (preenchida pelo app.js só com dados reais) -->
@@ -23,7 +23,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-menu"/></svg>
       </button>
 
-      <a href="#" class="logo" aria-label="Rota Importados — início">
+      <a href="#/" class="logo" aria-label="Rota Importados — início">
         <img src="img/logo.png" alt="Rota Importados" width="264" height="220" />
       </a>
 
@@ -66,7 +66,7 @@
   <!-- Menu lateral (celular) -->
   <aside class="menu" id="menu" aria-label="Menu" hidden>
     <div class="menu__head">
-      <a href="#" class="logo" data-close aria-label="Rota Importados — início"><img src="img/logo.png" alt="Rota Importados" width="264" height="220" loading="lazy" /></a>
+      <a href="#/" class="logo" data-close aria-label="Rota Importados — início"><img src="img/logo.png" alt="Rota Importados" width="264" height="220" loading="lazy" /></a>
       <button class="icon-btn" data-close aria-label="Fechar menu">✕</button>
     </div>
     <p class="menu__title">Departamentos</p>
@@ -78,7 +78,7 @@
 
   <main>
     <!-- Hero -->
-    <section class="hero">
+    <section class="hero" data-view="home">
       <div class="hero__glow"></div>
       <div class="container hero__inner">
         <div class="hero__content">
@@ -86,7 +86,7 @@
           <h1>Os melhores <span class="grad">importados</span> na rota até você.</h1>
           <p class="hero__sub" id="heroSlogan">Importados originais, direto pra você.</p>
           <div class="hero__actions">
-            <a href="#catalogo" class="btn btn--primary">Ver catálogo</a>
+            <a href="#/catalogo" class="btn btn--primary">Ver catálogo</a>
             <a href="#" class="btn btn--ghost" id="heroWhats">
               <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>
               Falar no WhatsApp
@@ -103,40 +103,77 @@
     </section>
 
     <!-- Diferenciais: só fatos do próprio sistema (preenchidos pelo app.js) -->
-    <section class="perks container" id="perks" aria-label="Diferenciais"></section>
+    <section class="perks container" id="perks" aria-label="Diferenciais" data-view="home"></section>
 
     <!-- Vitrines da página inicial (geradas a partir dos produtos cadastrados) -->
-    <div class="home-band"><div class="home container" id="home"></div></div>
+    <div class="home-band" data-view="home">
+      <div class="home container" id="home">
+        <div class="sk-shelf" aria-hidden="true"><span class="sk sk--title"></span><div class="sk-row"><span class="sk sk--card"></span><span class="sk sk--card"></span><span class="sk sk--card"></span><span class="sk sk--card"></span></div></div>
+      </div>
+    </div>
 
-    <!-- Catálogo -->
-    <section class="catalog container" id="catalogo">
+    <!-- Catálogo / listagem (#/catalogo?cat=&marca=&q=&ordem=&disp=) -->
+    <section class="catalog container" id="catalogo" data-view="catalogo" hidden>
+      <nav class="crumbs" id="crumbs" aria-label="Você está aqui"></nav>
       <div class="catalog__head">
         <div>
-          <h2>Catálogo</h2>
-          <p class="muted" id="resultInfo"></p>
+          <h1 class="catalog__title" id="catTitle">Todos os produtos</h1>
+          <p class="muted" id="resultInfo" aria-live="polite"></p>
         </div>
         <div class="catalog__tools">
-          <select id="brand" class="sort" aria-label="Filtrar por marca" hidden></select>
-          <select id="sort" class="sort" aria-label="Ordenar produtos">
-            <option value="destaque">Destaques</option>
-            <option value="menor">Menor preço</option>
-            <option value="maior">Maior preço</option>
-            <option value="nome">Nome (A–Z)</option>
-          </select>
+          <button class="btn btn--ghost filters-btn" id="openFilters" aria-controls="filters">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5h18v2H3V5Zm4 6h10v2H7v-2Zm3 6h4v2h-4v-2Z"/></svg>
+            Filtros <span class="filters-btn__n" id="filtersN" hidden></span>
+          </button>
+          <label class="sort-wrap"><span>Ordenar por</span>
+            <select id="sort" class="sort">
+              <option value="destaque">Destaques</option>
+              <option value="recentes">Mais recentes</option>
+              <option value="menor">Menor preço</option>
+              <option value="maior">Maior preço</option>
+              <option value="nome">Nome (A–Z)</option>
+            </select>
+          </label>
         </div>
       </div>
       <p class="rates" id="rates" hidden></p>
-      <div class="chips" id="chips" role="tablist"></div>
-      <div class="grid" id="grid"></div>
-      <div class="more"><button class="btn btn--ghost" id="more" hidden>Ver mais produtos</button></div>
-      <div class="empty" id="empty" hidden>
-        <p>Nenhum produto encontrado 😕</p>
-        <a href="#" class="btn btn--ghost" id="emptyWhats">Pergunte no WhatsApp</a>
+      <div class="catalog__body">
+        <aside class="filters" id="filters" aria-label="Filtros">
+          <div class="filters__head"><h2>Filtros</h2><button class="icon-btn" id="closeFilters" aria-label="Fechar filtros">✕</button></div>
+          <div class="filters__scroll">
+            <fieldset class="fgroup"><legend>Departamento</legend><div class="fgroup__list" id="fCats"></div></fieldset>
+            <fieldset class="fgroup" id="fMarcasBox"><legend>Marca</legend><div class="fgroup__list" id="fMarcas"></div></fieldset>
+            <fieldset class="fgroup" id="fDispBox"><legend>Disponibilidade</legend>
+              <label class="fopt"><input type="checkbox" id="fDisp" /><span>Somente disponíveis</span><small id="fDispN"></small></label>
+            </fieldset>
+          </div>
+          <div class="filters__foot">
+            <button class="link-btn" id="clearFilters">Limpar filtros</button>
+            <button class="btn btn--primary" id="applyFilters">Ver produtos</button>
+          </div>
+        </aside>
+        <div class="catalog__main">
+          <div class="active-filters" id="activeFilters"></div>
+          <div class="grid" id="grid" aria-busy="true">
+            <span class="sk sk--card"></span><span class="sk sk--card"></span><span class="sk sk--card"></span><span class="sk sk--card"></span>
+          </div>
+          <div class="more"><button class="btn btn--ghost" id="more" hidden>Ver mais produtos</button></div>
+          <div class="empty" id="empty" hidden>
+            <p><b>Nenhum produto encontrado.</b><br />Tente outro termo ou remova algum filtro.</p>
+            <div class="empty__actions">
+              <button class="btn btn--ghost" id="emptyClear">Limpar filtros</button>
+              <a href="#" class="btn btn--whats" id="emptyWhats"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>Pergunte no WhatsApp</a>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
+    <!-- Página de produto (#/produto/ID) -->
+    <section class="product container" id="produto" data-view="produto" hidden></section>
+
     <!-- Como comprar -->
-    <section class="how container">
+    <section class="how container" data-view="home">
       <h2>Como comprar</h2>
       <div class="how__steps">
         <div class="step"><span>1</span><b>Escolha</b><p>Navegue pelo catálogo e adicione os produtos ao carrinho.</p></div>
@@ -149,13 +186,13 @@
   <footer class="footer">
     <div class="container footer__inner">
       <div>
-        <a href="#" class="logo logo--footer" aria-label="Rota Importados — início"><img src="img/logo.png" alt="Rota Importados" width="264" height="220" loading="lazy" /></a>
+        <a href="#/" class="logo logo--footer" aria-label="Rota Importados — início"><img src="img/logo.png" alt="Rota Importados" width="264" height="220" loading="lazy" /></a>
         <p class="muted" id="footerInfo"></p>
       </div>
       <div class="footer__links">
         <a href="#" id="footerWhats">WhatsApp</a>
         <a href="#" id="footerInsta" target="_blank" rel="noopener">Instagram</a>
-        <a href="#catalogo">Catálogo</a>
+        <a href="#/catalogo">Catálogo</a>
       </div>
     </div>
     <div class="container footer__copy muted">© <span id="year"></span> Rota Importados. Todos os direitos reservados.</div>
@@ -166,12 +203,7 @@
     <svg viewBox="0 0 24 24"><use href="#ico-whats"/></svg>
   </a>
 
-  <!-- Modal produto -->
   <div class="overlay" id="overlay" hidden></div>
-  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden>
-    <button class="icon-btn modal__close" data-close aria-label="Fechar">✕</button>
-    <div class="modal__body" id="modalBody"></div>
-  </div>
 
   <!-- Carrinho -->
   <aside class="drawer" id="drawer" aria-label="Carrinho" hidden>
@@ -204,7 +236,7 @@
     <symbol id="ico-whats" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.98L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-2.97-.4-4.25-1.17l-.3-.18-3.07.9.92-2.99-.2-.31a8.2 8.2 0 1 1 6.9 3.75Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3c-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.16 1.73 2.64 4.2 3.7 1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.66-1.17.2-.58.2-1.07.15-1.17-.06-.11-.22-.17-.47-.29Z"/></symbol>
   </svg>
 
-  <script src="js/config.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/config.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

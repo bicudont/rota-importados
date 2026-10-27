@@ -90,6 +90,30 @@
   const esgotado = (p) => p.estoque === 0;
   const waLink = (text) => `https://wa.me/${S.whatsapp}${text ? "?text=" + encodeURIComponent(text) : ""}`;
   const skuTxt = (p) => (p.sku ? ` [${p.sku}]` : "");
+  const marcas = [...new Set(PRODUTOS.map((p) => p.marca).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const temEstoque = PRODUTOS.some((p) => p.estoque != null);
+
+  /* ---------- Endereços (rotas com #, sem mudar o servidor) ---------- */
+  const PAGE = 24;
+  const ORDENS = ["destaque", "recentes", "menor", "maior", "nome"];
+  let state = { cat: "todos", marca: "", q: "", sort: "destaque", disp: false, limite: PAGE };
+  let VIEW = "home";
+  const TITULO = document.title;
+
+  const prodHref = (p) => "#/produto/" + encodeURIComponent(p.id);
+  function catalogHref(o = {}) {
+    const st = { cat: "todos", marca: "", q: "", sort: "destaque", disp: false, ...o };
+    const prm = new URLSearchParams();
+    if (st.cat !== "todos") prm.set("cat", st.cat);
+    if (st.marca) prm.set("marca", st.marca);
+    if (st.q) prm.set("q", st.q);
+    if (st.sort !== "destaque") prm.set("ordem", st.sort);
+    if (st.disp) prm.set("disp", "1");
+    const s = prm.toString();
+    return "#/catalogo" + (s ? "?" + s : "");
+  }
+  // Atualiza o endereço sem criar novo item no histórico (filtros dentro da listagem)
+  const syncURL = () => { if (VIEW === "catalogo") history.replaceState(null, "", catalogHref(state)); };
 
   /* ---------- Textos gerais ---------- */
   $("#heroSlogan").textContent = S.slogan;
@@ -110,20 +134,20 @@
   if (loja && comFoto.length === 3) {
     $("#heroVisual").innerHTML = comFoto
       .map(
-        (p, i) => `<button class="hero__card hero__card--${"abc"[i]}" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}">
+        (p, i) => `<a href="${prodHref(p)}" class="hero__card hero__card--${"abc"[i]}" aria-label="Ver ${esc(p.nome)}">
           <img src="${esc(p.imagens[0])}" alt="" onerror="__imgErr(this)" />
           <span class="hero__tag"><b>${esc(p.nome)}</b>${p.preco == null ? "" : `<span>${esc(fmt(p.preco))}</span>`}</span>
-        </button>`
+        </a>`
       )
       .join("");
     $("#heroVisual").hidden = false;
   }
   // Atalhos para os departamentos com mais produtos
+  const qtd = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
   {
-    const conta = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
-    const top = [...CATS].sort((a, b) => (conta[b.id] || 0) - (conta[a.id] || 0)).slice(0, 4);
+    const top = [...CATS].sort((a, b) => (qtd[b.id] || 0) - (qtd[a.id] || 0)).slice(0, 4);
     if (top.length > 1) {
-      $("#heroCats").innerHTML = `<span>Explore:</span>` + top.map((c) => `<a href="#catalogo" data-cat="${esc(c.id)}">${esc(c.nome)}</a>`).join("");
+      $("#heroCats").innerHTML = `<span>Explore:</span>` + top.map((c) => `<a href="${catalogHref({ cat: c.id })}">${esc(c.nome)}</a>`).join("");
       $("#heroCats").hidden = false;
     }
   }
@@ -132,9 +156,8 @@
     $("#heroPill").hidden = false;
   }
   {
-    const nMarcas = new Set(PRODUTOS.map((p) => p.marca).filter(Boolean)).size;
     const stats = [[PRODUTOS.length, PRODUTOS.length === 1 ? "produto" : "produtos"], [CATS.length, CATS.length === 1 ? "departamento" : "departamentos"]];
-    if (nMarcas) stats.splice(1, 0, [nMarcas, nMarcas === 1 ? "marca" : "marcas"]);
+    if (marcas.length) stats.splice(1, 0, [marcas.length, marcas.length === 1 ? "marca" : "marcas"]);
     $("#heroStats").innerHTML = stats.map(([n, t]) => `<li><b>${n.toLocaleString("pt-BR")}</b><span>${t}</span></li>`).join("");
   }
 
@@ -145,7 +168,7 @@
       ["🛒", "Pedido em poucos cliques", "Monte o carrinho e envie pelo WhatsApp"],
     ];
     if (COTACAO) perks.push(["💱", "Cotação do dia", "Preços em US$ e em R$"]);
-    if (PRODUTOS.some((p) => p.estoque != null)) perks.push(["📦", "Estoque atualizado", "Disponibilidade de cada produto"]);
+    if (temEstoque) perks.push(["📦", "Estoque atualizado", "Disponibilidade de cada produto"]);
     $("#perks").innerHTML = perks.map(([i, b, s]) => `<div class="perk"><span aria-hidden="true">${i}</span><div><b>${b}</b><small>${s}</small></div></div>`).join("");
     $("#perks").style.setProperty("--cols", perks.length);
   }
@@ -169,44 +192,17 @@
     $("#topbar").innerHTML = itens.join('<span class="topbar__sep" aria-hidden="true"></span>');
   }
 
-  /* ---------- Filtros ---------- */
-  const PAGE = 24;
-  let state = { cat: "todos", marca: "", q: "", sort: "destaque", limite: PAGE };
-
-  $("#chips").innerHTML = [{ id: "todos", nome: "Todos" }, ...CATS]
-    .map((c) => `<button class="chip${c.id === "todos" ? " active" : ""}" data-cat="${esc(c.id)}" role="tab">${esc(c.nome)}</button>`)
-    .join("");
-  $("#chips").addEventListener("click", (e) => {
-    const b = e.target.closest(".chip");
-    if (b) selectCategory(b.dataset.cat);
-  });
-
-  // Seleciona um departamento em qualquer menu e mantém todos sincronizados
-  function selectCategory(id, scroll) {
-    state.cat = id;
-    state.limite = PAGE;
-    document.querySelectorAll("[data-cat]").forEach((el) => {
-      const on = el.dataset.cat === id;
-      el.classList.toggle("active", on);
-      if (el.matches(".nav__link, .dept__item, .menu__item")) el.setAttribute("aria-current", on ? "true" : "false");
-    });
-    render();
-    if (scroll) $("#catalogo").scrollIntoView({ behavior: "smooth" });
-  }
-
   /* ---------- Navegação de departamentos (só os setores cadastrados) ---------- */
-  const qtd = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
   const deptos = [{ id: "todos", nome: "Todos os produtos" }, ...CATS];
   const deptBtn = $("#deptBtn"), deptMenu = $("#deptMenu");
+  const nDept = (id) => (id === "todos" ? PRODUTOS.length : qtd[id] || 0);
 
-  $("#navLinks").innerHTML = CATS
-    .map((c) => `<li><a href="#catalogo" class="nav__link" data-cat="${esc(c.id)}">${esc(c.nome)}</a></li>`)
-    .join("");
+  $("#navLinks").innerHTML = CATS.map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="nav__link" data-cat="${esc(c.id)}">${esc(c.nome)}</a></li>`).join("");
   deptMenu.innerHTML = `<ul>${deptos
-    .map((c) => `<li><a href="#catalogo" class="dept__item${c.id === "todos" ? " active" : ""}" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${c.id === "todos" ? PRODUTOS.length : qtd[c.id] || 0}</small></a></li>`)
+    .map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="dept__item" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${nDept(c.id)}</small></a></li>`)
     .join("")}</ul>`;
   $("#menuList").innerHTML = deptos
-    .map((c) => `<li><a href="#catalogo" class="menu__item${c.id === "todos" ? " active" : ""}" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${c.id === "todos" ? PRODUTOS.length : qtd[c.id] || 0}</small></a></li>`)
+    .map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="menu__item" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${nDept(c.id)}</small></a></li>`)
     .join("");
 
   const setDept = (open) => {
@@ -218,24 +214,17 @@
   $("#dept").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { setDept(false); deptBtn.focus(); }
   });
-
-  ["#navLinks", "#deptMenu", "#menuList"].forEach((s) =>
-    $(s).addEventListener("click", (e) => {
-      const a = e.target.closest("[data-cat]");
-      if (!a) return;
-      e.preventDefault();
-      setDept(false);
-      closeAll();
-      selectCategory(a.dataset.cat, true);
-    })
-  );
   $("#openMenu").addEventListener("click", () => show($("#menu")));
 
-  const marcas = [...new Set(PRODUTOS.map((p) => p.marca).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  if (marcas.length > 1) {
-    $("#brand").innerHTML = `<option value="">Todas as marcas</option>` + marcas.map((m) => `<option>${esc(m)}</option>`).join("");
-    $("#brand").hidden = false;
-    $("#brand").addEventListener("change", (e) => { state.marca = e.target.value; state.limite = PAGE; render(); });
+  // Marca o departamento atual em todos os menus
+  function marcarDepartamento() {
+    const atual = VIEW === "catalogo" ? state.cat : VIEW === "produto" && produtoAtual ? produtoAtual.categoria : null;
+    document.querySelectorAll(".nav__link, .dept__item, .menu__item").forEach((el) => {
+      const on = el.dataset.cat === atual;
+      el.classList.toggle("active", on);
+      if (on) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
   }
 
   /* ---------- Busca: mesmo filtro do catálogo + sugestões ---------- */
@@ -251,7 +240,8 @@
   }
 
   function mostrarSugestoes() {
-    const q = norm(state.q);
+    const termo = input.value.trim();
+    const q = norm(termo);
     if (q.length < 2) return fecharSugestoes();
     const todos = PRODUTOS.filter((p) => textoBusca(p).includes(q));
     sugList = todos.slice(0, 6);
@@ -259,14 +249,14 @@
     suggest.innerHTML = todos.length
       ? sugList
           .map(
-            (p, i) => `<a href="#catalogo" class="sug" id="sug-${i}" role="option" aria-selected="false" data-sug="${esc(p.id)}">
+            (p, i) => `<a href="${prodHref(p)}" class="sug" id="sug-${i}" role="option" aria-selected="false">
           <img src="${esc(foto(p))}" alt="" loading="lazy" onerror="__imgErr(this)" />
           <span class="sug__txt"><b>${esc(p.nome)}</b><small>${esc([p.marca, p.sku ? "Cód. " + p.sku : ""].filter(Boolean).join(" · ") || catName(p.categoria))}</small></span>
           <span class="sug__price">${p.preco == null ? "Consultar" : esc(fmt(p.preco))}</span>
         </a>`
           )
           .join("") + `<button type="submit" form="searchForm" class="sug__all">Ver todos os ${todos.length} resultados</button>`
-      : `<p class="sug__none">Nenhum produto encontrado para “${esc(state.q)}”.</p>`;
+      : `<p class="sug__none">Nenhum produto encontrado para “${esc(termo)}”.</p>`;
     suggest.hidden = false;
     input.setAttribute("aria-expanded", "true");
   }
@@ -280,9 +270,13 @@
   }
 
   input.addEventListener("input", () => {
-    state.q = input.value.trim();
-    state.limite = PAGE;
-    render();
+    // Na listagem, a busca filtra na hora (como antes); nas outras páginas, só mostra sugestões
+    if (VIEW === "catalogo") {
+      state.q = input.value.trim();
+      state.limite = PAGE;
+      render();
+      syncURL();
+    }
     mostrarSugestoes();
   });
   input.addEventListener("focus", mostrarSugestoes);
@@ -291,50 +285,108 @@
     if (e.key === "ArrowDown") { e.preventDefault(); marcarSugestao(sugIdx + 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); marcarSugestao(sugIdx - 1); }
     else if (e.key === "Escape") fecharSugestoes();
-    else if (e.key === "Enter" && sugIdx >= 0) { e.preventDefault(); abrirSugestao(sugList[sugIdx].id); }
-  });
-  suggest.addEventListener("click", (e) => {
-    const a = e.target.closest("[data-sug]");
-    if (!a) return;
-    e.preventDefault();
-    abrirSugestao(a.dataset.sug);
+    else if (e.key === "Enter" && sugIdx >= 0) { e.preventDefault(); location.hash = prodHref(sugList[sugIdx]); }
   });
   document.addEventListener("click", (e) => { if (!e.target.closest("#searchWrap")) fecharSugestoes(); });
 
-  function abrirSugestao(id) {
-    fecharSugestoes();
-    input.blur();
-    openModal(id);
-  }
-
-  // Enviar a busca mostra todos os resultados no catálogo, sem filtro de departamento
+  // Enviar a busca mostra todos os resultados, sem filtro de departamento ou marca
   $("#searchForm").addEventListener("submit", (e) => {
     e.preventDefault();
     fecharSugestoes();
     input.blur();
-    state.q = input.value.trim();
-    if (state.cat !== "todos") selectCategory("todos");
-    else { state.limite = PAGE; render(); }
-    $("#catalogo").scrollIntoView({ behavior: "smooth" });
+    location.hash = catalogHref({ q: input.value.trim(), sort: state.sort });
   });
-  $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
-  $("#more").addEventListener("click", () => { state.limite += PAGE; render(); });
+
+  /* ---------- Listagem: filtros, ordenação e contagem ---------- */
+  const matches = (p, o, ignorar) => {
+    const q = norm(o.q);
+    return (
+      (ignorar === "cat" || o.cat === "todos" || p.categoria === o.cat) &&
+      (ignorar === "marca" || !o.marca || p.marca === o.marca) &&
+      (ignorar === "disp" || !o.disp || !esgotado(p)) &&
+      (!q || textoBusca(p).includes(q))
+    );
+  };
 
   function filtered() {
-    const q = norm(state.q);
-    let list = PRODUTOS.filter(
-      (p) =>
-        (state.cat === "todos" || p.categoria === state.cat) &&
-        (!state.marca || p.marca === state.marca) &&
-        (!q || norm(`${p.nome} ${p.marca} ${p.sku} ${p.tipo} ${p.descricao} ${catName(p.categoria)}`).includes(q))
-    );
+    let list = PRODUTOS.filter((p) => matches(p, state));
     const price = (p) => (p.preco == null ? Infinity : p.preco);
     if (state.sort === "menor") list = [...list].sort((a, b) => price(a) - price(b));
     if (state.sort === "maior") list = [...list].sort((a, b) => (b.preco ?? -1) - (a.preco ?? -1));
     if (state.sort === "nome") list = [...list].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (state.sort === "recentes") list = [...list].sort((a, b) => (b.adicionado || 0) - (a.adicionado || 0));
     // esgotados sempre por último
     return [...list].sort((a, b) => esgotado(a) - esgotado(b));
   }
+
+  function setFiltro(changes) {
+    Object.assign(state, changes, { limite: PAGE });
+    render();
+    syncURL();
+  }
+
+  function renderFiltros() {
+    const conta = (ign, f) => PRODUTOS.filter((p) => matches(p, state, ign) && f(p)).length;
+    const opcao = (name, value, label, n, on) =>
+      `<label class="fopt${n ? "" : " fopt--zero"}"><input type="radio" name="${name}" value="${esc(value)}"${on ? " checked" : ""} /><span>${esc(label)}</span><small>${n}</small></label>`;
+
+    $("#fCats").innerHTML = deptos.map((c) => opcao("fcat", c.id, c.nome, conta("cat", (p) => c.id === "todos" || p.categoria === c.id), state.cat === c.id)).join("");
+    $("#fMarcasBox").hidden = marcas.length < 2;
+    $("#fMarcas").innerHTML =
+      opcao("fmarca", "", "Todas as marcas", conta("marca", () => true), !state.marca) +
+      marcas.map((m) => opcao("fmarca", m, m, conta("marca", (p) => p.marca === m), state.marca === m)).join("");
+    $("#fDispBox").hidden = !temEstoque;
+    $("#fDisp").checked = state.disp;
+    $("#fDispN").textContent = conta("disp", (p) => !esgotado(p));
+
+    // Filtros ativos (com botão para remover cada um)
+    const ativos = [];
+    if (state.cat !== "todos") ativos.push(["cat", catName(state.cat)]);
+    if (state.marca) ativos.push(["marca", state.marca]);
+    if (state.q) ativos.push(["q", `“${state.q}”`]);
+    if (state.disp) ativos.push(["disp", "Somente disponíveis"]);
+    $("#activeFilters").innerHTML = ativos.length
+      ? ativos.map(([k, t]) => `<button class="af" data-rm-filter="${k}" aria-label="Remover filtro ${esc(t)}">${esc(t)} <span aria-hidden="true">✕</span></button>`).join("") +
+        `<button class="link-btn af__clear" data-rm-filter="all">Limpar tudo</button>`
+      : "";
+    const n = ativos.filter(([k]) => k !== "q").length;
+    $("#filtersN").textContent = n;
+    $("#filtersN").hidden = !n;
+  }
+
+  $("#filters").addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.name === "fcat") setFiltro({ cat: t.value });
+    else if (t.name === "fmarca") setFiltro({ marca: t.value });
+    else if (t.id === "fDisp") setFiltro({ disp: t.checked });
+  });
+  const limparFiltros = () => {
+    input.value = "";
+    setFiltro({ cat: "todos", marca: "", q: "", disp: false });
+  };
+  $("#activeFilters").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rm-filter]");
+    if (!b) return;
+    const k = b.dataset.rmFilter;
+    if (k === "all") return limparFiltros();
+    if (k === "q") input.value = "";
+    setFiltro(k === "cat" ? { cat: "todos" } : k === "disp" ? { disp: false } : { [k]: "" });
+  });
+  $("#clearFilters").addEventListener("click", limparFiltros);
+  $("#emptyClear").addEventListener("click", limparFiltros);
+  $("#sort").addEventListener("change", (e) => setFiltro({ sort: e.target.value }));
+  $("#more").addEventListener("click", () => { state.limite += PAGE; render(); });
+
+  // Painel de filtros no celular
+  const filtersEl = $("#filters");
+  $("#openFilters").addEventListener("click", () => {
+    closeAll();
+    overlay.hidden = false;
+    filtersEl.classList.add("open");
+    document.body.style.overflow = "hidden";
+  });
+  $("#closeFilters").addEventListener("click", closeAll);
+  $("#applyFilters").addEventListener("click", () => { closeAll(); $("#catalogo").scrollIntoView(); });
 
   function priceHTML(p) {
     if (p.preco == null) return `<div class="price"><b>Sob consulta</b></div>`;
@@ -349,34 +401,64 @@
 
   const off = (p) => (p.preco && p.precoAntigo ? Math.round((1 - p.preco / p.precoAntigo) * 100) : 0);
   const meta = (p) => [p.marca, p.volume ? `${p.volume} ml` : ""].filter(Boolean).join(" · ") || catName(p.categoria);
+  // Disponibilidade real (só quando o Catálogo Pro informa o estoque)
+  const dispHTML = (p) =>
+    p.estoque == null ? "" : esgotado(p) ? `<span class="avail avail--out">Esgotado</span>` : p.estoque <= 3 ? `<span class="avail avail--low">Últimas ${p.estoque} unidades</span>` : `<span class="avail">Em estoque</span>`;
+
+  function tituloListagem() {
+    if (state.q) return `Resultados para “${state.q}”`;
+    if (state.cat !== "todos") return catName(state.cat);
+    if (state.marca) return state.marca;
+    if (state.sort === "recentes") return "Lançamentos";
+    return "Todos os produtos";
+  }
+
+  function crumbs(itens) {
+    return `<ol>${itens
+      .map(([t, href], i) => (i === itens.length - 1 ? `<li aria-current="page">${esc(t)}</li>` : `<li><a href="${href}">${esc(t)}</a></li>`))
+      .join("")}</ol>`;
+  }
 
   function render() {
     const all = filtered();
     const list = all.slice(0, state.limite);
-    $("#resultInfo").textContent = `${all.length} produto${all.length === 1 ? "" : "s"}`;
+    const titulo = tituloListagem();
+    $("#catTitle").textContent = titulo;
+    const migalhas = [["Início", "#/"], ["Produtos", catalogHref()]];
+    if (state.cat !== "todos") migalhas.push([catName(state.cat), catalogHref({ cat: state.cat })]);
+    if (state.marca) migalhas.push([state.marca, catalogHref({ cat: state.cat, marca: state.marca })]);
+    if (state.q) migalhas.push([`Busca: ${state.q}`, ""]);
+    $("#crumbs").innerHTML = crumbs(migalhas);
+    $("#resultInfo").textContent = `${all.length.toLocaleString("pt-BR")} produto${all.length === 1 ? "" : "s"} encontrado${all.length === 1 ? "" : "s"}`;
+    $("#sort").value = state.sort;
     $("#empty").hidden = all.length > 0;
     $("#more").hidden = all.length <= state.limite;
-    $("#grid").innerHTML = list.map((p, i) => cardHTML(p, Math.min(i % PAGE, 12) * 40)).join("");
+    $("#grid").removeAttribute("aria-busy");
+    $("#grid").innerHTML = list.map((p, i) => cardHTML(p, Math.min(i % PAGE, 12) * 30)).join("");
+    renderFiltros();
+    if (VIEW === "catalogo") document.title = `${titulo} · ${S.nome}`;
   }
 
-  // Card de produto: usado no catálogo e nas vitrines da página inicial
+  // Card de produto: usado na listagem, nas vitrines e nos relacionados
   function cardHTML(p, delay = 0) {
     return `
       <article class="card${esgotado(p) ? " card--out" : ""}" style="animation-delay:${delay}ms">
-        <div class="card__media" data-open="${esc(p.id)}">
-          <img src="${esc(foto(p))}" alt="${esc(p.nome)}" loading="lazy" onerror="__imgErr(this)" />
+        <a class="card__media" href="${prodHref(p)}" tabindex="-1" aria-hidden="true">
+          <img src="${esc(foto(p))}" alt="" loading="lazy" onerror="__imgErr(this)" />
           ${esgotado(p) ? `<span class="badge badge--out">Esgotado</span>` : p.tag ? `<span class="badge">${esc(p.tag)}</span>` : ""}
           ${off(p) ? `<span class="badge badge--off">-${off(p)}%</span>` : ""}
-        </div>
+        </a>
         <div class="card__body">
           <span class="card__cat">${esc(meta(p))}</span>
-          <h3 class="card__name" data-open="${esc(p.id)}">${esc(p.nome)}</h3>
+          <h3 class="card__name"><a href="${prodHref(p)}">${esc(p.nome)}</a></h3>
+          ${p.sku ? `<span class="card__sku">Cód. ${esc(p.sku)}</span>` : ""}
           ${priceHTML(p)}
+          ${esgotado(p) ? "" : dispHTML(p)}
           <div class="card__actions">
             ${esgotado(p)
               ? `<a class="btn btn--ghost btn--wide" href="${waLink(`Olá! O produto *${p.nome}*${skuTxt(p)} vai voltar ao estoque?`)}" target="_blank" rel="noopener">Avise-me</a>`
               : `<button class="btn btn--primary" data-add="${esc(p.id)}">Adicionar</button>
-            <a class="btn btn--ghost" href="${waLink(`Olá! Tenho interesse no produto: *${p.nome}*${skuTxt(p)}`)}" target="_blank" rel="noopener" aria-label="Perguntar no WhatsApp">
+            <a class="btn btn--ghost" href="${waLink(`Olá! Tenho interesse no produto: *${p.nome}*${skuTxt(p)}`)}" target="_blank" rel="noopener" aria-label="Perguntar no WhatsApp sobre ${esc(p.nome)}">
               <svg viewBox="0 0 24 24"><use href="#ico-whats"/></svg>
             </a>`}
           </div>
@@ -384,21 +466,247 @@
       </article>`;
   }
 
-  function onCardClick(e) {
-    const open = e.target.closest("[data-open]");
+  // "Adicionar" em qualquer card (listagem, vitrines, relacionados)
+  document.addEventListener("click", (e) => {
     const add = e.target.closest("[data-add]");
-    if (add) {
-      const p = byId(add.dataset.add);
-      if (p.variacoes && p.variacoes.length > 1) openModal(p.id);
-      else addToCart(p.id, (p.variacoes || [])[0] || "", 1);
-    } else if (open) openModal(open.dataset.open);
-  }
-  $("#grid").addEventListener("click", onCardClick);
+    if (!add) return;
+    const p = byId(add.dataset.add);
+    if (p.variacoes && p.variacoes.length > 1) location.hash = prodHref(p);
+    else addToCart(p.id, (p.variacoes || [])[0] || "", 1);
+  });
 
-  /* ---------- Overlay / modal / drawer ---------- */
-  const overlay = $("#overlay"), modal = $("#modal"), drawer = $("#drawer"), menu = $("#menu");
+  /* ---------- Vitrines (carrosséis) ---------- */
+  const MAX_VITRINE = 12;
+  const shelfHTML = (titulo, lista, acao, tipo) =>
+    lista.length
+      ? `<section class="shelf${tipo ? " shelf--" + tipo : ""}" aria-label="${esc(titulo)}">
+        <div class="shelf__head"><h2>${esc(titulo)}</h2>${acao || ""}</div>
+        <div class="shelf__wrap">
+          <button class="shelf__nav shelf__nav--prev" data-dir="-1" aria-label="Anterior" hidden>‹</button>
+          <div class="shelf__track">${lista.slice(0, MAX_VITRINE).map((p) => cardHTML(p)).join("")}</div>
+          <button class="shelf__nav shelf__nav--next" data-dir="1" aria-label="Próximo" hidden>›</button>
+        </div>
+      </section>`
+      : "";
+
+  function atualizarSetas(track) {
+    const wrap = track.parentElement;
+    const max = track.scrollWidth - track.clientWidth - 2;
+    wrap.querySelector(".shelf__nav--prev").hidden = track.scrollLeft <= 2;
+    wrap.querySelector(".shelf__nav--next").hidden = track.scrollLeft >= max;
+  }
+  function iniciarVitrines(root) {
+    root.querySelectorAll(".shelf__track").forEach((tr) => {
+      atualizarSetas(tr);
+      tr.addEventListener("scroll", () => atualizarSetas(tr), { passive: true });
+    });
+  }
+  window.addEventListener("resize", () => document.querySelectorAll(".shelf__track").forEach(atualizarSetas));
+  document.addEventListener("click", (e) => {
+    const nav = e.target.closest(".shelf__nav");
+    if (!nav) return;
+    const tr = nav.parentElement.querySelector(".shelf__track");
+    tr.scrollBy({ left: Number(nav.dataset.dir) * tr.clientWidth * 0.9, behavior: "smooth" });
+  });
+
+  /* ---------- Página inicial: vitrines geradas só com dados reais ---------- */
+  function buildHome() {
+    const disponiveisPrimeiro = (a, b) => esgotado(a) - esgotado(b);
+    const verTodos = (href, n) => `<a href="${href}" class="shelf__all">Ver todos${n ? ` (${n})` : ""}</a>`;
+    const html = [];
+
+    // Departamentos (imagem = foto real de um produto do departamento)
+    if (CATS.length) {
+      html.push(`<section class="depts" aria-label="Departamentos"><div class="shelf__head"><h2>Departamentos</h2></div><div class="depts__grid">${CATS.map((c) => {
+        const ps = PRODUTOS.filter((p) => p.categoria === c.id);
+        const capa = ps.find((p) => p.imagens.length);
+        return `<a href="${catalogHref({ cat: c.id })}" class="dept-card">
+          <span class="dept-card__img">${capa ? `<img src="${esc(capa.imagens[0])}" alt="" loading="lazy" onerror="__imgErr(this)" />` : `<span class="dept-card__ini">${esc(c.nome.charAt(0))}</span>`}</span>
+          <b>${esc(c.nome)}</b><small>${ps.length} produto${ps.length === 1 ? "" : "s"}</small>
+        </a>`;
+      }).join("")}</div></section>`);
+    }
+
+    // Lançamentos: pela data de cadastro no Catálogo Pro
+    const lancamentos = PRODUTOS.filter((p) => p.adicionado && !esgotado(p)).sort((a, b) => b.adicionado - a.adicionado);
+    if (lancamentos.length >= 4) html.push(shelfHTML("Lançamentos", lancamentos, verTodos(catalogHref({ sort: "recentes" })), "novo"));
+
+    // Ofertas: só produtos com preço anterior maior que o atual
+    const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
+    if (ofertas.length >= 2) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
+
+    // Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações
+    const porTag = {};
+    PRODUTOS.forEach((p) => (p.tags || []).slice(0, 1).forEach((t) => (porTag[t] = porTag[t] || []).push(p)));
+    Object.entries(porTag)
+      .filter(([, ps]) => ps.length >= 2)
+      .forEach(([t, ps]) => html.push(shelfHTML(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
+
+    // Marcas
+    if (marcas.length > 1) {
+      const n = (m) => PRODUTOS.filter((p) => p.marca === m).length;
+      html.push(`<section class="brands" aria-label="Marcas"><div class="shelf__head"><h2>Marcas</h2></div><div class="brands__list">${marcas
+        .map((m) => `<a href="${catalogHref({ marca: m })}" class="brand-chip">${esc(m)}<small>${n(m)}</small></a>`)
+        .join("")}</div></section>`);
+    }
+
+    // Uma vitrine por departamento
+    CATS.forEach((c) => {
+      const ps = PRODUTOS.filter((p) => p.categoria === c.id).sort(disponiveisPrimeiro);
+      html.push(shelfHTML(c.nome, ps, verTodos(catalogHref({ cat: c.id }), ps.length)));
+    });
+
+    $("#home").innerHTML = html.join("");
+    iniciarVitrines($("#home"));
+  }
+
+  /* ---------- Página de produto ---------- */
+  let produtoAtual = null;
+
+  function renderProduto(p) {
+    produtoAtual = p;
+    const imgs = p.imagens.length ? p.imagens : [fallback(p.nome)];
+    const out = esgotado(p);
+    let v = (p.variacoes || [])[0] || "", q = 1;
+    const specs = [
+      ["Marca", p.marca],
+      ["Código", p.sku],
+      ["Departamento", catName(p.categoria)],
+      ["Tipo", p.tipo],
+      ["Volume", p.volume ? `${p.volume} ml` : ""],
+      ["Notas", p.notas],
+    ].filter((s) => s[1]);
+    // Relacionados: mesmo departamento, primeiro os da mesma marca e os disponíveis
+    const rel = PRODUTOS.filter((x) => x.categoria === p.categoria && x.id !== p.id).sort(
+      (a, b) => (b.marca === p.marca) - (a.marca === p.marca) || esgotado(a) - esgotado(b)
+    );
+    const migalhas = [["Início", "#/"], ["Produtos", catalogHref()], [catName(p.categoria), catalogHref({ cat: p.categoria })], [p.nome, ""]];
+
+    $("#produto").innerHTML = `
+      <nav class="crumbs" aria-label="Você está aqui">${crumbs(migalhas)}</nav>
+      <div class="pdp">
+        <div class="pdp__gallery">
+          <div class="pdp__main"><img id="pImg" src="${esc(imgs[0])}" alt="${esc(p.nome)}" onerror="__imgErr(this)" />
+            ${!out && off(p) ? `<span class="badge badge--off">-${off(p)}%</span>` : ""}
+          </div>
+          ${imgs.length > 1 ? `<div class="pdp__thumbs" role="group" aria-label="Fotos do produto">${imgs.map((src, i) => `<button class="pdp__thumb${i ? "" : " active"}" data-src="${esc(src)}" aria-label="Foto ${i + 1}"${i ? "" : ' aria-current="true"'}><img src="${esc(src)}" alt="" loading="lazy" onerror="__imgErr(this)" /></button>`).join("")}</div>` : ""}
+        </div>
+        <div class="pdp__info">
+          <div class="pdp__meta">
+            ${p.marca ? `<a href="${catalogHref({ marca: p.marca })}" class="pdp__brand">${esc(p.marca)}</a>` : ""}
+            ${p.sku ? `<span>Cód. ${esc(p.sku)}</span>` : ""}
+            ${p.tag && !out ? `<span class="badge badge--inline">${esc(p.tag)}</span>` : ""}
+          </div>
+          <h1 class="pdp__title">${esc(p.nome)}</h1>
+          ${dispHTML(p)}
+          <div class="pdp__price">${priceHTML(p)}</div>
+          ${p.variacoes && p.variacoes.length ? `<div class="pdp__block"><span class="label">Opção</span><div class="opts">${p.variacoes.map((o, i) => `<button class="opt${i ? "" : " active"}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>` : ""}
+          ${out ? "" : `<div class="pdp__block"><span class="label">Quantidade</span>
+            <div class="qty"><button data-q="-1" aria-label="Diminuir">−</button><span id="pQty" aria-live="polite">1</span><button data-q="1" aria-label="Aumentar">+</button></div></div>`}
+          <div class="pdp__btns">
+            ${out ? "" : `<button class="btn btn--primary btn--block" id="pAdd">Adicionar ao carrinho</button>`}
+            <a class="btn btn--whats btn--block" id="pBuy" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>${out ? "Avise-me quando chegar" : "Comprar agora no WhatsApp"}</a>
+          </div>
+          <p class="pdp__note">${COTACAO ? "Preços calculados pela cotação do dia. " : ""}Pagamento e entrega são combinados pelo WhatsApp.</p>
+        </div>
+      </div>
+      ${p.descricao || specs.length ? `<div class="pdp__extra">
+        ${p.descricao ? `<section class="pdp__section"><h2>Descrição</h2><p>${esc(p.descricao)}</p></section>` : ""}
+        ${specs.length ? `<section class="pdp__section"><h2>Especificações</h2><dl class="specs">${specs.map(([k, val]) => `<dt>${k}</dt><dd>${esc(val)}</dd>`).join("")}</dl></section>` : ""}
+      </div>` : ""}
+      ${rel.length ? `<div class="pdp__related">${shelfHTML(`Mais em ${catName(p.categoria)}`, rel, `<a href="${catalogHref({ cat: p.categoria })}" class="shelf__all">Ver todos</a>`)}</div>` : ""}`;
+
+    const updBuy = () => {
+      $("#pBuy").href = waLink(
+        out
+          ? `Olá! O produto *${p.nome}*${skuTxt(p)} vai voltar ao estoque?`
+          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? ` — ${fmt(p.preco * q)}` : ""}\n\nPodemos combinar pagamento e entrega?`
+      );
+    };
+    updBuy();
+    $("#produto").onclick = (e) => {
+      const o = e.target.closest(".opt");
+      const qb = e.target.closest("[data-q]");
+      const th = e.target.closest(".pdp__thumb");
+      if (o) {
+        v = o.dataset.v;
+        $("#produto").querySelectorAll(".opt").forEach((x) => x.classList.toggle("active", x === o));
+      }
+      if (qb) {
+        q = Math.max(1, q + Number(qb.dataset.q));
+        if (p.estoque > 0) q = Math.min(q, p.estoque);
+        $("#pQty").textContent = q;
+      }
+      if (th) {
+        $("#pImg").src = th.dataset.src;
+        $("#produto").querySelectorAll(".pdp__thumb").forEach((x) => {
+          x.classList.toggle("active", x === th);
+          if (x === th) x.setAttribute("aria-current", "true");
+          else x.removeAttribute("aria-current");
+        });
+      }
+      if (e.target.closest("#pAdd")) addToCart(p.id, v, q);
+      updBuy();
+    };
+    iniciarVitrines($("#produto"));
+    document.title = `${p.nome} · ${S.nome}`;
+  }
+
+  /* ---------- Roteador ---------- */
+  function showView(v) {
+    VIEW = v;
+    document.querySelectorAll("[data-view]").forEach((el) => (el.hidden = el.dataset.view !== v));
+  }
+
+  function route() {
+    const h = location.hash.replace(/^#\/?/, "");
+    const [path, qs = ""] = h.split("?");
+    const [view, ...rest] = path.split("/");
+    closeAll();
+    setDept(false);
+    fecharSugestoes();
+
+    if (view === "produto") {
+      const p = byId(decodeURIComponent(rest.join("/")));
+      if (p) {
+        showView("produto");
+        renderProduto(p);
+        marcarDepartamento();
+        window.scrollTo(0, 0);
+        return;
+      }
+    }
+    if (view === "catalogo") {
+      const prm = new URLSearchParams(qs);
+      const cat = prm.get("cat");
+      state = {
+        cat: CATS.some((c) => c.id === cat) ? cat : "todos",
+        marca: marcas.includes(prm.get("marca")) ? prm.get("marca") : "",
+        q: (prm.get("q") || "").trim(),
+        sort: ORDENS.includes(prm.get("ordem")) ? prm.get("ordem") : "destaque",
+        disp: prm.get("disp") === "1",
+        limite: PAGE,
+      };
+      input.value = state.q;
+      showView("catalogo");
+      render();
+      marcarDepartamento();
+      window.scrollTo(0, 0);
+      return;
+    }
+    produtoAtual = null;
+    showView("home");
+    marcarDepartamento();
+    document.title = TITULO;
+    if (h) window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+
+  /* ---------- Overlay / painéis laterais ---------- */
+  const overlay = $("#overlay"), drawer = $("#drawer"), menu = $("#menu");
   function closeAll() {
-    [overlay, modal, drawer, menu].forEach((el) => (el.hidden = true));
+    [overlay, drawer, menu].forEach((el) => (el.hidden = true));
+    filtersEl.classList.remove("open");
     document.body.style.overflow = "";
   }
   function show(el) {
@@ -410,73 +718,6 @@
   overlay.addEventListener("click", closeAll);
   document.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeAll(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
-
-  function openModal(id) {
-    const p = byId(id);
-    const imgs = p.imagens.length ? p.imagens : [fallback(p.nome)];
-    const out = esgotado(p);
-    let v = (p.variacoes || [])[0] || "", q = 1;
-    const specs = [
-      ["Marca", p.marca],
-      ["Código", p.sku],
-      ["Tipo", p.tipo],
-      ["Volume", p.volume ? `${p.volume} ml` : ""],
-      ["Notas", p.notas],
-      ["Estoque", p.estoque == null ? "" : out ? "Esgotado" : p.estoque <= 3 ? `Últimas ${p.estoque} unidades` : "Disponível"],
-    ].filter((s) => s[1]);
-    $("#modalBody").innerHTML = `
-      <div>
-        <div class="modal__media"><img id="mImg" src="${esc(imgs[0])}" alt="${esc(p.nome)}" onerror="__imgErr(this)" /></div>
-        ${imgs.length > 1 ? `<div class="modal__thumbs">${imgs.map((src, i) => `<img src="${esc(src)}" alt="${esc(p.nome)}" class="${i ? "" : "active"}" onerror="__imgErr(this)" />`).join("")}</div>` : ""}
-      </div>
-      <div class="modal__info">
-        <span class="card__cat">${esc(catName(p.categoria))}${p.tag ? " · " + esc(p.tag) : ""}</span>
-        <h3 id="modalTitle">${esc(p.nome)}</h3>
-        ${priceHTML(p)}
-        ${p.preco && !COTACAO ? `<small class="muted">Pix ou cartão — combine as condições no WhatsApp</small>` : ""}
-        ${p.descricao ? `<p>${esc(p.descricao)}</p>` : ""}
-        ${specs.length ? `<dl class="specs">${specs.map(([k, val]) => `<dt>${k}</dt><dd>${esc(val)}</dd>`).join("")}</dl>` : ""}
-        ${p.variacoes && p.variacoes.length ? `<span class="label">Opção</span><div class="opts">${p.variacoes.map((o, i) => `<button class="opt${i ? "" : " active"}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div>` : ""}
-        ${out ? "" : `<span class="label">Quantidade</span>
-        <div class="qty"><button data-q="-1" aria-label="Diminuir">−</button><span id="mQty">1</span><button data-q="1" aria-label="Aumentar">+</button></div>`}
-        <div class="modal__btns">
-          ${out ? "" : `<button class="btn btn--primary btn--block" id="mAdd">Adicionar ao carrinho</button>`}
-          <a class="btn btn--whats btn--block" id="mBuy" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><use href="#ico-whats"/></svg>${out ? "Avise-me quando chegar" : "Comprar agora no WhatsApp"}</a>
-        </div>
-      </div>`;
-    const updBuy = () => {
-      $("#mBuy").href = waLink(
-        out
-          ? `Olá! O produto *${p.nome}*${skuTxt(p)} vai voltar ao estoque?`
-          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? ` — ${fmt(p.preco * q)}` : ""}\n\nPodemos combinar pagamento e entrega?`
-      );
-    };
-    updBuy();
-    $("#modalBody").onclick = (e) => {
-      const o = e.target.closest(".opt");
-      const qb = e.target.closest("[data-q]");
-      const th = e.target.closest(".modal__thumbs img");
-      if (o) {
-        v = o.dataset.v;
-        document.querySelectorAll(".opt").forEach((x) => x.classList.toggle("active", x === o));
-      }
-      if (qb) {
-        q = Math.max(1, q + Number(qb.dataset.q));
-        if (p.estoque > 0) q = Math.min(q, p.estoque);
-        $("#mQty").textContent = q;
-      }
-      if (th) {
-        $("#mImg").src = th.src;
-        document.querySelectorAll(".modal__thumbs img").forEach((x) => x.classList.toggle("active", x === th));
-      }
-      if (e.target.closest("#mAdd")) {
-        addToCart(p.id, v, q);
-        closeAll();
-      }
-      updBuy();
-    };
-    show(modal);
-  }
 
   /* ---------- Carrinho ---------- */
   const KEY = "rota_cart_v1";
@@ -578,107 +819,7 @@
   }
   window.addEventListener("scroll", () => $("#header").classList.toggle("scrolled", scrollY > 10), { passive: true });
 
-  /* ---------- Página inicial: vitrines geradas só com dados reais ---------- */
-  function buildHome() {
-    const MAX = 12;
-    const disponiveisPrimeiro = (a, b) => esgotado(a) - esgotado(b);
-    const shelf = (titulo, lista, acao, tipo) =>
-      lista.length
-        ? `<section class="shelf${tipo ? " shelf--" + tipo : ""}" aria-label="${esc(titulo)}">
-        <div class="shelf__head"><h2>${esc(titulo)}</h2>${acao || ""}</div>
-        <div class="shelf__wrap">
-          <button class="shelf__nav shelf__nav--prev" data-dir="-1" aria-label="Anterior" hidden>‹</button>
-          <div class="shelf__track">${lista.slice(0, MAX).map((p) => cardHTML(p)).join("")}</div>
-          <button class="shelf__nav shelf__nav--next" data-dir="1" aria-label="Próximo" hidden>›</button>
-        </div>
-      </section>`
-        : "";
-    const verTodos = (cat, n) => `<a href="#catalogo" class="shelf__all" data-cat="${esc(cat)}">Ver todos (${n})</a>`;
-    const html = [];
-
-    // B — Departamentos (imagem = foto real de um produto do departamento)
-    if (CATS.length) {
-      html.push(`<section class="depts" aria-label="Departamentos"><div class="shelf__head"><h2>Departamentos</h2></div><div class="depts__grid">${CATS.map((c) => {
-        const ps = PRODUTOS.filter((p) => p.categoria === c.id);
-        const capa = ps.find((p) => p.imagens.length);
-        return `<a href="#catalogo" class="dept-card" data-cat="${esc(c.id)}">
-          <span class="dept-card__img">${capa ? `<img src="${esc(capa.imagens[0])}" alt="" loading="lazy" onerror="__imgErr(this)" />` : `<span class="dept-card__ini">${esc(c.nome.charAt(0))}</span>`}</span>
-          <b>${esc(c.nome)}</b><small>${ps.length} produto${ps.length === 1 ? "" : "s"}</small>
-        </a>`;
-      }).join("")}</div></section>`);
-    }
-
-    // C — Lançamentos: pela data de cadastro no Catálogo Pro
-    const lancamentos = PRODUTOS.filter((p) => p.adicionado && !esgotado(p)).sort((a, b) => b.adicionado - a.adicionado);
-    if (lancamentos.length >= 4) html.push(shelf("Lançamentos", lancamentos, "", "novo"));
-
-    // D — Ofertas: só produtos com preço anterior maior que o atual
-    const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
-    if (ofertas.length >= 2) html.push(shelf("Ofertas", ofertas, "", "promo"));
-
-    // D — Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações
-    const porTag = {};
-    PRODUTOS.forEach((p) => (p.tags || []).slice(0, 1).forEach((t) => (porTag[t] = porTag[t] || []).push(p)));
-    Object.entries(porTag)
-      .filter(([, ps]) => ps.length >= 2)
-      .forEach(([t, ps]) => html.push(shelf(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
-
-    // D — Marcas
-    if (marcas.length > 1) {
-      const n = (m) => PRODUTOS.filter((p) => p.marca === m).length;
-      html.push(`<section class="brands" aria-label="Marcas"><div class="shelf__head"><h2>Marcas</h2></div><div class="brands__list">${marcas
-        .map((m) => `<a href="#catalogo" class="brand-chip" data-marca="${esc(m)}">${esc(m)}<small>${n(m)}</small></a>`)
-        .join("")}</div></section>`);
-    }
-
-    // D — Uma vitrine por departamento
-    CATS.forEach((c) => {
-      const ps = PRODUTOS.filter((p) => p.categoria === c.id).sort(disponiveisPrimeiro);
-      html.push(shelf(c.nome, ps, ps.length > MAX || CATS.length > 1 ? verTodos(c.id, ps.length) : ""));
-    });
-
-    $("#home").innerHTML = html.join("");
-    $("#home").querySelectorAll(".shelf__track").forEach(atualizarSetas);
-    $("#home").querySelectorAll(".shelf__track").forEach((tr) => tr.addEventListener("scroll", () => atualizarSetas(tr), { passive: true }));
-  }
-
-  function atualizarSetas(track) {
-    const wrap = track.parentElement;
-    const max = track.scrollWidth - track.clientWidth - 2;
-    wrap.querySelector(".shelf__nav--prev").hidden = track.scrollLeft <= 2;
-    wrap.querySelector(".shelf__nav--next").hidden = track.scrollLeft >= max;
-  }
-  window.addEventListener("resize", () => $("#home").querySelectorAll(".shelf__track").forEach(atualizarSetas));
-
-  $("#home").addEventListener("click", (e) => {
-    const nav = e.target.closest(".shelf__nav");
-    const cat = e.target.closest("[data-cat]");
-    const marca = e.target.closest("[data-marca]");
-    if (nav) {
-      const tr = nav.parentElement.querySelector(".shelf__track");
-      tr.scrollBy({ left: Number(nav.dataset.dir) * tr.clientWidth * 0.9, behavior: "smooth" });
-    } else if (cat) {
-      e.preventDefault();
-      selectCategory(cat.dataset.cat, true);
-    } else if (marca) {
-      e.preventDefault();
-      state.marca = marca.dataset.marca;
-      $("#brand").value = state.marca;
-      selectCategory("todos", true);
-    } else onCardClick(e);
-  });
-
-  // Destaque principal: atalhos de departamento e fotos de produtos reais
-  $(".hero").addEventListener("click", (e) => {
-    const cat = e.target.closest("[data-cat]");
-    const open = e.target.closest("[data-open]");
-    if (cat) {
-      e.preventDefault();
-      selectCategory(cat.dataset.cat, true);
-    } else if (open) openModal(open.dataset.open);
-  });
-
   buildHome();
-  render();
   renderCart();
+  route();
 })();
