@@ -260,16 +260,33 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 
 .hero__visual { position: relative; height: 420px; }
 .hero__card {
-  position: absolute; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-lg);
-  background: var(--surface); border: 4px solid rgba(255, 255, 255, .9);
+  position: absolute; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-lg); padding: 0; cursor: pointer;
+  background: var(--surface); border: 4px solid rgba(255, 255, 255, .9); transition: transform var(--t), border-color var(--t);
 }
-.hero__card img { width: 100%; height: 100%; object-fit: cover; }
-.hero__card--a { width: 56%; height: 72%; left: 0; top: 8%; }
-.hero__card--b { width: 42%; height: 46%; right: 2%; top: 0; }
-.hero__card--c { width: 46%; height: 44%; right: 8%; bottom: 0; }
+.hero__card:hover { transform: translateY(-4px); border-color: #fff; }
+.hero__card img { width: 100%; height: 100%; object-fit: contain; padding: 8%; }
+.hero__tag {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: var(--r-sm); background: rgba(255, 255, 255, .95); color: var(--text); text-align: left;
+  box-shadow: var(--shadow-sm); font-size: .76rem;
+}
+.hero__tag b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hero__tag span { font: 700 .82rem var(--font-head); color: var(--royal); white-space: nowrap; }
+
+/* Atalhos de departamento no destaque principal */
+.hero__cats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -12px 0 32px; }
+.hero__cats > span { color: var(--on-dark-muted); font-size: .85rem; margin-right: 2px; }
+.hero__cats a {
+  padding: 6px 14px; border-radius: var(--r-pill); font-size: .85rem; font-weight: 500; color: #fff;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .22); transition: background var(--t), border-color var(--t), color var(--t);
+}
+.hero__cats a:hover { background: var(--yellow); border-color: var(--yellow); color: var(--navy); }
+.hero__card--a { width: 54%; height: 78%; left: 0; top: 11%; }
+.hero__card--b { width: 42%; height: 47%; right: 0; top: 0; }
+.hero__card--c { width: 42%; height: 47%; right: 0; bottom: 0; }
 
 /* ---------- Diferenciais ---------- */
-.perks { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: var(--s-3); margin: calc(-1 * var(--s-6)) auto var(--s-7); position: relative; }
+.perks { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: var(--s-3); margin: calc(-1 * var(--s-6)) auto var(--s-6); position: relative; z-index: 1; }
 .perks:empty { display: none; }
 .perk {
   display: flex; align-items: center; gap: 12px; padding: 18px; border-radius: var(--r);
@@ -280,8 +297,20 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .perk small { color: var(--muted); }
 
 /* ---------- Página inicial: departamentos, vitrines e marcas ---------- */
-.home { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-7); margin-bottom: var(--s-8); }
+.home-band { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: var(--s-7) 0 var(--s-8); margin-bottom: var(--s-7); }
+.home-band:has(.home:empty) { display: none; }
+.home { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-8); }
 .home:empty { display: none; }
+
+/* Marcador das vitrines comerciais: azul (padrão), laranja (destaques/lançamentos) e amarelo (ofertas) */
+.shelf__head h2 { display: flex; align-items: center; gap: 10px; }
+.shelf__head h2::before { content: ""; width: 5px; height: 1.1em; border-radius: 3px; background: var(--royal); }
+.shelf--novo .shelf__head h2::before, .shelf--destaque .shelf__head h2::before { background: var(--orange); }
+.shelf--promo .shelf__head h2::before { background: var(--yellow); }
+.shelf--promo .shelf__head h2::after {
+  content: "Preço reduzido"; font: 700 .7rem var(--font); text-transform: uppercase; letter-spacing: .04em;
+  background: var(--yellow); color: var(--navy); padding: 4px 8px; border-radius: var(--r-sm);
+}
 .shelf__head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: var(--s-4); }
 .shelf__head h2 { font-size: clamp(1.25rem, 2vw, 1.6rem); font-weight: 700; }
 .shelf__all { color: var(--royal); font-weight: 600; font-size: .9rem; white-space: nowrap; transition: color var(--t); }
@@ -510,7 +539,9 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
   .shelf__nav { display: none; }
 }
 @media (max-width: 560px) {
-  .home { gap: var(--s-6); }
+  .home { gap: var(--s-7); }
+  .home-band { padding: var(--s-6) 0 var(--s-7); }
+  .hero__cats { margin: -8px 0 24px; }
   .shelf__track { grid-auto-columns: calc(50% - 6px); gap: 12px; }
   .depts__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .dept-card { padding: 12px 6px; }

@@ -109,9 +109,23 @@
   const comFoto = PRODUTOS.filter((p) => p.imagens.length && !esgotado(p)).sort((a, b) => (b.adicionado || 0) - (a.adicionado || 0)).slice(0, 3);
   if (loja && comFoto.length === 3) {
     $("#heroVisual").innerHTML = comFoto
-      .map((p, i) => `<div class="hero__card hero__card--${"abc"[i]}"><img src="${esc(p.imagens[0])}" alt="" onerror="__imgErr(this)" /></div>`)
+      .map(
+        (p, i) => `<button class="hero__card hero__card--${"abc"[i]}" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}">
+          <img src="${esc(p.imagens[0])}" alt="" onerror="__imgErr(this)" />
+          <span class="hero__tag"><b>${esc(p.nome)}</b>${p.preco == null ? "" : `<span>${esc(fmt(p.preco))}</span>`}</span>
+        </button>`
+      )
       .join("");
     $("#heroVisual").hidden = false;
+  }
+  // Atalhos para os departamentos com mais produtos
+  {
+    const conta = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
+    const top = [...CATS].sort((a, b) => (conta[b.id] || 0) - (conta[a.id] || 0)).slice(0, 4);
+    if (top.length > 1) {
+      $("#heroCats").innerHTML = `<span>Explore:</span>` + top.map((c) => `<a href="#catalogo" data-cat="${esc(c.id)}">${esc(c.nome)}</a>`).join("");
+      $("#heroCats").hidden = false;
+    }
   }
   if (loja && loja.generated && !isNaN(Date.parse(loja.generated))) {
     $("#heroPill").textContent = `Catálogo atualizado em ${new Date(loja.generated).toLocaleDateString("pt-BR")}`;
@@ -568,9 +582,9 @@
   function buildHome() {
     const MAX = 12;
     const disponiveisPrimeiro = (a, b) => esgotado(a) - esgotado(b);
-    const shelf = (titulo, lista, acao) =>
+    const shelf = (titulo, lista, acao, tipo) =>
       lista.length
-        ? `<section class="shelf" aria-label="${esc(titulo)}">
+        ? `<section class="shelf${tipo ? " shelf--" + tipo : ""}" aria-label="${esc(titulo)}">
         <div class="shelf__head"><h2>${esc(titulo)}</h2>${acao || ""}</div>
         <div class="shelf__wrap">
           <button class="shelf__nav shelf__nav--prev" data-dir="-1" aria-label="Anterior" hidden>‹</button>
@@ -596,18 +610,18 @@
 
     // C — Lançamentos: pela data de cadastro no Catálogo Pro
     const lancamentos = PRODUTOS.filter((p) => p.adicionado && !esgotado(p)).sort((a, b) => b.adicionado - a.adicionado);
-    if (lancamentos.length >= 4) html.push(shelf("Lançamentos", lancamentos));
+    if (lancamentos.length >= 4) html.push(shelf("Lançamentos", lancamentos, "", "novo"));
 
     // D — Ofertas: só produtos com preço anterior maior que o atual
     const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
-    if (ofertas.length >= 2) html.push(shelf("Ofertas", ofertas));
+    if (ofertas.length >= 2) html.push(shelf("Ofertas", ofertas, "", "promo"));
 
     // D — Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações
     const porTag = {};
     PRODUTOS.forEach((p) => (p.tags || []).slice(0, 1).forEach((t) => (porTag[t] = porTag[t] || []).push(p)));
     Object.entries(porTag)
       .filter(([, ps]) => ps.length >= 2)
-      .forEach(([t, ps]) => html.push(shelf(t, ps.sort(disponiveisPrimeiro))));
+      .forEach(([t, ps]) => html.push(shelf(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
 
     // D — Marcas
     if (marcas.length > 1) {
@@ -652,6 +666,16 @@
       $("#brand").value = state.marca;
       selectCategory("todos", true);
     } else onCardClick(e);
+  });
+
+  // Destaque principal: atalhos de departamento e fotos de produtos reais
+  $(".hero").addEventListener("click", (e) => {
+    const cat = e.target.closest("[data-cat]");
+    const open = e.target.closest("[data-open]");
+    if (cat) {
+      e.preventDefault();
+      selectCategory(cat.dataset.cat, true);
+    } else if (open) openModal(open.dataset.open);
   });
 
   buildHome();
