@@ -146,6 +146,20 @@
     .ped-total b { font: 700 1.25rem Poppins, sans-serif; color: var(--navy); }
     @media (max-width: 560px) { .it { grid-template-columns: minmax(0,1fr) 64px 34px; } .it__preco { grid-column: 1 / 3; } }
 
+    /* Exportar */
+    .exp { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+    .exp .card + .card { margin-top: 0; }
+    .ecats { display: grid; gap: 2px; }
+    .ecat { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 10px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+    .ecat:last-child { border-bottom: 0; }
+    .ecat input { width: 18px; height: 18px; accent-color: var(--royal); }
+    .ecat label { cursor: pointer; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ecat--off label { color: var(--muted); }
+    .exp-foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; position: sticky; bottom: 12px; box-shadow: 0 10px 30px -12px rgba(0,27,80,.25); }
+    .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 6px; width: min(320px, 70vw); }
+    .bar span { display: block; height: 100%; width: 0; background: var(--royal); transition: width .2s; }
+    @media (max-width: 900px) { .exp { grid-template-columns: 1fr; } }
+
     /* Importar */
     .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 30px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop:hover, .drop.over { border-color: var(--royal); background: #eef4ff; }
@@ -210,6 +224,7 @@
       <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
       <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
       <button class="tab" data-tab="importar">⬆️ <span>Importar</span></button>
+      <button class="tab" data-tab="exportar">📄 <span>Exportar</span></button>
       <button class="tab" data-tab="loja">⚙️ <span>Loja</span></button>
       <div class="side__foot">
         <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
@@ -277,6 +292,41 @@
           <div class="files" id="files"></div>
           <button class="btn btn--primary" id="send" disabled style="margin-top:16px;width:100%">Enviar para o site</button>
           <div class="log" id="log" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <!-- Exportar -->
+      <section data-sec="exportar" hidden>
+        <div class="head"><h1>Exportar catálogo em PDF</h1></div>
+        <p class="muted small" style="margin:-8px 0 16px">Gera um catálogo para enviar aos clientes: capa com sumário, produtos com foto, preço e disponibilidade, e cada produto com link para a página dele no site. Só entram produtos visíveis no site.</p>
+        <div class="exp">
+          <div class="stack">
+            <div class="card">
+              <h2 style="margin-bottom:10px">Estoque</h2>
+              <label class="switch"><input type="checkbox" id="eComEst" checked /> Com estoque <span class="muted small" id="eComEstN"></span></label><br />
+              <label class="switch" style="margin-top:8px"><input type="checkbox" id="eSemEst" /> Sem estoque (esgotados) <span class="muted small" id="eSemEstN"></span></label>
+            </div>
+            <div class="card">
+              <h2 style="margin-bottom:10px">Foto</h2>
+              <label class="switch"><input type="checkbox" id="eComFoto" checked /> Com foto <span class="muted small" id="eComFotoN"></span></label><br />
+              <label class="switch" style="margin-top:8px"><input type="checkbox" id="eSemFoto" checked /> Sem foto <span class="muted small" id="eSemFotoN"></span></label>
+            </div>
+            <div class="card">
+              <h2 style="margin-bottom:10px">Opções</h2>
+              <label class="switch"><input type="checkbox" id="ePreco" checked /> Mostrar preços</label>
+            </div>
+          </div>
+          <div class="card">
+            <div class="head" style="margin-bottom:10px"><h2>Departamentos</h2><div style="display:flex;gap:6px"><button class="btn btn--sm" id="eTodas">Marcar todos</button><button class="btn btn--sm" id="eNenhuma">Desmarcar todos</button></div></div>
+            <div class="ecats" id="eCats"></div>
+          </div>
+        </div>
+        <div class="card exp-foot">
+          <div><b id="eResumo"></b><div class="muted small" id="eStatus" aria-live="polite"></div><div class="bar" id="eBar" hidden><span></span></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="ePorCat">Baixar um PDF por departamento</button>
+            <button class="btn btn--primary" id="eCompleto">Baixar PDF completo</button>
+          </div>
         </div>
       </section>
 
@@ -392,6 +442,8 @@
   <datalist id="dlSetores"></datalist>
   <div class="toast" id="toast" role="status"></div>
 
+  <script src="/js/config.js?v=23"></script>
+  <script src="/js/catalogo-pdf.js?v=4"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -506,6 +558,7 @@
       renderPedidos();
       renderProdutos();
       renderLoja();
+      renderExportar();
     }
 
     /* ---------- Abas ---------- */
@@ -514,6 +567,7 @@
       $$("[data-sec]").forEach((s) => (s.hidden = s.dataset.sec !== t));
       $$(".tab[data-tab]").forEach((b) => (b.dataset.tab === t ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
       history.replaceState(null, "", "#" + t);
+      if (t === "exportar" && D) renderExportar();
       if (!inicio) { scrollTo(0, 0); $(`[data-sec="${t}"] h1`).focus({ preventScroll: true }); }
     }
     $$("[data-sec] h1").forEach((h) => h.setAttribute("tabindex", "-1"));
@@ -984,6 +1038,137 @@
       if (last) { try { await carregar(); } catch {} }
       $("#send").disabled = false;
     };
+
+    /* ---------- Exportar catálogo em PDF ---------- */
+    const eFora = new Set(); // departamentos desmarcados
+    let gerando = false;
+    const setorDe = (p) => p.sector || "Outros";
+    const visiveis = () => PROD.filter((p) => p.active !== false);
+    const slugA = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    function filtroExp(p) {
+      const esg = p.stock === 0, temFoto = p._fotos.length > 0;
+      return (esg ? $("#eSemEst").checked : $("#eComEst").checked) && (temFoto ? $("#eComFoto").checked : $("#eSemFoto").checked);
+    }
+    // Mesma ordem de departamentos do Catálogo Pro; os demais em ordem alfabética
+    function ordemSetores(lista) {
+      const ordem = ((D.loja && D.loja.sectors) || []).map((s) => s.name);
+      const pos = (s) => { const i = ordem.indexOf(s); return i < 0 ? 1e4 : i; };
+      return [...new Set(lista)].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
+    }
+    // Preço igual ao do site: R$ no Pix (convertido do US$), com US$ e valor em dinheiro embaixo
+    function itemPDF(p) {
+      let preco = null, precoNota = "", precoSub = "";
+      if ($("#ePreco").checked) {
+        const pix = cot("pix"), efe = cot("efetivo"), princ = pix || efe;
+        if (!(p.price > 0)) preco = "";
+        else if (princ) {
+          preco = brl(Math.round(p.price * princ.rate * 100) / 100);
+          precoNota = pix ? "no Pix" : "em dinheiro";
+          precoSub = [usd(p.price), pix && efe ? brl(Math.round(p.price * efe.rate * 100) / 100) + " em dinheiro" : ""].filter(Boolean).join(" · ");
+        } else preco = usd(p.price);
+      }
+      return {
+        nome: p.name, marca: p.brand || "", sku: p.sku, preco, precoNota, precoSub,
+        esgotado: p.stock === 0, ultimas: p.stock > 0 && p.stock <= 3,
+        foto: p._fotos.length ? fotoURL(p._fotos[0]) : null,
+        url: location.origin + "/#/produto/" + encodeURIComponent(p.sku),
+      };
+    }
+    function gruposExp(soSetor) {
+      const prods = visiveis().filter(filtroExp);
+      return ordemSetores(prods.map(setorDe))
+        .filter((s) => (soSetor ? s === soSetor : !eFora.has(s)))
+        .map((s) => ({ nome: s, produtos: prods.filter((p) => setorDe(p) === s).sort((a, b) => a.name.localeCompare(b.name)).map(itemPDF) }));
+    }
+    function lojaPDF() {
+      const S = window.STORE || {};
+      const wa = soDig(D.site.whatsapp || S.whatsapp || (D.loja && D.loja.brand && D.loja.brand.whatsapp));
+      const waTxt = wa.length === 13 && wa.startsWith("55") ? `+55 (${wa.slice(2, 4)}) ${wa.slice(4, 9)}-${wa.slice(9)}` : wa ? "+" + wa : "";
+      const c = cot("pix") || cot("efetivo");
+      const aviso = $("#ePreco").checked ? `Preços sujeitos a alteração${c && c.date ? " · cotação de " + dataBR(c.date) : ""}` : "";
+      return { nome: D.site.nome || S.nome || "Rota Importados", whatsapp: waTxt, site: location.host, aviso };
+    }
+    const paginasDe = (gs) => 1 + gs.reduce((s, g) => s + Math.ceil(g.produtos.length / 9), 0);
+
+    function renderExportar() {
+      const vis = visiveis();
+      const n = (fn) => `(${vis.filter(fn).length.toLocaleString("pt-BR")})`;
+      $("#eComEstN").textContent = n((p) => p.stock !== 0);
+      $("#eSemEstN").textContent = n((p) => p.stock === 0);
+      $("#eComFotoN").textContent = n((p) => p._fotos.length > 0);
+      $("#eSemFotoN").textContent = n((p) => !p._fotos.length);
+      const prods = vis.filter(filtroExp);
+      $("#eCats").innerHTML = ordemSetores(vis.map(setorDe)).map((s, i) => {
+        const q = prods.filter((p) => setorDe(p) === s).length;
+        return `<div class="ecat${eFora.has(s) ? " ecat--off" : ""}">
+          <input type="checkbox" id="ec${i}" data-setor="${esc(s)}"${eFora.has(s) ? "" : " checked"} />
+          <label for="ec${i}">${esc(s)}</label>
+          <span class="muted small">${q.toLocaleString("pt-BR")}</span>
+          <button class="btn btn--sm" data-pdf-setor="${esc(s)}" title="Baixar o PDF só deste departamento"${q && !gerando ? "" : " disabled"}>PDF</button>
+        </div>`;
+      }).join("") || `<p class="muted">Nenhum produto visível no site.</p>`;
+      const gs = gruposExp().filter((g) => g.produtos.length);
+      const total = gs.reduce((s, g) => s + g.produtos.length, 0);
+      $("#eResumo").textContent = total ? `${total.toLocaleString("pt-BR")} produtos · ${gs.length} departamento(s) · ${paginasDe(gs)} páginas` : "Nenhum produto com esses filtros.";
+      $("#eCompleto").disabled = $("#ePorCat").disabled = !total || gerando;
+    }
+
+    async function baixarPDF(titulo, grupos, prefixo) {
+      const r = await CatalogoPDF.gerar({
+        titulo, grupos, loja: lojaPDF(), logo: "/img/logo.png",
+        onProgresso: (f, t) => { $("#eBar span").style.width = Math.round(f * 100) + "%"; $("#eStatus").textContent = prefixo + t; },
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(r.blob);
+      a.download = `Catalogo-${slugA(lojaPDF().nome)}-${slugA(titulo)}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      return r;
+    }
+    async function exportar(modo, setor) {
+      if (gerando) return;
+      gerando = true;
+      renderExportar();
+      $("#eBar").hidden = false;
+      try {
+        if (modo === "completo") {
+          const gs = gruposExp().filter((g) => g.produtos.length);
+          const r = await baixarPDF("Catálogo completo", gs, "");
+          $("#eStatus").textContent = `PDF completo baixado: ${r.paginas} páginas, ${(r.blob.size / 1048576).toFixed(1)} MB.`;
+        } else {
+          const lista = setor ? [setor] : gruposExp().filter((g) => g.produtos.length).map((g) => g.nome);
+          let feitos = 0;
+          for (const s of lista) {
+            const gs = gruposExp(s).filter((g) => g.produtos.length);
+            if (!gs.length) continue;
+            await baixarPDF(s, gs, lista.length > 1 ? `${s} (${feitos + 1} de ${lista.length}): ` : "");
+            feitos++;
+          }
+          $("#eStatus").textContent = feitos === 1 ? `PDF de ${lista[0]} baixado.` : `${feitos} PDFs baixados, um por departamento. Se o navegador perguntar, permita vários downloads.`;
+        }
+        toast("PDF pronto");
+      } catch (err) {
+        $("#eStatus").textContent = "";
+        toast("Não foi possível gerar o PDF: " + err.message, true);
+      }
+      gerando = false;
+      $("#eBar").hidden = true;
+      renderExportar();
+    }
+    ["#eComEst", "#eSemEst", "#eComFoto", "#eSemFoto", "#ePreco"].forEach((s) => $(s).addEventListener("change", renderExportar));
+    $("#eCats").addEventListener("change", (e) => {
+      const s = e.target.dataset.setor;
+      if (s == null) return;
+      e.target.checked ? eFora.delete(s) : eFora.add(s);
+      renderExportar();
+    });
+    $("#eCats").addEventListener("click", (e) => { const b = e.target.closest("[data-pdf-setor]"); if (b) exportar("setor", b.dataset.pdfSetor); });
+    $("#eTodas").addEventListener("click", () => { eFora.clear(); renderExportar(); });
+    $("#eNenhuma").addEventListener("click", () => { visiveis().forEach((p) => eFora.add(setorDe(p))); renderExportar(); });
+    $("#eCompleto").addEventListener("click", () => exportar("completo"));
+    $("#ePorCat").addEventListener("click", () => exportar("porSetor"));
 
     /* ---------- Loja ---------- */
     function renderLoja() {
