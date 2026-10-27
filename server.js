@@ -1,7 +1,7 @@
 // Servidor Node.js mínimo (sem dependências) para hospedagens que exigem app Node, como a Hostinger.
 // - Serve o site (index.html, css, js, img)
-// - Serve os dados exportados pelo Catálogo Pro em /data (loja.json + fotos)
-// - Painel /admin para enviar o ZIP exportado pelo Catálogo Pro (senha na variável ADMIN_SENHA)
+// - Serve os dados em /data: loja.json (Catálogo Pro + ajustes feitos no painel), site.json (dados da loja) e fotos
+// - Painel /admin com senha (variável ADMIN_SENHA): visão geral, pedidos, produtos, importação do ZIP e dados da loja
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -13,6 +13,7 @@ const ROOT = __dirname;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, "data"));
 const SENHA = process.env.ADMIN_SENHA || "";
 const MAX_UPLOAD = 80 * 1024 * 1024;
+const MAX_FOTO = 8 * 1024 * 1024;
 const PUBLIC = ["index.html", "css", "js", "img"]; // só isso fica acessível
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -25,6 +26,14 @@ const TYPES = {
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
+};
+
+// Arquivos de dados. "privado/" nunca é servido ao público.
+const F = {
+  loja: path.join(DATA_DIR, "loja.json"), // exportação original do Catálogo Pro
+  ajustes: path.join(DATA_DIR, "ajustes.json"), // edições e produtos criados no painel
+  site: path.join(DATA_DIR, "site.json"), // dados da loja (WhatsApp, Instagram, cotação manual…)
+  pedidos: path.join(DATA_DIR, "privado", "pedidos.json"),
 };
 
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
@@ -40,10 +49,14 @@ http
 
     if (rel === "admin" || rel === "admin/") return sendFile(res, path.join(ROOT, "admin.html"), "no-store", false, req);
     if (rel === "admin/importar") return importar(req, res);
+    if (rel.startsWith("admin/api/")) return adminApi(req, res, rel.slice(10));
+    if (rel === "api/pedido") return novoPedido(req, res);
 
+    if (rel === "data/loja.json") return sendLoja(req, res);
+    if (rel === "data/site.json" && !fs.existsSync(F.site)) return json(res, 200, {}, { "Cache-Control": "no-cache" });
     if (rel.startsWith("data/")) {
       const file = path.normalize(path.join(DATA_DIR, rel.slice(5)));
-      if (!inside(DATA_DIR, file)) return notFound(res);
+      if (!inside(DATA_DIR, file) || inside(path.join(DATA_DIR, "privado"), file) || file === F.ajustes || file.endsWith(".tmp")) return notFound(res);
       return sendFile(res, file, rel.endsWith(".json") ? "no-cache" : "public, max-age=86400", true, req);
     }
 
@@ -67,8 +80,7 @@ function sendFile(res, file, cache, plain404, req) {
       ETag: etag,
       "Last-Modified": st.mtime.toUTCString(),
     };
-    const inm = req && req.headers["if-none-match"];
-    if (inm && inm.split(",").some((t) => t.trim() === etag)) {
+    if (naoMudou(req, etag)) {
       res.writeHead(304, headers);
       return res.end();
     }
@@ -80,6 +92,11 @@ function sendFile(res, file, cache, plain404, req) {
   });
 }
 
+const naoMudou = (req, etag) => {
+  const inm = req && req.headers["if-none-match"];
+  return !!inm && inm.split(",").some((t) => t.trim() === etag);
+};
+
 function redirectHome(res) {
   res.writeHead(302, { Location: "/" });
   res.end();
@@ -90,12 +107,91 @@ function notFound(res) {
   res.end("Não encontrado");
 }
 
-function json(res, status, obj) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+function json(res, status, obj, extra) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extra });
   res.end(JSON.stringify(obj));
 }
 
-/* ---------- Importação do ZIP do Catálogo Pro ---------- */
+/* ---------- Arquivos JSON ---------- */
+function lerJSON(file, padrao) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return padrao;
+  }
+}
+
+// Grava em arquivo temporário e renomeia: quem estiver lendo nunca vê um arquivo pela metade
+function gravarJSON(file, obj) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.renameSync(tmp, file);
+  if (file !== F.pedidos) lojaCache = null;
+}
+
+const lerAjustes = () => {
+  const a = lerJSON(F.ajustes, null) || {};
+  return { produtos: a.produtos && typeof a.produtos === "object" ? a.produtos : {}, novos: Array.isArray(a.novos) ? a.novos : [] };
+};
+
+/* ---------- loja.json público = Catálogo Pro + ajustes do painel + cotação manual ---------- */
+// Campos que o painel pode alterar. Se o Catálogo Pro mudar o mesmo campo depois da edição
+// (nova exportação com outro valor), vale o do Catálogo Pro: a alteração mais recente ganha.
+const CAMPOS = ["name", "description", "brand", "sector", "price", "stock", "active", "tags", "photos"];
+const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+
+function aplicarAjuste(p, aj) {
+  if (!aj || !aj.campos) return p;
+  const q = { ...p };
+  for (const k of CAMPOS) {
+    if (!(k in aj.campos)) continue;
+    if (aj.base && k in aj.base && !igual(p[k], aj.base[k])) continue; // Catálogo Pro alterou depois
+    q[k] = aj.campos[k];
+  }
+  return q;
+}
+
+let lojaCache = null;
+function montarLoja() {
+  if (lojaCache) return lojaCache;
+  const loja = lerJSON(F.loja, null);
+  const aj = lerAjustes();
+  const site = lerJSON(F.site, null) || {};
+  const valida = loja && loja.type === "catalogo-pro-site" && Array.isArray(loja.products);
+  if (!valida && !aj.novos.length) return (lojaCache = { vazio: true });
+
+  const out = valida ? { ...loja } : { type: "catalogo-pro-site", version: 1, currency: "USD", sectors: [], rates: {}, products: [] };
+  out.products = out.products.map((p) => aplicarAjuste(p, p.sku && aj.produtos[p.sku])).concat(aj.novos);
+  const rates = { ...(out.rates || {}) };
+  for (const k of ["pix", "efetivo"]) {
+    const c = site.cotacao && site.cotacao[k];
+    if (c && c.rate > 0) rates[k] = { rate: c.rate, date: c.date || "" };
+  }
+  out.rates = rates;
+  const body = Buffer.from(JSON.stringify(out));
+  const etag = `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
+  return (lojaCache = { body, etag });
+}
+
+function sendLoja(req, res) {
+  let l;
+  try {
+    l = montarLoja();
+  } catch {
+    return notFound(res);
+  }
+  if (l.vazio) return notFound(res);
+  const headers = { "Content-Type": TYPES[".json"], "Cache-Control": "no-cache", ETag: l.etag };
+  if (naoMudou(req, l.etag)) {
+    res.writeHead(304, headers);
+    return res.end();
+  }
+  res.writeHead(200, headers);
+  res.end(req.method === "HEAD" ? undefined : l.body);
+}
+
+/* ---------- Acesso ao painel ---------- */
 function senhaOk(given) {
   if (!SENHA) return false;
   const a = crypto.createHash("sha256").update(String(given || "")).digest();
@@ -103,26 +199,313 @@ function senhaOk(given) {
   return crypto.timingSafeEqual(a, b);
 }
 
-function importar(req, res) {
-  if (req.method !== "POST") return json(res, 405, { erro: "Use POST." });
-  if (!SENHA) return json(res, 503, { erro: "Painel desativado: defina a variável ADMIN_SENHA na hospedagem." });
-  if (!senhaOk(req.headers["x-senha"])) return json(res, 401, { erro: "Senha incorreta." });
+const SESSAO_MS = 12 * 3600 * 1000;
+const sessoes = new Map(); // token -> expira em
+const falhas = new Map(); // ip -> { n, ate }
 
+const ipDe = (req) => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+const cookie = (req, nome) => {
+  const m = new RegExp("(?:^|;\\s*)" + nome + "=([^;]+)").exec(req.headers.cookie || "");
+  return m ? m[1] : "";
+};
+
+function logado(req) {
+  const t = cookie(req, "rota_adm");
+  const exp = t && sessoes.get(t);
+  if (exp && exp > Date.now()) return true;
+  if (t) sessoes.delete(t);
+  return false;
+}
+
+// Painel: sessão (cookie) + cabeçalho x-rota nas alterações (impede envio a partir de outros sites).
+// O envio antigo com x-senha continua aceito.
+const autorizado = (req) => (req.headers["x-senha"] ? senhaOk(req.headers["x-senha"]) : logado(req) && (req.method === "GET" || req.headers["x-rota"] === "1"));
+
+function bloqueado(req) {
+  const f = falhas.get(ipDe(req));
+  return f && f.ate > Date.now() && f.n >= 8;
+}
+function registrarFalha(req) {
+  const ip = ipDe(req);
+  const f = falhas.get(ip);
+  if (!f || f.ate < Date.now()) falhas.set(ip, { n: 1, ate: Date.now() + 15 * 60 * 1000 });
+  else f.n++;
+}
+
+function lerCorpo(req, max, cb) {
   const chunks = [];
   let size = 0, aborted = false;
   req.on("data", (c) => {
+    if (aborted) return;
     size += c.length;
-    if (size > MAX_UPLOAD) {
+    if (size > max) {
       aborted = true;
-      json(res, 413, { erro: "Arquivo grande demais (máx. 80 MB). Exporte em partes." });
+      cb(new Error("grande"));
       req.destroy();
     } else chunks.push(c);
   });
-  req.on("end", () => {
-    if (aborted) return;
+  req.on("end", () => !aborted && cb(null, Buffer.concat(chunks)));
+}
+
+function lerCorpoJSON(req, res, max, cb) {
+  lerCorpo(req, max, (err, buf) => {
+    if (err) return json(res, 413, { erro: "Conteúdo grande demais." });
+    let d;
     try {
-      const result = aplicarZip(Buffer.concat(chunks));
-      json(res, 200, result);
+      d = JSON.parse(buf.toString("utf8") || "{}");
+    } catch {
+      return json(res, 400, { erro: "JSON inválido." });
+    }
+    try {
+      cb(d && typeof d === "object" ? d : {});
+    } catch (e) {
+      json(res, 400, { erro: e.message });
+    }
+  });
+}
+
+function adminApi(req, res, rota) {
+  if (!SENHA) return json(res, 503, { erro: "Painel desativado: defina a variável ADMIN_SENHA na hospedagem." });
+
+  if (rota === "login" && req.method === "POST") {
+    if (bloqueado(req)) return json(res, 429, { erro: "Muitas tentativas. Aguarde 15 minutos." });
+    return lerCorpoJSON(req, res, 4096, (d) => {
+      if (!senhaOk(d.senha)) {
+        registrarFalha(req);
+        return json(res, 401, { erro: "Senha incorreta." });
+      }
+      falhas.delete(ipDe(req));
+      const token = crypto.randomBytes(32).toString("hex");
+      sessoes.set(token, Date.now() + SESSAO_MS);
+      const seguro = req.headers["x-forwarded-proto"] === "https" || req.socket.encrypted ? "; Secure" : "";
+      json(res, 200, { ok: true }, { "Set-Cookie": `rota_adm=${token}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=${SESSAO_MS / 1000}${seguro}` });
+    });
+  }
+  if (rota === "logout" && req.method === "POST") {
+    sessoes.delete(cookie(req, "rota_adm"));
+    return json(res, 200, { ok: true }, { "Set-Cookie": "rota_adm=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0" });
+  }
+  if (rota === "sessao") return json(res, 200, { logado: logado(req) });
+
+  if (!autorizado(req)) return json(res, 401, { erro: "Sessão expirada. Entre novamente." });
+
+  const r = `${req.method} ${rota}`;
+  if (r === "GET dados") return dadosPainel(res);
+  if (r === "PUT produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, salvarProduto(d)));
+  if (r === "POST produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, criarProduto(d)));
+  if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
+  if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
+  if (r === "POST foto") return enviarFoto(req, res);
+  if (r === "PUT site") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
+  if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
+  if (r === "PUT pedido") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, alterarPedido(d)));
+  if (r === "DELETE pedido") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirPedido(d.id)));
+  json(res, 404, { erro: "Rota desconhecida." });
+}
+
+function dadosPainel(res) {
+  const loja = lerJSON(F.loja, null);
+  const valida = loja && loja.type === "catalogo-pro-site" && Array.isArray(loja.products);
+  let gravado = null;
+  try { gravado = fs.statSync(F.loja).mtime.toISOString(); } catch {}
+  json(res, 200, {
+    loja: valida ? loja : null,
+    importadoEm: valida ? gravado : null,
+    ajustes: lerAjustes(),
+    site: lerJSON(F.site, null) || {},
+    pedidos: lerJSON(F.pedidos, []),
+  });
+}
+
+/* ---------- Produtos ---------- */
+const texto = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+const ID_FOTO = /^[A-Za-z0-9_-]{1,120}$/;
+
+// Valida e normaliza os campos enviados pelo painel
+function limparCampos(c) {
+  const out = {};
+  if ("name" in c) { out.name = texto(c.name, 200); if (!out.name) throw new Error("Informe o nome do produto."); }
+  if ("description" in c) out.description = texto(c.description, 5000);
+  if ("brand" in c) out.brand = texto(c.brand, 120);
+  if ("sector" in c) out.sector = texto(c.sector, 120);
+  if ("tags" in c) out.tags = texto(c.tags, 300);
+  if ("active" in c) out.active = c.active !== false;
+  if ("price" in c) {
+    const n = c.price === "" || c.price == null ? null : Number(c.price);
+    if (n != null && !(n >= 0 && n < 1e7)) throw new Error("Preço inválido.");
+    out.price = n == null ? null : Math.round(n * 100) / 100;
+  }
+  if ("stock" in c) {
+    const n = c.stock === "" || c.stock == null ? null : Number(c.stock);
+    if (n != null && !(Number.isInteger(n) && n >= 0 && n < 1e7)) throw new Error("Estoque inválido.");
+    out.stock = n;
+  }
+  if ("photos" in c) {
+    if (!Array.isArray(c.photos)) throw new Error("Fotos inválidas.");
+    out.photos = c.photos.map(String).filter((id) => ID_FOTO.test(id)).slice(0, 20);
+  }
+  return out;
+}
+
+const ehNovo = (sku) => /^ADM-/.test(sku);
+
+function salvarProduto(d) {
+  const sku = texto(d.sku, 120);
+  const campos = limparCampos(d.campos || {});
+  const aj = lerAjustes();
+  if (ehNovo(sku)) {
+    const i = aj.novos.findIndex((p) => p.sku === sku);
+    if (i < 0) throw new Error("Produto não encontrado.");
+    aj.novos[i] = { ...aj.novos[i], ...campos, updated: new Date().toISOString() };
+  } else {
+    const loja = lerJSON(F.loja, null);
+    const orig = loja && Array.isArray(loja.products) && loja.products.find((p) => p.sku === sku);
+    if (!orig) throw new Error("Produto não encontrado no Catálogo Pro.");
+    const atual = aj.produtos[sku] || { campos: {}, base: {} };
+    for (const [k, v] of Object.entries(campos)) {
+      if (igual(orig[k], v)) { delete atual.campos[k]; delete atual.base[k]; } // voltou ao valor do Catálogo Pro
+      else { atual.campos[k] = v; atual.base[k] = orig[k] === undefined ? null : orig[k]; }
+    }
+    atual.em = new Date().toISOString();
+    if (Object.keys(atual.campos).length) aj.produtos[sku] = atual;
+    else delete aj.produtos[sku];
+  }
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj };
+}
+
+function criarProduto(d) {
+  const campos = limparCampos({ active: true, ...(d.campos || {}) });
+  if (!campos.name) throw new Error("Informe o nome do produto.");
+  const aj = lerAjustes();
+  let n = aj.novos.reduce((m, p) => Math.max(m, Number(String(p.sku).slice(4)) || 0), 0) + 1;
+  const agora = new Date().toISOString();
+  const p = { sku: "ADM-" + String(n).padStart(4, "0"), name: "", description: "", sector: "", brand: "", tipo: "", notes: "", volume: null, stock: null, price: null, tags: "", photos: [], ...campos, added: agora.slice(0, 10), updated: agora };
+  aj.novos.push(p);
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, sku: p.sku, ajustes: aj };
+}
+
+// Novo produto: exclui. Produto do Catálogo Pro: descarta as edições (volta ao original).
+function removerAjuste(skuIn) {
+  const sku = texto(skuIn, 120);
+  const aj = lerAjustes();
+  if (ehNovo(sku)) aj.novos = aj.novos.filter((p) => p.sku !== sku);
+  else delete aj.produtos[sku];
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj };
+}
+
+// Ação em lote (por enquanto: mostrar/ocultar)
+function alterarVarios(d) {
+  if (!Array.isArray(d.skus) || !d.skus.length) throw new Error("Nenhum produto selecionado.");
+  if (typeof d.active !== "boolean") throw new Error("Ação inválida.");
+  let aj;
+  for (const sku of d.skus.slice(0, 5000)) {
+    try { aj = salvarProduto({ sku, campos: { active: d.active } }).ajustes; } catch {}
+  }
+  return { ok: true, ajustes: aj || lerAjustes() };
+}
+
+function enviarFoto(req, res) {
+  lerCorpo(req, MAX_FOTO, (err, buf) => {
+    if (err) return json(res, 413, { erro: "Foto grande demais (máx. 8 MB)." });
+    if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return json(res, 400, { erro: "Envie a foto em JPG." });
+    const id = "adm" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
+    fs.mkdirSync(path.join(DATA_DIR, "fotos"), { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, "fotos", id + ".jpg"), buf);
+    json(res, 200, { ok: true, id });
+  });
+}
+
+/* ---------- Dados da loja ---------- */
+function salvarSite(d) {
+  const site = {};
+  for (const k of ["nome", "slogan", "instagram", "cidade", "horario"]) site[k] = texto(d[k], k === "slogan" ? 200 : 120);
+  site.whatsapp = texto(d.whatsapp, 30).replace(/\D/g, "");
+  if (site.whatsapp && site.whatsapp.length < 10) throw new Error("WhatsApp inválido: use DDI + DDD + número (ex.: 5511920889155).");
+  if (site.instagram && !/^https:\/\//.test(site.instagram)) site.instagram = "https://instagram.com/" + site.instagram.replace(/^@/, "");
+  site.cotacao = {};
+  for (const k of ["pix", "efetivo"]) {
+    const v = d.cotacao && d.cotacao[k];
+    const n = v === "" || v == null ? null : Number(v);
+    if (n == null) continue;
+    if (!(n > 0 && n < 100)) throw new Error("Cotação inválida.");
+    site.cotacao[k] = { rate: Math.round(n * 10000) / 10000, date: new Date().toISOString().slice(0, 10) };
+  }
+  gravarJSON(F.site, site);
+  return { ok: true, site };
+}
+
+/* ---------- Pedidos ---------- */
+const STATUS = ["novo", "atendimento", "confirmado", "entregue", "cancelado"];
+const envios = new Map(); // ip -> { n, ate }
+
+// Chamado pelo site quando o cliente clica em "Enviar pedido pelo WhatsApp"
+function novoPedido(req, res) {
+  if (req.method !== "POST") return json(res, 405, { erro: "Use POST." });
+  const ip = ipDe(req);
+  const e = envios.get(ip);
+  if (e && e.ate > Date.now() && e.n >= 20) return json(res, 429, { erro: "Muitos pedidos. Tente mais tarde." });
+  if (!e || e.ate < Date.now()) envios.set(ip, { n: 1, ate: Date.now() + 3600 * 1000 });
+  else e.n++;
+
+  lerCorpoJSON(req, res, 65536, (d) => {
+    if (!Array.isArray(d.itens) || !d.itens.length) throw new Error("Pedido vazio.");
+    const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
+    const pedidos = lerJSON(F.pedidos, []);
+    const id = pedidos.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1;
+    pedidos.unshift({
+      id,
+      data: new Date().toISOString(),
+      status: "novo",
+      cliente: { nome: texto(d.nome, 120), cidade: texto(d.cidade, 120), obs: texto(d.obs, 1000) },
+      itens: d.itens.slice(0, 100).map((i) => ({
+        sku: texto(i.sku, 120),
+        nome: texto(i.nome, 200),
+        variacao: texto(i.v, 120),
+        q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
+        preco: num(i.preco),
+      })),
+      total: num(d.total),
+      moeda: texto(d.moeda, 3) || "BRL",
+      nota: "",
+    });
+    gravarJSON(F.pedidos, pedidos.slice(0, 5000));
+    json(res, 200, { ok: true, id });
+  });
+}
+
+function alterarPedido(d) {
+  const pedidos = lerJSON(F.pedidos, []);
+  const p = pedidos.find((x) => x.id === Number(d.id));
+  if (!p) throw new Error("Pedido não encontrado.");
+  if ("status" in d) {
+    if (!STATUS.includes(d.status)) throw new Error("Status inválido.");
+    p.status = d.status;
+  }
+  if ("nota" in d) p.nota = texto(d.nota, 2000);
+  p.alterado = new Date().toISOString();
+  gravarJSON(F.pedidos, pedidos);
+  return { ok: true, pedido: p };
+}
+
+function excluirPedido(id) {
+  const pedidos = lerJSON(F.pedidos, []);
+  gravarJSON(F.pedidos, pedidos.filter((p) => p.id !== Number(id)));
+  return { ok: true };
+}
+
+/* ---------- Importação do ZIP do Catálogo Pro ---------- */
+function importar(req, res) {
+  if (req.method !== "POST") return json(res, 405, { erro: "Use POST." });
+  if (!SENHA) return json(res, 503, { erro: "Painel desativado: defina a variável ADMIN_SENHA na hospedagem." });
+  if (!autorizado(req)) return json(res, 401, { erro: req.headers["x-senha"] ? "Senha incorreta." : "Sessão expirada. Entre novamente." });
+
+  lerCorpo(req, MAX_UPLOAD, (err, buf) => {
+    if (err) return json(res, 413, { erro: "Arquivo grande demais (máx. 80 MB). Exporte em partes." });
+    try {
+      json(res, 200, aplicarZip(buf));
     } catch (e) {
       json(res, 400, { erro: e.message });
     }
@@ -149,15 +532,11 @@ function aplicarZip(buf) {
     }
   }
 
-  if (loja) {
-    const tmp = path.join(DATA_DIR, "loja.json.tmp");
-    fs.writeFileSync(tmp, JSON.stringify(loja));
-    fs.renameSync(tmp, path.join(DATA_DIR, "loja.json"));
-  }
+  if (loja) gravarJSON(F.loja, loja);
   if (!loja && !fotos) throw new Error("O ZIP não tem loja.json nem fotos.");
 
   const faltando = loja
-    ? [...new Set(loja.products.flatMap((p) => p.photos || []))].filter(
+    ? [...new Set(loja.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])))].filter(
         (id) => !fs.existsSync(path.join(DATA_DIR, "fotos", id + ".jpg"))
       ).length
     : null;

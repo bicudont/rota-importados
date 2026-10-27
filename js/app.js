@@ -29,7 +29,20 @@
     }
   }
 
-  const loja = await carregarLoja();
+  // Dados da loja editados no painel /admin (site.json) têm prioridade sobre o config.js
+  async function carregarSite() {
+    try {
+      const r = await fetch("data/site.json", { cache: "no-cache" });
+      return r.ok ? await r.json() : {};
+    } catch {
+      return {};
+    }
+  }
+
+  const [loja, site] = await Promise.all([carregarLoja(), carregarSite()]);
+  for (const k of ["nome", "slogan", "whatsapp", "instagram", "cidade", "horario"]) {
+    if (site && typeof site[k] === "string" && site[k].trim()) S[k] = site[k].trim();
+  }
   if (loja) {
     const base = (loja.currency || "USD").toUpperCase();
     const rates = loja.rates || {};
@@ -79,11 +92,11 @@
       .filter((c) => usados.has(c.id) && !vistos.has(c.id) && vistos.add(c.id));
 
     const b = loja.brand || {};
-    // O WhatsApp do config.js tem prioridade; o do Catálogo Pro só é usado se o config.js estiver vazio
+    // O WhatsApp do painel/config.js tem prioridade; o do Catálogo Pro só é usado se ambos estiverem vazios
     const waSite = String(S.whatsapp || "").replace(/\D/g, "");
     const waCatalogo = String(b.whatsapp || "").replace(/\D/g, "");
     if (waSite.length < 10 && waCatalogo.length >= 10) S.whatsapp = waCatalogo;
-    if (b.slogan) S.slogan = b.slogan;
+    if (b.slogan && !(site && site.slogan)) S.slogan = b.slogan;
   } else {
     PRODUTOS = window.PRODUTOS;
     CATS = window.CATEGORIAS;
@@ -910,8 +923,27 @@
       "",
       "Aguardo confirmação de disponibilidade, pagamento e entrega. Obrigado!",
     ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
+    registrarPedido(f);
     window.open(waLink(msg), "_blank", "noopener");
   });
+
+  // Guarda uma cópia do pedido para o painel /admin (não interfere no envio pelo WhatsApp)
+  function registrarPedido(f) {
+    if (!loja) return; // só com o servidor da loja (produtos do Catálogo Pro)
+    const dados = JSON.stringify({
+      nome: f.get("nome"),
+      cidade: f.get("cidade") || "",
+      obs: f.get("obs") || "",
+      itens: cart.map((i) => { const p = byId(i.id); return { sku: p.sku, nome: p.nome, v: i.v || "", q: i.q, preco: p.preco }; }),
+      total: total(),
+      moeda: MOEDA,
+    });
+    try {
+      if (!navigator.sendBeacon || !navigator.sendBeacon("api/pedido", new Blob([dados], { type: "application/json" }))) {
+        fetch("api/pedido", { method: "POST", headers: { "Content-Type": "application/json" }, body: dados, keepalive: true }).catch(() => {});
+      }
+    } catch {}
+  }
 
   /* ---------- Misc ---------- */
   let tt;

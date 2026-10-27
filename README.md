@@ -9,9 +9,27 @@ Loja-catálogo da Rota Importados: o cliente navega pelos produtos, monta o carr
 | `/#/` | Início: destaque, departamentos, lançamentos, vitrines por tag/marca/departamento |
 | `/#/catalogo?cat=&marca=&q=&ordem=&disp=1` | Listagem com filtros (departamento, marca, disponibilidade) e ordenação |
 | `/#/produto/SKU` | Página do produto: galeria, preço, disponibilidade, especificações e relacionados |
-| `/admin` | Painel com senha para enviar o ZIP exportado pelo Catálogo Pro |
+| `/admin` | Painel administrativo com senha (veja abaixo) |
 
 Os endereços com `#` funcionam sem configuração extra no servidor e podem ser compartilhados.
+
+## Painel administrativo (`/admin`)
+
+Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina se o app for reiniciado/reimplantado). Após 8 senhas erradas, o acesso daquele IP fica bloqueado por 15 minutos.
+
+| Seção | O que faz |
+|---|---|
+| **Visão geral** | Pedidos novos, produtos no site, esgotados, sem foto, sem preço, ocultos, editados; data da última importação e cotações |
+| **Pedidos** | Pedidos feitos pelo carrinho do site, com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
+| **Produtos** | Busca e filtros; editar nome, marca, departamento, preço (US$), estoque, etiquetas, descrição, fotos e visibilidade; criar produtos; ocultar/mostrar vários de uma vez |
+| **Importar** | Envio do ZIP do Catálogo Pro (mesma função de antes) |
+| **Loja** | Nome, slogan, WhatsApp, Instagram, cidade, horário e cotação manual do dólar |
+
+**Como as edições convivem com o Catálogo Pro:** o que você altera no painel continua valendo depois de novas importações. Se o Catálogo Pro exportar um valor *diferente* para o mesmo campo, vale o do Catálogo Pro (a alteração mais recente ganha). Em cada produto há o botão **Desfazer edições** para voltar aos dados do Catálogo Pro.
+
+**Pedidos:** são registrados quando o cliente clica em "Enviar pedido pelo WhatsApp". O envio da mensagem continua sendo feito pelo cliente no WhatsApp, então um pedido registrado pode não ter chegado ao seu WhatsApp. Os valores são os estimados no momento do pedido.
+
+Arquivos gravados em `DATA_DIR`: `loja.json` (exportação original), `ajustes.json` (edições e produtos criados), `site.json` (dados da loja), `fotos/` e `privado/pedidos.json` (nunca servido ao público).
 
 ## Atualizar produtos (dia a dia)
 
@@ -39,11 +57,11 @@ Em **Websites → rotaimportados.com → Node.js → Variáveis de ambiente**:
 | `ADMIN_SENHA` | a senha do painel `/admin` (sem ela o painel fica desativado) |
 | `DATA_DIR` | opcional: pasta onde salvar `loja.json` e fotos (padrão: `data/` dentro do app) |
 
-⚠️ Se um novo deploy apagar a pasta `data/`, basta reenviar o ZIP com **todas as fotos**. Para evitar isso, aponte `DATA_DIR` para uma pasta fora da pasta do app.
+⚠️ Se um novo deploy apagar a pasta `data/`, você perde também os **pedidos, edições e fotos enviadas pelo painel** (o ZIP do Catálogo Pro pode ser reenviado). Para evitar isso, aponte `DATA_DIR` para uma pasta fora da pasta do app.
 
 ## Dados da loja
 
-Em **`js/config.js`**: nome, slogan, número do WhatsApp, Instagram, cidade e horário. **Campos vazios não aparecem no site.** O WhatsApp do `config.js` tem prioridade; o do Catálogo Pro só é usado se o `config.js` estiver vazio. Os produtos de exemplo desse arquivo só aparecem enquanto não existir um `loja.json`.
+Pelo painel, em **Loja**, ou em **`js/config.js`** (valores padrão): nome, slogan, número do WhatsApp, Instagram, cidade e horário. **Campos vazios não aparecem no site.** Prioridade: painel → `config.js` → Catálogo Pro (o WhatsApp do Catálogo Pro só é usado se os outros dois estiverem vazios). Os produtos de exemplo desse arquivo só aparecem enquanto não existir um `loja.json`.
 
 ## Visual
 

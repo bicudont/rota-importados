@@ -5,92 +5,819 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex" />
   <title>Painel · Rota Importados</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="/img/favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root { --navy:#001b50; --royal:#0055cc; --orange:#ff8900; --bg:#f5f8fc; --surface:#fff; --line:#e2e8f0; --text:#172338; --muted:#64748b; --ok:#00852e; --err:#dc2626; }
+    :root { --navy:#001b50; --navy2:#0a2a66; --royal:#0055cc; --sky:#00b8ff; --orange:#ff8900; --bg:#f5f8fc; --surface:#fff; --line:#e2e8f0; --text:#172338; --muted:#5b6b82; --ok:#00852e; --okbg:#e6f6ec; --warn:#a15c00; --warnbg:#fff4e0; --err:#c81e1e; --errbg:#fdecec; --r:12px; }
     * { box-sizing: border-box; margin: 0; }
-    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
-    .box { width: min(520px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 16px 40px -12px rgba(16,37,77,.18); }
-    h1 { font: 700 1.5rem Poppins, sans-serif; margin-bottom: 6px; color: var(--navy); }
-    p { color: var(--muted); font-size: .92rem; line-height: 1.5; }
-    label { display: block; font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 18px 0 6px; }
-    input[type=password] { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; outline: 0; transition: border-color .18s, box-shadow .18s; }
-    input[type=password]:focus { border-color: var(--royal); box-shadow: 0 0 0 3px rgba(0,85,204,.22); }
-    .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 26px; text-align: center; cursor: pointer; transition: border-color .18s, background .18s; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { font: 15px/1.5 Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    h1, h2, h3 { font-family: Poppins, Inter, sans-serif; color: var(--navy); line-height: 1.25; }
+    h1 { font-size: 1.45rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
+    a { color: var(--royal); }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    [hidden] { display: none !important; }
+    .muted { color: var(--muted); }
+    .small { font-size: .85rem; }
+
+    /* Botões e campos */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; text-decoration: none; color: var(--text); white-space: nowrap; transition: background .15s, border-color .15s; }
+    .btn:hover { border-color: #c5d0de; background: #f8fafc; }
+    .btn--primary { background: var(--orange); border-color: var(--orange); color: var(--navy); }
+    .btn--primary:hover { background: #e67a00; border-color: #e67a00; }
+    .btn--navy { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .btn--navy:hover { background: var(--navy2); }
+    .btn--danger { color: var(--err); }
+    .btn--danger:hover { background: var(--errbg); border-color: #f5c2c2; }
+    .btn--sm { min-height: 34px; padding: 0 12px; font-size: .86rem; }
+    .btn:disabled { opacity: .55; cursor: wait; }
+    .btn:focus-visible, .field:focus-visible, .tab:focus-visible, .row:focus-visible { outline: 3px solid rgba(0,85,204,.35); outline-offset: 2px; }
+    label.lbl { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+    .field { width: 100%; min-height: 42px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); outline: 0; transition: border-color .15s, box-shadow .15s; }
+    .field:focus { border-color: var(--royal); box-shadow: 0 0 0 3px rgba(0,85,204,.18); }
+    textarea.field { min-height: 110px; resize: vertical; }
+    .hint { font-size: .8rem; color: var(--muted); margin-top: 5px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .stack { display: grid; gap: 14px; }
+    .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+    .switch input { width: 18px; height: 18px; accent-color: var(--royal); }
+
+    /* Login */
+    .login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+    .login form { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 16px 40px -12px rgba(16,37,77,.18); display: grid; gap: 14px; }
+    .login img { height: 68px; width: auto; }
+    .msg { font-size: .9rem; padding: 10px 12px; border-radius: 10px; }
+    .msg.err { background: var(--errbg); color: var(--err); }
+    .msg.ok { background: var(--okbg); color: var(--ok); }
+    .msg.warn { background: var(--warnbg); color: var(--warn); }
+    .msg.info { background: #eef4ff; color: var(--navy); }
+
+    /* Estrutura */
+    .app { display: grid; grid-template-columns: 232px minmax(0,1fr); min-height: 100vh; }
+    .side { background: var(--navy); color: #fff; padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
+    .side__logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; color: #fff; text-decoration: none; font: 700 1rem Poppins, sans-serif; }
+    .side__logo img { height: 40px; width: auto; }
+    .tab { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none; color: #cfd9ec; font-weight: 600; cursor: pointer; text-align: left; text-decoration: none; }
+    .tab:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .tab[aria-current="page"] { background: rgba(0,184,255,.16); color: #fff; box-shadow: inset 3px 0 0 var(--sky); }
+    .tab .count { margin-left: auto; background: var(--orange); color: var(--navy); border-radius: 99px; font-size: .75rem; padding: 1px 8px; }
+    .side__foot { margin-top: auto; display: grid; gap: 4px; }
+    .main { padding: 28px clamp(16px, 3vw, 36px) 60px; min-width: 0; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+    .card + .card { margin-top: 16px; }
+
+    /* Visão geral */
+    .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-align: left; cursor: pointer; }
+    .stat:hover { border-color: #c5d0de; }
+    .stat b { display: block; font: 700 1.6rem Poppins, sans-serif; color: var(--navy); }
+    .stat span { color: var(--muted); font-size: .86rem; }
+    .stat--alert b { color: var(--warn); }
+    .facts { display: grid; gap: 8px; }
+    .facts div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 8px; }
+    .facts div:last-child { border: 0; padding: 0; }
+
+    /* Produtos */
+    .toolbar { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #eef4ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
+    .list { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .row { display: grid; grid-template-columns: 28px 52px minmax(0, 1fr) 120px 80px 96px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .row:last-child { border-bottom: 0; }
+    .row:hover { background: #f8fafc; }
+    .row--head { cursor: default; background: #f8fafc; font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .row--off { opacity: .6; }
+    .row img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; background: #eef4ff; }
+    .row .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row .meta { font-size: .8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--royal); }
+    .badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+    .b-edit { background: #e8f0fe; color: var(--royal); }
+    .b-new { background: var(--okbg); color: var(--ok); }
+    .b-off { background: #eef1f5; color: var(--muted); }
+    .b-out { background: var(--errbg); color: var(--err); }
+    .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+    /* Editor */
+    dialog { margin: auto; border: 0; padding: 0; border-radius: 16px; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 30px 80px -20px rgba(0,27,80,.45); }
+    dialog::backdrop { background: rgba(0,27,80,.45); }
+    .dlg { display: flex; flex-direction: column; max-height: calc(100vh - 24px); }
+    .dlg__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .dlg__body { padding: 20px; overflow: auto; display: grid; gap: 14px; }
+    .dlg__foot { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--line); background: #f8fafc; }
+    .dlg__foot div { display: flex; gap: 8px; flex-wrap: wrap; }
+    .x { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 1.2rem; }
+    .photos { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ph { position: relative; width: 92px; }
+    .ph img { width: 92px; height: 92px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: #eef4ff; display: block; }
+    .ph__bar { display: flex; justify-content: space-between; margin-top: 4px; }
+    .ph__bar button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; width: 28px; height: 26px; cursor: pointer; font-size: .8rem; }
+    .ph--add { width: 92px; height: 92px; border: 2px dashed var(--line); border-radius: 10px; display: grid; place-items: center; text-align: center; font-size: .78rem; color: var(--muted); cursor: pointer; background: none; }
+    .ph--add:hover { border-color: var(--royal); color: var(--royal); }
+    .preview { font-size: .85rem; color: var(--muted); margin-top: 5px; }
+
+    /* Pedidos */
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 12px; font-weight: 600; font-size: .86rem; cursor: pointer; }
+    .chip[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .order { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; }
+    .order + .order { margin-top: 12px; }
+    .order__top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .order__items { font-size: .9rem; display: grid; gap: 3px; }
+    .order__items div { display: flex; justify-content: space-between; gap: 12px; }
+    .order__foot { display: grid; grid-template-columns: 180px minmax(0,1fr) auto; gap: 10px; align-items: start; }
+    .st { font-size: .75rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; }
+    .st-novo { background: var(--warnbg); color: var(--warn); } .st-atendimento { background: #e8f0fe; color: var(--royal); }
+    .st-confirmado { background: #e0f7ff; color: #00658c; } .st-entregue { background: var(--okbg); color: var(--ok); } .st-cancelado { background: #eef1f5; color: var(--muted); }
+
+    /* Importar */
+    .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 30px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop:hover, .drop.over { border-color: var(--royal); background: #eef4ff; }
-    .drop input { display: none; }
     .files { margin-top: 10px; font-size: .88rem; display: grid; gap: 6px; }
     .files div { display: flex; justify-content: space-between; gap: 8px; }
-    button { margin-top: 20px; width: 100%; height: 50px; border: 0; border-radius: 12px; font: 600 1rem Inter, sans-serif; cursor: pointer; background: var(--orange); color: var(--navy); transition: background .18s; }
-    button:hover:not(:disabled) { background: #e67a00; }
-    button:disabled { opacity: .5; cursor: wait; }
-    .log { margin-top: 16px; font-size: .9rem; display: grid; gap: 6px; }
-    .ok { color: var(--ok); } .err { color: var(--err); }
-    a { color: var(--royal); }
+    .log { margin-top: 14px; display: grid; gap: 8px; }
+
+    .toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); background: var(--navy); color: #fff; padding: 10px 18px; border-radius: 10px; font-weight: 600; opacity: 0; visibility: hidden; transition: .2s; z-index: 50; max-width: calc(100vw - 32px); }
+    .toast.show { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+    .toast.err { background: var(--err); }
+
+    @media (max-width: 900px) {
+      .app { grid-template-columns: minmax(0,1fr); }
+      .side { position: sticky; top: 0; z-index: 20; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 8px 10px; gap: 4px; }
+      .side__logo { padding: 0 6px 0 0; }
+      .side__logo span, .side__foot .tab span.lbl-long { display: none; }
+      .side__logo img { height: 32px; }
+      .tab { width: auto; white-space: nowrap; padding: 8px 10px; }
+      .tab[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--sky); }
+      .side__foot { margin: 0 0 0 auto; display: flex; }
+      .main { padding-top: 20px; }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+      .toolbar .search { grid-column: 1 / -1; }
+      .row { grid-template-columns: 24px 48px minmax(0,1fr) auto; }
+      .row img { width: 48px; height: 48px; }
+      .row .c-stock, .row--head { display: none; }
+      .row .c-vis { grid-column: 3 / -1; justify-self: start; }
+      .order__foot { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .grid2 { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 24px 44px minmax(0,1fr); }
+      .row .c-price { grid-column: 3; text-align: left; }
+      .row .c-vis { grid-column: 3; }
+    }
   </style>
 </head>
 <body>
-  <main class="box">
-    <img src="/img/logo.png" alt="Rota Importados" width="264" height="220" style="height:72px;width:auto;margin-bottom:14px" />
-    <h1>Atualizar produtos</h1>
-    <p>No <b>Catálogo Pro</b>, use <b>Configurações → Site da loja → Exportar para o site</b> e envie aqui o(s) arquivo(s) <code>loja-AAAA-MM-DD.zip</code>. Se vier em partes, selecione todas.</p>
-
-    <label for="senha">Senha do painel</label>
-    <input id="senha" type="password" autocomplete="current-password" />
-
-    <label>Arquivos</label>
-    <div class="drop" id="drop">
-      <input id="file" type="file" accept=".zip" multiple />
-      📦 Clique ou arraste o ZIP aqui
-    </div>
-    <div class="files" id="files"></div>
-
-    <button id="send" disabled>Enviar para o site</button>
-    <div class="log" id="log"></div>
-    <p style="margin-top:18px"><a href="/">← Ver o site</a></p>
+  <!-- Login -->
+  <main class="login" id="login" hidden>
+    <form id="loginForm">
+      <img src="/img/logo.png" alt="Rota Importados" width="264" height="220" />
+      <div>
+        <h1>Painel da loja</h1>
+        <p class="muted small">Acesso restrito. Digite a senha do painel.</p>
+      </div>
+      <div>
+        <label class="lbl" for="senha">Senha</label>
+        <input class="field" id="senha" type="password" autocomplete="current-password" required />
+      </div>
+      <div class="msg err" id="loginErr" role="alert" hidden></div>
+      <button class="btn btn--primary" id="loginBtn">Entrar</button>
+      <a class="small" href="/">← Voltar ao site</a>
+    </form>
   </main>
 
-  <script>
-    const $ = (s) => document.querySelector(s);
-    let files = [];
-    try { $("#senha").value = sessionStorage.getItem("rota_senha") || ""; } catch {}
+  <!-- Painel -->
+  <div class="app" id="app" hidden>
+    <nav class="side" aria-label="Seções do painel">
+      <a class="side__logo" href="/" target="_blank" rel="noopener" title="Abrir o site"><img src="/img/logo.png" alt="" width="264" height="220" /><span>Painel</span></a>
+      <button class="tab" data-tab="geral">📊 <span>Visão geral</span></button>
+      <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
+      <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
+      <button class="tab" data-tab="importar">⬆️ <span>Importar</span></button>
+      <button class="tab" data-tab="loja">⚙️ <span>Loja</span></button>
+      <div class="side__foot">
+        <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
+        <button class="tab" id="logout">🚪 <span class="lbl-long">Sair</span></button>
+      </div>
+    </nav>
 
+    <main class="main" id="main">
+      <!-- Visão geral -->
+      <section data-sec="geral">
+        <div class="head"><h1>Visão geral</h1><a class="btn" href="/" target="_blank" rel="noopener">Abrir o site ↗</a></div>
+        <div class="msg warn" id="semLoja" hidden>Ainda não há produtos do Catálogo Pro no site. Vá em <b>Importar</b> e envie o ZIP exportado.</div>
+        <div class="stats" id="stats"></div>
+        <div class="grid2">
+          <div class="card"><h2 style="margin-bottom:12px">Catálogo</h2><div class="facts" id="facts"></div></div>
+          <div class="card"><h2 style="margin-bottom:12px">Últimos pedidos</h2><div id="ultimos"></div></div>
+        </div>
+      </section>
+
+      <!-- Pedidos -->
+      <section data-sec="pedidos" hidden>
+        <div class="head"><h1>Pedidos</h1><button class="btn" id="reloadPedidos">↻ Atualizar</button></div>
+        <p class="muted small" style="margin:-8px 0 14px">Registrados quando o cliente clica em “Enviar pedido pelo WhatsApp” no carrinho. O cliente ainda precisa enviar a mensagem no WhatsApp; valores são os estimados no momento do pedido.</p>
+        <div class="chips" id="pedFiltro"></div>
+        <div id="pedLista"></div>
+      </section>
+
+      <!-- Produtos -->
+      <section data-sec="produtos" hidden>
+        <div class="head"><h1>Produtos</h1><button class="btn btn--primary" id="novoProd">+ Novo produto</button></div>
+        <div class="toolbar">
+          <input class="field search" id="pBusca" type="search" placeholder="Buscar por nome, SKU ou marca" aria-label="Buscar produtos" />
+          <select class="field" id="pSetor" aria-label="Departamento"></select>
+          <select class="field" id="pStatus" aria-label="Situação">
+            <option value="">Todas as situações</option>
+            <option value="visivel">Visíveis no site</option>
+            <option value="oculto">Ocultos</option>
+            <option value="esgotado">Esgotados</option>
+            <option value="semfoto">Sem foto</option>
+            <option value="sempreco">Sem preço</option>
+            <option value="editado">Editados no painel</option>
+            <option value="novo">Criados no painel</option>
+          </select>
+        </div>
+        <div class="bulk" id="bulk" hidden>
+          <b id="bulkN"></b>
+          <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
+          <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
+          <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
+        </div>
+        <div class="list" id="pLista"></div>
+        <div class="pager"><span class="muted small" id="pInfo"></span><div style="display:flex;gap:8px"><button class="btn btn--sm" id="pPrev">← Anterior</button><button class="btn btn--sm" id="pNext">Próxima →</button></div></div>
+      </section>
+
+      <!-- Importar -->
+      <section data-sec="importar" hidden>
+        <div class="head"><h1>Importar do Catálogo Pro</h1></div>
+        <div class="card">
+          <p class="muted">No <b>Catálogo Pro</b>, use <b>Configurações → Site da loja → Exportar para o site</b> e envie aqui o(s) arquivo(s) <code>loja-AAAA-MM-DD.zip</code>. Se vier em partes, selecione todas.</p>
+          <p class="muted small" style="margin-top:8px">Edições feitas no painel continuam valendo depois da importação, a menos que o Catálogo Pro traga um valor diferente para o mesmo campo (aí vale o mais recente, o do Catálogo Pro).</p>
+          <div class="drop" id="drop" role="button" tabindex="0" style="margin-top:16px">
+            <input id="file" type="file" accept=".zip" multiple hidden />
+            📦 Clique ou arraste o ZIP aqui
+          </div>
+          <div class="files" id="files"></div>
+          <button class="btn btn--primary" id="send" disabled style="margin-top:16px;width:100%">Enviar para o site</button>
+          <div class="log" id="log" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <!-- Loja -->
+      <section data-sec="loja" hidden>
+        <div class="head"><h1>Dados da loja</h1></div>
+        <form class="card stack" id="lojaForm">
+          <p class="muted small">Campos vazios usam o valor padrão do site (arquivo <code>js/config.js</code>). O que for preenchido aqui tem prioridade.</p>
+          <div class="grid2">
+            <div><label class="lbl" for="lNome">Nome da loja</label><input class="field" id="lNome" name="nome" maxlength="120" /></div>
+            <div><label class="lbl" for="lWhats">WhatsApp (DDI + DDD + número)</label><input class="field" id="lWhats" name="whatsapp" inputmode="tel" placeholder="5511920889155" maxlength="30" /></div>
+          </div>
+          <div><label class="lbl" for="lSlogan">Slogan</label><input class="field" id="lSlogan" name="slogan" maxlength="200" /></div>
+          <div class="grid2">
+            <div><label class="lbl" for="lInsta">Instagram</label><input class="field" id="lInsta" name="instagram" placeholder="@rotaimportados ou link" maxlength="120" /></div>
+            <div><label class="lbl" for="lCidade">Cidade</label><input class="field" id="lCidade" name="cidade" maxlength="120" /></div>
+          </div>
+          <div><label class="lbl" for="lHorario">Horário de atendimento</label><input class="field" id="lHorario" name="horario" placeholder="Ex.: Seg a Sáb, 9h às 18h" maxlength="120" /></div>
+          <div>
+            <h2 style="margin:6px 0 4px">Cotação do dólar</h2>
+            <p class="muted small" style="margin-bottom:10px">Deixe vazio para usar a cotação exportada pelo Catálogo Pro. Se preencher, vale este valor até você apagá-lo.</p>
+            <div class="grid2">
+              <div><label class="lbl" for="lPix">Cotação Pix (R$ por US$ 1)</label><input class="field" id="lPix" inputmode="decimal" /><div class="hint" id="lPixHint"></div></div>
+              <div><label class="lbl" for="lEfet">Cotação em dinheiro (R$ por US$ 1)</label><input class="field" id="lEfet" inputmode="decimal" /><div class="hint" id="lEfetHint"></div></div>
+            </div>
+          </div>
+          <div><button class="btn btn--primary" id="lojaSalvar">Salvar dados da loja</button></div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- Editor de produto -->
+  <dialog id="dlg" aria-labelledby="dlgTitle">
+    <form class="dlg" id="pForm" method="dialog">
+      <div class="dlg__head"><h2 id="dlgTitle">Produto</h2><button type="button" class="x" id="dlgX" aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <div class="msg warn small" id="dEditInfo" hidden></div>
+        <div><label class="lbl" for="dNome">Nome *</label><input class="field" id="dNome" required maxlength="200" /></div>
+        <div class="grid2">
+          <div><label class="lbl" for="dMarca">Marca</label><input class="field" id="dMarca" list="dlMarcas" maxlength="120" /></div>
+          <div><label class="lbl" for="dSetor">Departamento</label><input class="field" id="dSetor" list="dlSetores" maxlength="120" /></div>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl" for="dPreco">Preço (US$)</label><input class="field" id="dPreco" inputmode="decimal" placeholder="Vazio = sob consulta" /><div class="preview" id="dPrecoBR"></div></div>
+          <div><label class="lbl" for="dEstoque">Estoque</label><input class="field" id="dEstoque" inputmode="numeric" placeholder="Vazio = não informado" /><div class="hint">0 = Esgotado · até 3 = “Últimas unidades”</div></div>
+        </div>
+        <div><label class="lbl" for="dTags">Etiquetas (separe por vírgula)</label><input class="field" id="dTags" maxlength="300" placeholder="Ex.: Mais vendido" /><div class="hint">A primeira etiqueta aparece no card e cria uma vitrine na página inicial.</div></div>
+        <div><label class="lbl" for="dDesc">Descrição</label><textarea class="field" id="dDesc" maxlength="5000"></textarea></div>
+        <div>
+          <span class="lbl">Fotos</span>
+          <div class="photos" id="dFotos"></div>
+          <input type="file" id="dFotoIn" accept="image/*" multiple hidden />
+          <div class="hint">A primeira foto é a principal. As fotos são reduzidas para até 1200 px antes do envio.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="dAtivo" /> Visível no site</label>
+      </div>
+      <div class="dlg__foot">
+        <div><button type="button" class="btn btn--danger" id="dRestaurar"></button><a class="btn" id="dVer" target="_blank" rel="noopener">Ver no site ↗</a></div>
+        <div><button type="button" class="btn" id="dCancelar">Cancelar</button><button class="btn btn--primary" id="dSalvar" value="ok">Salvar</button></div>
+      </div>
+    </form>
+  </dialog>
+  <datalist id="dlMarcas"></datalist>
+  <datalist id="dlSetores"></datalist>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+  (() => {
+    const $ = (s, el = document) => el.querySelector(s);
+    const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const usd = (v) => "US$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dataBR = (iso, hora) => { const d = new Date(iso.length === 10 ? iso + "T12:00" : iso); return isNaN(d) ? "" : hora ? d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : d.toLocaleDateString("pt-BR"); };
+    const fotoURL = (id) => "/data/fotos/" + encodeURIComponent(id) + ".jpg";
+    const listaFotos = (v) => (Array.isArray(v) ? v : [v]).filter((id) => (typeof id === "string" && id.trim()) || typeof id === "number").map(String);
+    const SEMFOTO = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52"><rect width="52" height="52" fill="#eef4ff"/><text x="26" y="32" font-family="Arial" font-size="16" text-anchor="middle" fill="#8aa4cc">sem</text></svg>');
+
+    let tt;
+    function toast(t, erro) {
+      const el = $("#toast");
+      el.textContent = t;
+      el.className = "toast show" + (erro ? " err" : "");
+      clearTimeout(tt);
+      tt = setTimeout(() => (el.className = "toast"), 2600);
+    }
+
+    async function api(metodo, rota, corpo) {
+      const r = await fetch("/admin/api/" + rota, {
+        method: metodo,
+        headers: corpo instanceof Blob ? { "x-rota": "1", "Content-Type": corpo.type } : { "x-rota": "1", "Content-Type": "application/json" },
+        body: corpo == null ? undefined : corpo instanceof Blob ? corpo : JSON.stringify(corpo),
+        credentials: "same-origin",
+      });
+      const j = await r.json().catch(() => ({ erro: "Resposta inválida do servidor." }));
+      if (r.status === 401 && rota !== "login") { mostrarLogin("Sua sessão expirou. Entre novamente."); throw new Error(j.erro); }
+      if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
+      return j;
+    }
+
+    /* ---------- Login ---------- */
+    function mostrarLogin(aviso) {
+      $("#app").hidden = true;
+      $("#login").hidden = false;
+      if ($("#dlg").open) $("#dlg").close();
+      $("#loginErr").hidden = !aviso;
+      $("#loginErr").textContent = aviso || "";
+      $("#senha").focus();
+    }
+    $("#loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      $("#loginBtn").disabled = true;
+      try {
+        await api("POST", "login", { senha: $("#senha").value });
+        $("#senha").value = "";
+        await entrar();
+      } catch (err) {
+        $("#loginErr").textContent = err.message;
+        $("#loginErr").hidden = false;
+      }
+      $("#loginBtn").disabled = false;
+    });
+    $("#logout").addEventListener("click", async () => { try { await api("POST", "logout", {}); } catch {} mostrarLogin(); });
+
+    /* ---------- Dados ---------- */
+    let D = null; // { loja, importadoEm, ajustes, site, pedidos }
+    let PROD = []; // produtos como aparecem no site (Catálogo Pro + ajustes)
+    const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+
+    // Mesma regra do servidor: a edição vale, a menos que o Catálogo Pro tenha mudado o campo depois
+    function aplicar(p, aj) {
+      const q = { ...p }, editados = [];
+      if (aj && aj.campos) for (const k in aj.campos) {
+        if (aj.base && k in aj.base && !igual(p[k], aj.base[k])) continue;
+        q[k] = aj.campos[k];
+        editados.push(k);
+      }
+      return { ...q, _orig: p, _editados: editados, _novo: false };
+    }
+
+    function montar() {
+      const aj = D.ajustes;
+      PROD = (D.loja ? D.loja.products : []).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
+        .concat(aj.novos.map((p) => ({ ...p, _novo: true, _editados: [] })));
+      PROD.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand].join(" ")); });
+      const setores = [...new Set(PROD.map((p) => p.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const marcas = [...new Set(PROD.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const atual = $("#pSetor").value;
+      $("#pSetor").innerHTML = `<option value="">Todos os departamentos</option>` + setores.map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
+      $("#dlSetores").innerHTML = setores.map((s) => `<option value="${esc(s)}">`).join("");
+      $("#dlMarcas").innerHTML = marcas.map((s) => `<option value="${esc(s)}">`).join("");
+    }
+
+    const cot = (k) => {
+      const m = D.site.cotacao && D.site.cotacao[k];
+      if (m && m.rate > 0) return { rate: m.rate, date: m.date, manual: true };
+      const r = D.loja && D.loja.rates && D.loja.rates[k];
+      return r && r.rate > 0 ? { rate: r.rate, date: r.date, manual: false } : null;
+    };
+    const emReais = (v) => { const c = cot("pix") || cot("efetivo"); return v != null && c ? brl(Math.round(v * c.rate * 100) / 100) : ""; };
+
+    async function carregar() {
+      D = await api("GET", "dados");
+      montar();
+      renderTudo();
+    }
+
+    async function entrar() {
+      $("#login").hidden = true;
+      $("#app").hidden = false;
+      await carregar();
+      abrirAba(location.hash.slice(1) || "geral", true);
+    }
+
+    function renderTudo() {
+      renderGeral();
+      renderPedidos();
+      renderProdutos();
+      renderLoja();
+    }
+
+    /* ---------- Abas ---------- */
+    function abrirAba(t, inicio) {
+      if (!$(`[data-sec="${t}"]`)) t = "geral";
+      $$("[data-sec]").forEach((s) => (s.hidden = s.dataset.sec !== t));
+      $$(".tab[data-tab]").forEach((b) => (b.dataset.tab === t ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+      history.replaceState(null, "", "#" + t);
+      if (!inicio) { scrollTo(0, 0); $(`[data-sec="${t}"] h1`).focus({ preventScroll: true }); }
+    }
+    $$("[data-sec] h1").forEach((h) => h.setAttribute("tabindex", "-1"));
+    $$(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => abrirAba(b.dataset.tab)));
+
+    /* ---------- Visão geral ---------- */
+    function renderGeral() {
+      const vis = PROD.filter((p) => p.active !== false);
+      const n = {
+        visiveis: vis.length,
+        ocultos: PROD.length - vis.length,
+        esgotados: vis.filter((p) => p.stock === 0).length,
+        semfoto: vis.filter((p) => !p._fotos.length).length,
+        sempreco: vis.filter((p) => !(p.price > 0)).length,
+        editados: PROD.filter((p) => p._editados.length || p._novo).length,
+        novos: D.pedidos.filter((p) => p.status === "novo").length,
+      };
+      const st = (num, txt, acao, alerta) => `<button class="stat${alerta && num ? " stat--alert" : ""}" data-ir="${acao}"><b>${num.toLocaleString("pt-BR")}</b><span>${txt}</span></button>`;
+      $("#stats").innerHTML = [
+        st(n.novos, "Pedidos novos", "pedidos", true),
+        st(n.visiveis, "Produtos no site", "produtos:visivel"),
+        st(n.esgotados, "Esgotados", "produtos:esgotado", true),
+        st(n.semfoto, "Sem foto", "produtos:semfoto", true),
+        st(n.sempreco, "Sem preço (sob consulta)", "produtos:sempreco", true),
+        st(n.ocultos, "Ocultos do site", "produtos:oculto"),
+        st(n.editados, "Editados no painel", "produtos:editado"),
+      ].join("");
+      $("#semLoja").hidden = !!D.loja;
+      const pix = cot("pix"), efe = cot("efetivo");
+      const linha = (a, b) => `<div><span class="muted">${a}</span><b>${b}</b></div>`;
+      const cotTxt = (c) => (c ? `${brl(c.rate)}${c.date ? " · " + dataBR(c.date) : ""}${c.manual ? " (manual)" : ""}` : "—");
+      $("#facts").innerHTML = [
+        linha("Última importação", D.importadoEm ? dataBR(D.importadoEm, true) : "—"),
+        linha("Exportado pelo Catálogo Pro em", D.loja && D.loja.generated ? dataBR(D.loja.generated, true) : "—"),
+        linha("Departamentos", new Set(PROD.map((p) => p.sector).filter(Boolean)).size),
+        linha("Marcas", new Set(PROD.map((p) => p.brand).filter(Boolean)).size),
+        linha("Cotação Pix", cotTxt(pix)),
+        linha("Cotação em dinheiro", cotTxt(efe)),
+      ].join("");
+      $("#nNovos").hidden = !n.novos;
+      $("#nNovos").textContent = n.novos;
+      const ult = D.pedidos.slice(0, 5);
+      $("#ultimos").innerHTML = ult.length
+        ? `<div class="facts">${ult.map((p) => `<div><span>#${p.id} · ${esc(p.cliente.nome || "Sem nome")} <span class="muted small">${dataBR(p.data, true)}</span></span><span class="st st-${p.status}">${STATUS[p.status]}</span></div>`).join("")}</div><button class="btn btn--sm" data-ir="pedidos" style="margin-top:12px">Ver todos</button>`
+        : `<p class="muted">Nenhum pedido registrado ainda.</p>`;
+    }
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-ir]");
+      if (!b) return;
+      const [aba, filtro] = b.dataset.ir.split(":");
+      if (aba === "produtos") { $("#pStatus").value = filtro || ""; $("#pBusca").value = ""; $("#pSetor").value = ""; pag = 0; renderProdutos(); }
+      abrirAba(aba);
+    });
+
+    /* ---------- Pedidos ---------- */
+    const STATUS = { novo: "Novo", atendimento: "Em atendimento", confirmado: "Confirmado", entregue: "Entregue", cancelado: "Cancelado" };
+    let pedFiltro = "";
+    function renderPedidos() {
+      const cont = (s) => D.pedidos.filter((p) => !s || p.status === s).length;
+      $("#pedFiltro").innerHTML = [["", "Todos"], ...Object.entries(STATUS)].map(([k, v]) => `<button class="chip" data-pf="${k}" aria-pressed="${pedFiltro === k}">${v} (${cont(k)})</button>`).join("");
+      const lista = D.pedidos.filter((p) => !pedFiltro || p.status === pedFiltro);
+      const moeda = (v, m) => (v == null ? "sob consulta" : m === "USD" ? usd(v) : brl(v));
+      $("#pedLista").innerHTML = lista.length
+        ? lista.map((p) => `<article class="order" data-pid="${p.id}">
+            <div class="order__top">
+              <div><h3>Pedido #${p.id} <span class="st st-${p.status}">${STATUS[p.status]}</span></h3><div class="muted small">${dataBR(p.data, true)}</div></div>
+              <b>${moeda(p.total, p.moeda)}</b>
+            </div>
+            <div class="small"><b>${esc(p.cliente.nome || "Sem nome")}</b>${p.cliente.cidade ? " · " + esc(p.cliente.cidade) : ""}${p.cliente.obs ? `<div class="muted">Obs.: ${esc(p.cliente.obs)}</div>` : ""}</div>
+            <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moeda(i.preco * i.q, p.moeda)}</span></div>`).join("")}</div>
+            <div class="order__foot">
+              <select class="field" data-st aria-label="Situação do pedido #${p.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}"${k === p.status ? " selected" : ""}>${v}</option>`).join("")}</select>
+              <input class="field" data-nota placeholder="Anotação interna (ex.: pago no Pix, entrega sábado)" value="${esc(p.nota)}" aria-label="Anotação do pedido #${p.id}" maxlength="2000" />
+              <button class="btn btn--danger btn--sm" data-del style="min-height:42px">Excluir</button>
+            </div>
+          </article>`).join("")
+        : `<div class="card empty">${D.pedidos.length ? "Nenhum pedido nesta situação." : "Nenhum pedido registrado ainda. Eles aparecem aqui quando um cliente finaliza o carrinho no site."}</div>`;
+    }
+    $("#pedFiltro").addEventListener("click", (e) => { const b = e.target.closest("[data-pf]"); if (b) { pedFiltro = b.dataset.pf; renderPedidos(); } });
+    async function salvarPedido(id, campos) {
+      try {
+        const r = await api("PUT", "pedido", { id, ...campos });
+        const i = D.pedidos.findIndex((p) => p.id === id);
+        D.pedidos[i] = r.pedido;
+        renderPedidos(); renderGeral();
+        toast("Pedido atualizado");
+      } catch (err) { toast(err.message, true); }
+    }
+    $("#pedLista").addEventListener("change", (e) => {
+      const card = e.target.closest("[data-pid]");
+      if (!card) return;
+      const id = Number(card.dataset.pid);
+      if (e.target.matches("[data-st]")) salvarPedido(id, { status: e.target.value });
+      if (e.target.matches("[data-nota]")) salvarPedido(id, { nota: e.target.value });
+    });
+    $("#pedLista").addEventListener("click", async (e) => {
+      if (!e.target.matches("[data-del]")) return;
+      const id = Number(e.target.closest("[data-pid]").dataset.pid);
+      if (!confirm(`Excluir o pedido #${id}? Isso não pode ser desfeito.`)) return;
+      try { await api("DELETE", "pedido", { id }); D.pedidos = D.pedidos.filter((p) => p.id !== id); renderPedidos(); renderGeral(); toast("Pedido excluído"); }
+      catch (err) { toast(err.message, true); }
+    });
+    $("#reloadPedidos").addEventListener("click", async () => {
+      try { D.pedidos = (await api("GET", "pedidos")).pedidos; renderPedidos(); renderGeral(); toast("Pedidos atualizados"); } catch (err) { toast(err.message, true); }
+    });
+
+    /* ---------- Produtos ---------- */
+    const POR_PAG = 50;
+    let pag = 0, filtrados = [];
+    const sel = new Set();
+    const FILTROS = {
+      visivel: (p) => p.active !== false,
+      oculto: (p) => p.active === false,
+      esgotado: (p) => p.stock === 0,
+      semfoto: (p) => !p._fotos.length,
+      sempreco: (p) => !(p.price > 0),
+      editado: (p) => p._editados.length > 0,
+      novo: (p) => p._novo,
+    };
+    function renderProdutos() {
+      const q = norm($("#pBusca").value).trim().split(/\s+/).filter(Boolean);
+      const setor = $("#pSetor").value, st = FILTROS[$("#pStatus").value];
+      filtrados = PROD.filter((p) => (!setor || p.sector === setor) && (!st || st(p)) && q.every((t) => p._busca.includes(t)));
+      const total = Math.max(1, Math.ceil(filtrados.length / POR_PAG));
+      pag = Math.min(pag, total - 1);
+      const pagina = filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
+      $("#pLista").innerHTML = pagina.length
+        ? `<div class="row row--head"><span></span><span></span><span>Produto</span><span class="num">Preço</span><span class="num">Estoque</span><span>Site</span></div>` +
+          pagina.map((p) => {
+            const preco = p.price > 0 ? `${usd(p.price)}<div class="meta">${emReais(p.price)}</div>` : `<span class="muted small">Sob consulta</span>`;
+            return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
+              <input type="checkbox" data-sel aria-label="Selecionar ${esc(p.name)}"${sel.has(p.sku) ? " checked" : ""} />
+              <img src="${p._fotos.length ? fotoURL(p._fotos[0]) : SEMFOTO}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
+              <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
+              <div class="num c-price">${preco}</div>
+              <div class="num c-stock">${p.stock == null ? "—" : p.stock === 0 ? '<span class="badge b-out">0</span>' : p.stock}</div>
+              <div class="c-vis">${p.active === false ? '<span class="badge b-off">Oculto</span>' : p.stock === 0 ? '<span class="badge b-out">Esgotado</span>' : '<span class="badge b-new">Visível</span>'}</div>
+            </div>`;
+          }).join("")
+        : `<div class="empty">${PROD.length ? "Nenhum produto encontrado com esses filtros." : "Nenhum produto ainda. Importe o ZIP do Catálogo Pro ou crie um produto."}</div>`;
+      $("#pInfo").textContent = filtrados.length ? `${(pag * POR_PAG + 1).toLocaleString("pt-BR")}–${Math.min(filtrados.length, (pag + 1) * POR_PAG).toLocaleString("pt-BR")} de ${filtrados.length.toLocaleString("pt-BR")} produtos` : "";
+      $("#pPrev").disabled = pag === 0;
+      $("#pNext").disabled = pag >= total - 1;
+      renderBulk();
+    }
+    function renderBulk() {
+      $("#bulk").hidden = !sel.size;
+      $("#bulkN").textContent = `${sel.size} selecionado(s)`;
+    }
+    let tBusca;
+    $("#pBusca").addEventListener("input", () => { clearTimeout(tBusca); tBusca = setTimeout(() => { pag = 0; renderProdutos(); }, 200); });
+    $("#pSetor").addEventListener("change", () => { pag = 0; renderProdutos(); });
+    $("#pStatus").addEventListener("change", () => { pag = 0; renderProdutos(); });
+    $("#pPrev").addEventListener("click", () => { pag--; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
+    $("#pNext").addEventListener("click", () => { pag++; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
+    $("#pLista").addEventListener("click", (e) => {
+      const row = e.target.closest("[data-sku]");
+      if (!row) return;
+      if (e.target.matches("[data-sel]")) { e.target.checked ? sel.add(row.dataset.sku) : sel.delete(row.dataset.sku); return renderBulk(); }
+      abrirEditor(row.dataset.sku);
+    });
+    $("#pLista").addEventListener("keydown", (e) => {
+      const row = e.target.closest("[data-sku]");
+      if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirEditor(row.dataset.sku); }
+    });
+    $("#bulkClear").addEventListener("click", () => { sel.clear(); renderProdutos(); });
+    $$("[data-bulk]").forEach((b) => b.addEventListener("click", async () => {
+      const ativo = b.dataset.bulk === "true";
+      b.disabled = true;
+      try {
+        const r = await api("PUT", "produtos", { skus: [...sel], active: ativo });
+        D.ajustes = r.ajustes; sel.clear(); montar(); renderProdutos(); renderGeral();
+        toast(ativo ? "Produtos visíveis no site" : "Produtos ocultados do site");
+      } catch (err) { toast(err.message, true); }
+      b.disabled = false;
+    }));
+
+    /* ---------- Editor ---------- */
+    let ed = null; // { sku, fotos, novo }
+    const dlg = $("#dlg");
+    const numOuNull = (v) => { v = String(v).trim().replace(/\s/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); return Number(v); };
+    const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos" };
+
+    function abrirEditor(sku) {
+      const p = sku ? PROD.find((x) => x.sku === sku) : null;
+      ed = { sku: p ? p.sku : null, fotos: p ? [...p._fotos] : [], novo: !p || p._novo };
+      $("#dlgTitle").textContent = p ? "Editar produto" : "Novo produto";
+      $("#dNome").value = p ? p.name : "";
+      $("#dMarca").value = p ? p.brand || "" : "";
+      $("#dSetor").value = p ? p.sector || "" : "";
+      $("#dPreco").value = p && p.price != null ? String(p.price).replace(".", ",") : "";
+      $("#dEstoque").value = p && p.stock != null ? p.stock : "";
+      $("#dTags").value = p ? p.tags || "" : "";
+      $("#dDesc").value = p ? p.description || "" : "";
+      $("#dAtivo").checked = !p || p.active !== false;
+      const info = $("#dEditInfo");
+      info.hidden = !p || p._novo;
+      if (p && !p._novo) {
+        info.className = "msg small " + (p._editados.length ? "warn" : "info");
+        info.textContent = p._editados.length
+          ? `Editado no painel: ${p._editados.map((k) => NOMES[k] || k).join(", ")}. Se o Catálogo Pro exportar outro valor para esses campos, vale o do Catálogo Pro.`
+          : `Produto do Catálogo Pro (SKU ${p.sku}). As alterações feitas aqui valem até o Catálogo Pro exportar um valor diferente para o mesmo campo.`;
+      }
+      const rest = $("#dRestaurar");
+      rest.hidden = !p || (!p._novo && !p._editados.length);
+      rest.textContent = p && p._novo ? "Excluir produto" : "Desfazer edições";
+      $("#dVer").hidden = !p || p.active === false;
+      if (p) $("#dVer").href = "/#/produto/" + encodeURIComponent(p.sku);
+      renderFotos();
+      precoBR();
+      dlg.showModal();
+      $("#dNome").focus();
+    }
+    function precoBR() {
+      const v = numOuNull($("#dPreco").value);
+      const c = cot("pix") || cot("efetivo");
+      $("#dPrecoBR").textContent = v > 0 && c ? `No site: ${emReais(v)} (${cot("pix") ? "Pix" : "dinheiro"}, US$ 1 = ${brl(c.rate)})` : v === null ? "Aparece como “Sob consulta”." : "";
+    }
+    $("#dPreco").addEventListener("input", precoBR);
+    function renderFotos() {
+      $("#dFotos").innerHTML = ed.fotos.map((id, i) => `<div class="ph"><img src="${fotoURL(id)}" alt="Foto ${i + 1}" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
+        <div class="ph__bar"><button type="button" data-mv="${i}" data-d="-1" aria-label="Mover foto ${i + 1} para a esquerda"${i ? "" : " disabled"}>◀</button><button type="button" data-rmf="${i}" aria-label="Remover foto ${i + 1}">✕</button><button type="button" data-mv="${i}" data-d="1" aria-label="Mover foto ${i + 1} para a direita"${i < ed.fotos.length - 1 ? "" : " disabled"}>▶</button></div></div>`).join("") +
+        (ed.fotos.length < 20 ? `<button type="button" class="ph--add" id="addFoto">＋<br>Adicionar foto</button>` : "");
+    }
+    $("#dFotos").addEventListener("click", (e) => {
+      const mv = e.target.closest("[data-mv]"), rm = e.target.closest("[data-rmf]");
+      if (mv) { const i = +mv.dataset.mv, j = i + +mv.dataset.d; [ed.fotos[i], ed.fotos[j]] = [ed.fotos[j], ed.fotos[i]]; renderFotos(); }
+      if (rm) { ed.fotos.splice(+rm.dataset.rmf, 1); renderFotos(); }
+      if (e.target.closest("#addFoto")) $("#dFotoIn").click();
+    });
+    // Reduz a foto no navegador (até 1200 px, JPG) antes de enviar
+    async function reduzir(file) {
+      const img = await createImageBitmap(file);
+      const k = Math.min(1, 1200 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      return new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.86));
+    }
+    $("#dFotoIn").addEventListener("change", async (e) => {
+      const arqs = [...e.target.files].slice(0, 20 - ed.fotos.length);
+      e.target.value = "";
+      for (const f of arqs) {
+        toast(`Enviando ${f.name}…`);
+        try { const r = await api("POST", "foto", await reduzir(f)); ed.fotos.push(r.id); renderFotos(); }
+        catch (err) { toast(`${f.name}: ${err.message || "não foi possível ler a imagem"}`, true); }
+      }
+      if (arqs.length) toast("Foto(s) adicionada(s). Clique em Salvar.");
+    });
+
+    $("#pForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const preco = numOuNull($("#dPreco").value), estoque = numOuNull($("#dEstoque").value);
+      if (preco != null && !(preco >= 0)) return toast("Preço inválido. Use apenas números, ex.: 49,90", true);
+      if (estoque != null && !(Number.isInteger(estoque) && estoque >= 0)) return toast("Estoque inválido. Use um número inteiro.", true);
+      const campos = {
+        name: $("#dNome").value.trim(), brand: $("#dMarca").value.trim(), sector: $("#dSetor").value.trim(),
+        price: preco, stock: estoque, tags: $("#dTags").value.trim(), description: $("#dDesc").value.trim(),
+        active: $("#dAtivo").checked, photos: ed.fotos,
+      };
+      // Produto do Catálogo Pro: envia só o que mudou, para não marcar campos intocados como editados
+      const p = ed.sku && PROD.find((x) => x.sku === ed.sku);
+      if (p && !p._novo) for (const k in campos) {
+        const atual = k === "photos" ? p._fotos : k === "active" ? p.active !== false : p[k] === undefined ? (k === "price" || k === "stock" ? null : "") : p[k];
+        if (igual(atual, campos[k]) || (k === "description" || k === "tags" || k === "brand" || k === "sector") && String(atual || "") === campos[k]) delete campos[k];
+      }
+      $("#dSalvar").disabled = true;
+      try {
+        const r = ed.sku ? await api("PUT", "produto", { sku: ed.sku, campos }) : await api("POST", "produto", { campos });
+        D.ajustes = r.ajustes; montar(); renderProdutos(); renderGeral();
+        dlg.close();
+        toast(ed.sku ? "Produto salvo. Já está no site." : "Produto criado. Já está no site.");
+      } catch (err) { toast(err.message, true); }
+      $("#dSalvar").disabled = false;
+    });
+    $("#dRestaurar").addEventListener("click", async () => {
+      const novo = ed.novo;
+      if (!confirm(novo ? "Excluir este produto criado no painel?" : "Desfazer as edições feitas no painel e voltar aos dados do Catálogo Pro?")) return;
+      try {
+        const r = await api("DELETE", "produto", { sku: ed.sku });
+        D.ajustes = r.ajustes; sel.delete(ed.sku); montar(); renderProdutos(); renderGeral();
+        dlg.close();
+        toast(novo ? "Produto excluído" : "Edições desfeitas");
+      } catch (err) { toast(err.message, true); }
+    });
+    $("#dlgX").addEventListener("click", () => dlg.close());
+    $("#dCancelar").addEventListener("click", () => dlg.close());
+    $("#novoProd").addEventListener("click", () => abrirEditor(null));
+
+    /* ---------- Importar ---------- */
+    let files = [];
     function setFiles(list) {
       files = [...list].filter((f) => /\.zip$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-      $("#files").innerHTML = files.map((f) => `<div><span>${f.name.replace(/[<>&]/g, "")}</span><span>${(f.size / 1048576).toFixed(1)} MB</span></div>`).join("");
+      $("#files").innerHTML = files.map((f) => `<div><span>${esc(f.name)}</span><span>${(f.size / 1048576).toFixed(1)} MB</span></div>`).join("");
       $("#send").disabled = !files.length;
     }
-    $("#drop").onclick = () => $("#file").click();
+    const drop = $("#drop");
+    drop.onclick = () => $("#file").click();
+    drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#file").click(); } };
     $("#file").onchange = (e) => setFiles(e.target.files);
-    $("#drop").ondragover = (e) => { e.preventDefault(); $("#drop").classList.add("over"); };
-    $("#drop").ondragleave = () => $("#drop").classList.remove("over");
-    $("#drop").ondrop = (e) => { e.preventDefault(); $("#drop").classList.remove("over"); setFiles(e.dataTransfer.files); };
-
-    const log = (t, cls) => { const d = document.createElement("div"); d.className = cls || ""; d.textContent = t; $("#log").appendChild(d); };
-
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); setFiles(e.dataTransfer.files); };
+    const log = (t, cls) => { const d = document.createElement("div"); d.className = "msg " + (cls || ""); d.textContent = t; $("#log").appendChild(d); };
     $("#send").onclick = async () => {
-      const senha = $("#senha").value;
-      if (!senha) return $("#senha").focus();
-      try { sessionStorage.setItem("rota_senha", senha); } catch {}
       $("#send").disabled = true;
       $("#log").innerHTML = "";
       let last = null;
       for (const f of files) {
         log(`Enviando ${f.name}…`);
         try {
-          const r = await fetch("/admin/importar", { method: "POST", headers: { "x-senha": senha, "Content-Type": "application/zip" }, body: f });
+          const r = await fetch("/admin/importar", { method: "POST", headers: { "x-rota": "1", "Content-Type": "application/zip" }, body: f, credentials: "same-origin" });
           const j = await r.json().catch(() => ({ erro: "Resposta inválida do servidor." }));
-          if (!r.ok) { log(`✕ ${f.name}: ${j.erro}`, "err"); if (r.status === 401) break; continue; }
+          if (r.status === 401) { mostrarLogin("Sua sessão expirou. Entre novamente."); break; }
+          if (!r.ok) { log(`✕ ${f.name}: ${j.erro}`, "err"); continue; }
           last = j;
           log(`✓ ${f.name}: ${j.produtos != null ? j.produtos + " produtos, " : ""}${j.fotos} fotos`, "ok");
-        } catch (e) {
+        } catch {
           log(`✕ ${f.name}: falha de conexão`, "err");
         }
       }
-      if (last && last.fotosFaltando) log(`Atenção: ${last.fotosFaltando} foto(s) ainda não estão no site. Exporte com "todas as fotos".`, "err");
+      if (last && last.fotosFaltando) log(`Atenção: ${last.fotosFaltando} foto(s) ainda não estão no site. Exporte com "todas as fotos".`, "warn");
       else if (last) log("Pronto! O site já mostra os produtos atualizados.", "ok");
+      if (last) { try { await carregar(); } catch {} }
       $("#send").disabled = false;
     };
+
+    /* ---------- Loja ---------- */
+    function renderLoja() {
+      const s = D.site;
+      $("#lNome").value = s.nome || ""; $("#lSlogan").value = s.slogan || ""; $("#lWhats").value = s.whatsapp || "";
+      $("#lInsta").value = s.instagram || ""; $("#lCidade").value = s.cidade || ""; $("#lHorario").value = s.horario || "";
+      const m = s.cotacao || {};
+      $("#lPix").value = m.pix ? String(m.pix.rate).replace(".", ",") : "";
+      $("#lEfet").value = m.efetivo ? String(m.efetivo.rate).replace(".", ",") : "";
+      const doCat = (k) => { const r = D.loja && D.loja.rates && D.loja.rates[k]; return r && r.rate > 0 ? `Catálogo Pro: ${brl(r.rate)}${r.date ? " (" + dataBR(r.date) + ")" : ""}` : "O Catálogo Pro não exportou essa cotação."; };
+      $("#lPixHint").textContent = doCat("pix");
+      $("#lEfetHint").textContent = doCat("efetivo");
+    }
+    $("#lojaForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pix = numOuNull($("#lPix").value), efe = numOuNull($("#lEfet").value);
+      if ((pix != null && !(pix > 0)) || (efe != null && !(efe > 0))) return toast("Cotação inválida. Ex.: 5,22", true);
+      $("#lojaSalvar").disabled = true;
+      try {
+        const r = await api("PUT", "site", {
+          nome: $("#lNome").value, slogan: $("#lSlogan").value, whatsapp: $("#lWhats").value, instagram: $("#lInsta").value,
+          cidade: $("#lCidade").value, horario: $("#lHorario").value, cotacao: { pix, efetivo: efe },
+        });
+        D.site = r.site; renderLoja(); renderGeral(); renderProdutos();
+        toast("Dados da loja salvos");
+      } catch (err) { toast(err.message, true); }
+      $("#lojaSalvar").disabled = false;
+    });
+
+    /* ---------- Início ---------- */
+    fetch("/admin/api/sessao", { credentials: "same-origin" })
+      .then((r) => r.json().then((j) => ({ r, j })))
+      .then(({ r, j }) => {
+        if (r.status === 503) { mostrarLogin(j.erro); $("#loginBtn").disabled = true; return; }
+        j.logado ? entrar().catch((e) => mostrarLogin(e.message)) : mostrarLogin();
+      })
+      .catch(() => mostrarLogin("Não foi possível conectar ao servidor."));
+  })();
   </script>
 </body>
 </html>
