@@ -450,7 +450,7 @@
         </a>
         <div class="card__body">
           <span class="card__cat">${esc(meta(p))}</span>
-          <h3 class="card__name"><a href="${prodHref(p)}">${esc(p.nome)}</a></h3>
+          <h3 class="card__name"><a href="${prodHref(p)}" title="${esc(p.nome)}">${esc(p.nome)}</a></h3>
           ${p.sku ? `<span class="card__sku">Cód. ${esc(p.sku)}</span>` : ""}
           ${priceHTML(p)}
           ${esgotado(p) ? "" : dispHTML(p)}

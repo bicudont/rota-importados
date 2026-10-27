@@ -606,9 +606,10 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .toast {
   position: fixed; left: 50%; bottom: 28px; z-index: 70; transform: translate(-50%, 140%);
   background: var(--navy); color: #fff; padding: 12px 20px; border-radius: var(--r-pill); font-weight: 500; font-size: .92rem;
-  box-shadow: var(--shadow-lg); transition: transform .25s cubic-bezier(.2, .9, .3, 1.2); pointer-events: none; white-space: nowrap;
+  box-shadow: var(--shadow-lg); transition: transform .25s cubic-bezier(.2, .9, .3, 1.2), visibility .25s; pointer-events: none; white-space: nowrap;
+  visibility: hidden;
 }
-.toast.show { transform: translate(-50%, 0); }
+.toast.show { transform: translate(-50%, 0); visibility: visible; }
 
 /* ---------- Responsivo (1440 · 1024 · 768 · 390 · 360) ---------- */
 @media (max-width: 1024px) {
