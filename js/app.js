@@ -610,10 +610,15 @@
           <p class="pdp__note">${COTACAO ? "Preços calculados pela cotação do dia. " : ""}Pagamento e entrega são combinados pelo WhatsApp.</p>
         </div>
       </div>
-      ${p.descricao || specs.length ? `<div class="pdp__extra">
+      <div class="pdp__extra">
         ${p.descricao ? `<section class="pdp__section"><h2>Descrição</h2><p>${esc(p.descricao)}</p></section>` : ""}
         ${specs.length ? `<section class="pdp__section"><h2>Especificações</h2><dl class="specs">${specs.map(([k, val]) => `<dt>${k}</dt><dd>${esc(val)}</dd>`).join("")}</dl></section>` : ""}
-      </div>` : ""}
+        <section class="pdp__section"><h2>Informações de compra</h2><ul class="pdp__facts">${infoCompra(p).map(([i, t]) => `<li><span aria-hidden="true">${i}</span><span>${t}</span></li>`).join("")}</ul></section>
+      </div>
+      ${out ? "" : `<div class="pdp__bar" id="pBar" hidden>
+        <div class="pdp__bar-price"><small>${esc(p.nome)}</small><b>${p.preco == null ? "Sob consulta" : esc(fmt(p.preco))}</b></div>
+        <button class="btn btn--primary" data-bar-add>Adicionar</button>
+      </div>`}
       ${rel.length ? `<div class="pdp__related">${shelfHTML(`Mais em ${catName(p.categoria)}`, rel, `<a href="${catalogHref({ cat: p.categoria })}" class="shelf__all">Ver todos</a>`)}</div>` : ""}`;
 
     const updBuy = () => {
@@ -645,16 +650,43 @@
           else x.removeAttribute("aria-current");
         });
       }
-      if (e.target.closest("#pAdd")) addToCart(p.id, v, q);
+      if (e.target.closest("#pAdd") || e.target.closest("[data-bar-add]")) addToCart(p.id, v, q);
       updBuy();
     };
     iniciarVitrines($("#produto"));
+    observarBarra();
     document.title = `${p.nome} · ${S.nome}`;
   }
+
+  // Informações complementares: só fatos do sistema (cotação, data do catálogo, fluxo do pedido)
+  function infoCompra(p) {
+    const itens = [["💬", "Pedido pelo WhatsApp: adicione ao carrinho ou use “Comprar agora” e a mensagem chega pronta para a loja."]];
+    if (COTACAO && p.usd != null) {
+      const c = COTACAO[COTACAO.principal];
+      const quando = c.date ? ` de ${esc(new Date(c.date + (c.date.length === 10 ? "T12:00" : "")).toLocaleDateString("pt-BR"))}` : " do dia";
+      itens.push(["💱", `Preço em R$ calculado pela cotação ${COTACAO.principal === "pix" ? "Pix" : "em dinheiro"}${quando} (US$ 1 = ${esc(money(c.rate, "BRL"))}).`]);
+    }
+    if (p.estoque != null && loja && loja.generated && !isNaN(Date.parse(loja.generated))) {
+      itens.push(["📦", `Estoque conforme a atualização do catálogo em ${new Date(loja.generated).toLocaleDateString("pt-BR")}.`]);
+    }
+    if (temEstoque && p.estoque > 0) itens.push(["🔢", `A quantidade do pedido é limitada ao estoque disponível (${p.estoque} ${p.estoque === 1 ? "unidade" : "unidades"}).`]);
+    return itens;
+  }
+
+  // Barra fixa de compra (celular): aparece quando os botões principais saem da tela
+  function atualizarBarra() {
+    const bar = $("#pBar"), alvo = $("#produto .pdp__btns");
+    const mostrar = VIEW === "produto" && !!bar && !!alvo && alvo.getBoundingClientRect().bottom < 0;
+    if (bar) bar.hidden = !mostrar;
+    document.body.classList.toggle("has-bar", mostrar);
+  }
+  const observarBarra = atualizarBarra;
+  window.addEventListener("scroll", atualizarBarra, { passive: true });
 
   /* ---------- Roteador ---------- */
   function showView(v) {
     VIEW = v;
+    if (v !== "produto") document.body.classList.remove("has-bar");
     document.querySelectorAll("[data-view]").forEach((el) => (el.hidden = el.dataset.view !== v));
   }
 

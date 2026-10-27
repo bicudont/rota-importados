@@ -551,6 +551,26 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .pdp__section h2 { font-size: 1.15rem; margin-bottom: 12px; }
 .pdp__section p { color: var(--text); white-space: pre-line; }
 .pdp__related { margin-top: var(--s-7); }
+.pdp__facts { list-style: none; display: grid; gap: 12px; font-size: .92rem; }
+.pdp__facts li { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; }
+.pdp__facts li > span:first-child { width: 28px; height: 28px; border-radius: var(--r-sm); background: var(--royal-050); display: grid; place-items: center; font-size: .9rem; }
+
+/* Barra fixa de compra (só no celular, quando os botões principais saem da tela) */
+.pdp__bar { display: none; }
+@media (max-width: 768px) {
+  .pdp__bar:not([hidden]) {
+    position: fixed; z-index: 35; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface);
+    border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -12px rgba(16, 37, 77, .25); animation: barUp .2s;
+  }
+  .pdp__bar-price { flex: 1; min-width: 0; display: grid; }
+  .pdp__bar-price small { color: var(--muted); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pdp__bar-price b { font: 700 1.15rem var(--font-head); color: var(--royal); }
+  .pdp__bar .btn { height: 46px; padding: 0 22px; }
+  body.has-bar .float-whats { bottom: 86px; }
+  body.has-bar .toast { bottom: 90px; }
+}
+@keyframes barUp { from { transform: translateY(100%); } }
 .badge--inline { position: static; }
 .pdp__main .badge--off { top: 14px; right: 14px; }
 
