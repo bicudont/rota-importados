@@ -147,6 +147,22 @@
     .ped-total b { font: 700 1.25rem Poppins, sans-serif; color: var(--navy); }
     @media (max-width: 560px) { .it { grid-template-columns: minmax(0,1fr) 64px 34px; } .it__preco { grid-column: 1 / 3; } }
 
+    /* Banner */
+    .bnc { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; display: grid; gap: 14px; }
+    .bnc--off { opacity: .7; }
+    .bnc__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .bnc__head h2 { margin-right: auto; }
+    .lnk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; }
+    .lnk--so { grid-template-columns: 1fr; }
+    .imgs { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+    .slot { border: 2px dashed var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px; align-content: start; }
+    .slot__prev { aspect-ratio: 16 / 7; background: #eef4ff center / contain no-repeat; border-radius: 8px; display: grid; place-items: center; color: var(--muted); font-size: .82rem; text-align: center; }
+    .slot--cel .slot__prev { aspect-ratio: 1; }
+    .slot__acts { display: flex; gap: 6px; flex-wrap: wrap; }
+    .botoes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .botao { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+    @media (max-width: 760px) { .imgs, .botoes, .lnk { grid-template-columns: 1fr; } }
+
     /* Pendências */
     .rev { background: #fffdf5; border: 1px solid #f3dfb0; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
     .rv { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 12px; padding: 12px 0; border-top: 1px solid #f3dfb0; }
@@ -233,6 +249,7 @@
       <button class="tab" data-tab="geral">📊 <span>Visão geral</span></button>
       <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
       <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
+      <button class="tab" data-tab="banner">🖼️ <span>Banner</span></button>
       <button class="tab" data-tab="pendencias">⚠️ <span>Pendências</span><b class="count" id="nPend" hidden></b></button>
       <button class="tab" data-tab="importar">🔄 <span>Importar/Exportar</span></button>
       <button class="tab" data-tab="exportar">📄 <span>Catálogo PDF</span></button>
@@ -289,6 +306,40 @@
         </div>
         <div class="list" id="pLista"></div>
         <div class="pager"><span class="muted small" id="pInfo"></span><div style="display:flex;gap:8px"><button class="btn btn--sm" id="pPrev">← Anterior</button><button class="btn btn--sm" id="pNext">Próxima →</button></div></div>
+      </section>
+
+      <!-- Banner -->
+      <section data-sec="banner" hidden>
+        <div class="head"><h1>Banner da página inicial</h1><a class="btn" href="/" target="_blank" rel="noopener">Ver o site ↗</a></div>
+        <p class="muted small" style="margin:-8px 0 16px">Os banners ativos aparecem em sequência no topo da página inicial. Sem nenhum banner ativo, o site mostra o destaque automático (com produtos e números do catálogo).</p>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2>Aviso na faixa superior</h2>
+          <p class="muted small" style="margin:4px 0 12px">Texto curto na faixa azul acima do cabeçalho, em todas as páginas (ex.: “Entregas para todo o Brasil”). Deixe vazio para não mostrar.</p>
+          <div class="grid2">
+            <div><label class="lbl" for="bfTexto">Texto</label><input class="field" id="bfTexto" maxlength="120" /></div>
+            <div><span class="lbl">Link (opcional)</span><div id="bfLink"></div></div>
+          </div>
+        </div>
+
+        <div id="bnLista"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:4px 0 16px">
+          <button class="btn" id="bnAdd">+ Adicionar banner</button>
+          <span class="muted small" id="bnLimite"></span>
+        </div>
+
+        <div class="card exp-foot">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <label class="lbl" for="bnIntervalo" style="margin:0">Trocar a cada</label>
+            <input class="field" id="bnIntervalo" type="number" min="4" max="15" style="width:80px" />
+            <span class="muted small">segundos</span>
+            <b class="small" id="bnSujo" style="color:var(--warn)" hidden>• Alterações não salvas</b>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="bnDesfazer">Desfazer alterações</button>
+            <button class="btn btn--primary" id="bnSalvar">Salvar banners</button>
+          </div>
+        </div>
       </section>
 
       <!-- Pendências -->
@@ -509,6 +560,7 @@
     </form>
   </dialog>
   <datalist id="dlMarcas"></datalist>
+  <datalist id="dlSkus"></datalist>
   <datalist id="dlSetores"></datalist>
   <div class="toast" id="toast" role="status"></div>
 
@@ -601,6 +653,7 @@
       $("#pSetor").innerHTML = `<option value="">Todos os departamentos</option>` + setores.map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
       $("#dlSetores").innerHTML = setores.map((s) => `<option value="${esc(s)}">`).join("");
       $("#dlMarcas").innerHTML = marcas.map((s) => `<option value="${esc(s)}">`).join("");
+      $("#dlSkus").innerHTML = PROD.map((p) => `<option value="${esc(p.sku)}">${esc(p.name)}</option>`).join("");
     }
 
     const cot = (k) => {
@@ -631,6 +684,7 @@
       renderLoja();
       renderExportar();
       renderExportarProdutos();
+      if (!bnSujo) renderBanner(); // não apaga edições de banner ainda não salvas
     }
 
     /* ---------- Abas ---------- */
@@ -1115,6 +1169,186 @@
       if (last) { try { await carregar(); } catch {} }
       $("#send").disabled = false;
     };
+
+    /* ---------- Banner da página inicial ---------- */
+    const MAX_BANNERS = 8;
+    const LINKS = [["nenhum", "Sem link"], ["catalogo", "Catálogo (todos os produtos)"], ["departamento", "Departamento"], ["marca", "Marca"], ["produto", "Produto"], ["whatsapp", "WhatsApp"], ["url", "Endereço externo"]];
+    const LINK_AJUDA = { departamento: ["dlSetores", "Nome do departamento"], marca: ["dlMarcas", "Nome da marca"], produto: ["dlSkus", "SKU do produto"], whatsapp: ["", "Mensagem (opcional)"], url: ["", "https://…"] };
+    const FORMATOS = {
+      lado: ["Texto ao lado da imagem", "Fundo azul da loja com o texto à esquerda e a imagem à direita. Ideal: produto em PNG com fundo transparente ou foto quadrada (~1000×1000 px)."],
+      fundo: ["Texto sobre a imagem", "A imagem cobre o banner e o texto fica à esquerda sobre um escurecido. Ideal: imagem larga (~1920×800 px) com o assunto à direita."],
+      imagem: ["Só imagem (arte pronta)", "Mostra a arte inteira, sem texto do site; a imagem toda vira o link. Ideal: ~1920×640 px e, para celular, uma versão ~900×900 px."],
+    };
+    let bnSujo = false;
+    const novoSlide = () => ({ id: Math.random().toString(36).slice(2, 10), ativo: true, layout: "lado", etiqueta: "", titulo: "", subtitulo: "", btn1: { texto: "Ver catálogo", link: { tipo: "catalogo", valor: "" } }, btn2: { texto: "", link: { tipo: "nenhum", valor: "" } }, link: { tipo: "nenhum", valor: "" }, imagem: "", imagemCelular: "", alt: "" });
+    const urlBanner = (arq) => "/data/banners/" + encodeURIComponent(arq);
+
+    function linkHTML(nome, l, semNenhum) {
+      l = l || { tipo: "nenhum", valor: "" };
+      const opts = LINKS.filter(([k]) => !(semNenhum && k === "nenhum")).map(([k, t]) => `<option value="${k}"${k === l.tipo ? " selected" : ""}>${t}</option>`).join("");
+      return `<div class="lnk" data-lnk="${nome}"><select class="field" data-lt aria-label="Tipo de link">${opts}</select><input class="field" data-lv maxlength="300" value="${esc(l.valor)}" aria-label="Destino do link" /></div>`;
+    }
+    function ajustarLink(box) {
+      const tipo = $("[data-lt]", box).value, inp = $("[data-lv]", box), aj = LINK_AJUDA[tipo];
+      inp.hidden = !aj;
+      box.classList.toggle("lnk--so", !aj);
+      if (aj) { aj[0] ? inp.setAttribute("list", aj[0]) : inp.removeAttribute("list"); inp.placeholder = aj[1]; }
+    }
+    const lerLink = (box) => ({ tipo: $("[data-lt]", box).value, valor: $("[data-lv]", box).hidden ? "" : $("[data-lv]", box).value.trim() });
+
+    function slotHTML(campo, arq, titulo, cel) {
+      return `<div class="slot${cel ? " slot--cel" : ""}" data-slot="${campo}">
+        <span class="lbl" style="margin:0">${titulo}</span>
+        <div class="slot__prev" style="${arq ? `background-image:url('${urlBanner(arq)}')` : ""}">${arq ? "" : "Nenhuma imagem"}</div>
+        <input type="hidden" data-k="${campo}" value="${esc(arq)}" />
+        <input type="file" accept="image/jpeg,image/png,image/webp" hidden data-file />
+        <div class="slot__acts"><button type="button" class="btn btn--sm" data-enviar>${arq ? "Trocar" : "Enviar imagem"}</button>${arq ? `<button type="button" class="btn btn--sm btn--danger" data-tirar>Remover</button>` : ""}</div>
+      </div>`;
+    }
+    function slideHTML(s, i, total) {
+      const v = (k) => esc(s[k] || "");
+      return `<div class="bnc${s.ativo ? "" : " bnc--off"}" data-i="${i}" data-id="${esc(s.id)}">
+        <div class="bnc__head">
+          <h2>Banner ${i + 1}</h2>
+          <label class="switch"><input type="checkbox" data-k="ativo"${s.ativo ? " checked" : ""} /> Ativo</label>
+          <button type="button" class="btn btn--sm" data-mv="-1" aria-label="Subir o banner ${i + 1}"${i ? "" : " disabled"}>↑</button>
+          <button type="button" class="btn btn--sm" data-mv="1" aria-label="Descer o banner ${i + 1}"${i < total - 1 ? "" : " disabled"}>↓</button>
+          <button type="button" class="btn btn--sm btn--danger" data-rm>Excluir</button>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl">Formato</label><select class="field" data-k="layout">${Object.entries(FORMATOS).map(([k, [t]]) => `<option value="${k}"${k === s.layout ? " selected" : ""}>${t}</option>`).join("")}</select><div class="hint" data-ajuda></div></div>
+          <div data-so="texto"><label class="lbl">Etiqueta (opcional)</label><input class="field" data-k="etiqueta" maxlength="60" value="${v("etiqueta")}" placeholder="Ex.: Lançamento" /></div>
+        </div>
+        <div data-so="texto" class="stack">
+          <div><label class="lbl">Título *</label><input class="field" data-k="titulo" maxlength="120" value="${v("titulo")}" placeholder="Ex.: Perfumes árabes com preço de Pix" /></div>
+          <div><label class="lbl">Subtítulo (opcional)</label><input class="field" data-k="subtitulo" maxlength="240" value="${v("subtitulo")}" /></div>
+          <div class="botoes">
+            <div class="botao"><span class="lbl" style="margin:0">Botão principal (laranja)</span><input class="field" data-k="btn1t" maxlength="40" value="${esc(s.btn1.texto)}" placeholder="Texto do botão (vazio = sem botão)" />${linkHTML("btn1", s.btn1.link)}</div>
+            <div class="botao"><span class="lbl" style="margin:0">Botão secundário</span><input class="field" data-k="btn2t" maxlength="40" value="${esc(s.btn2.texto)}" placeholder="Texto do botão (vazio = sem botão)" />${linkHTML("btn2", s.btn2.link)}</div>
+          </div>
+        </div>
+        <div data-so="imagem"><span class="lbl">Link do banner</span>${linkHTML("link", s.link)}</div>
+        <div class="imgs">${slotHTML("imagem", s.imagem, "Imagem", false)}${slotHTML("imagemCelular", s.imagemCelular, "Imagem para celular (opcional)", true)}</div>
+        <div><label class="lbl">Descrição da imagem (para leitores de tela e Google)</label><input class="field" data-k="alt" maxlength="160" value="${v("alt")}" placeholder="Ex.: Frascos de perfume árabe sobre fundo dourado" /></div>
+      </div>`;
+    }
+    function aplicarFormato(card) {
+      const lay = $("[data-k=layout]", card).value;
+      $("[data-ajuda]", card).textContent = FORMATOS[lay][1];
+      $$("[data-so=texto]", card).forEach((el) => (el.hidden = lay === "imagem"));
+      $$("[data-so=imagem]", card).forEach((el) => (el.hidden = lay !== "imagem"));
+    }
+    function renderBanner(b) {
+      b = b || D.banner || {};
+      const slides = Array.isArray(b.slides) ? b.slides : [];
+      $("#bnLista").innerHTML = slides.length ? slides.map((s, i) => slideHTML(s, i, slides.length)).join("") : `<div class="card empty" style="margin-bottom:14px">Nenhum banner ainda. O site está mostrando o destaque automático.</div>`;
+      $$("#bnLista [data-i]").forEach(aplicarFormato);
+      $$("#bnLista [data-lnk]").forEach(ajustarLink);
+      $("#bfTexto").value = (b.faixa && b.faixa.texto) || "";
+      $("#bfLink").innerHTML = linkHTML("faixa", b.faixa && b.faixa.link);
+      ajustarLink($("#bfLink [data-lnk]"));
+      $("#bnIntervalo").value = b.intervalo || 6;
+      $("#bnAdd").disabled = slides.length >= MAX_BANNERS;
+      $("#bnLimite").textContent = slides.length >= MAX_BANNERS ? `Máximo de ${MAX_BANNERS} banners.` : "";
+      marcarSujo(false);
+    }
+    function coletarBanner() {
+      const slides = $$("#bnLista [data-i]").map((c) => {
+        const k = (n) => $(`[data-k=${n}]`, c);
+        return {
+          id: c.dataset.id, ativo: k("ativo").checked, layout: k("layout").value,
+          etiqueta: k("etiqueta").value.trim(), titulo: k("titulo").value.trim(), subtitulo: k("subtitulo").value.trim(),
+          btn1: { texto: k("btn1t").value.trim(), link: lerLink($("[data-lnk=btn1]", c)) },
+          btn2: { texto: k("btn2t").value.trim(), link: lerLink($("[data-lnk=btn2]", c)) },
+          link: lerLink($("[data-lnk=link]", c)),
+          imagem: k("imagem").value, imagemCelular: k("imagemCelular").value, alt: k("alt").value.trim(),
+        };
+      });
+      return { slides, faixa: { texto: $("#bfTexto").value.trim(), link: lerLink($("#bfLink [data-lnk]")) }, intervalo: Number($("#bnIntervalo").value) || 6 };
+    }
+    function marcarSujo(v) { bnSujo = v; $("#bnSujo").hidden = !v; }
+    window.addEventListener("beforeunload", (e) => { if (bnSujo) { e.preventDefault(); e.returnValue = ""; } });
+
+    const secBanner = $('[data-sec="banner"]');
+    secBanner.addEventListener("input", () => marcarSujo(true));
+    secBanner.addEventListener("change", (e) => {
+      marcarSujo(true);
+      if (e.target.matches("[data-lt]")) ajustarLink(e.target.closest("[data-lnk]"));
+      if (e.target.matches("[data-k=layout]")) aplicarFormato(e.target.closest("[data-i]"));
+      if (e.target.matches("[data-k=ativo]")) e.target.closest("[data-i]").classList.toggle("bnc--off", !e.target.checked);
+      if (e.target.matches("[data-file]")) enviarBanner(e.target);
+    });
+    $("#bnLista").addEventListener("click", (e) => {
+      const card = e.target.closest("[data-i]");
+      if (!card) return;
+      const b = coletarBanner(), i = Number(card.dataset.i);
+      if (e.target.closest("[data-mv]")) { const j = i + Number(e.target.closest("[data-mv]").dataset.mv); [b.slides[i], b.slides[j]] = [b.slides[j], b.slides[i]]; renderBanner(b); marcarSujo(true); }
+      else if (e.target.closest("[data-rm]")) { if (!confirm(`Excluir o banner ${i + 1}?`)) return; b.slides.splice(i, 1); renderBanner(b); marcarSujo(true); }
+      else if (e.target.closest("[data-enviar]")) $("[data-file]", e.target.closest("[data-slot]")).click();
+      else if (e.target.closest("[data-tirar]")) { const slot = e.target.closest("[data-slot]"); b.slides[i][slot.dataset.slot] = ""; renderBanner(b); marcarSujo(true); }
+    });
+    $("#bnAdd").addEventListener("click", () => {
+      const b = coletarBanner();
+      b.slides.push(novoSlide());
+      renderBanner(b);
+      marcarSujo(true);
+      const ult = $$("#bnLista [data-i]").pop();
+      ult.scrollIntoView({ block: "start", behavior: "smooth" });
+      $("[data-k=titulo]", ult).focus({ preventScroll: true });
+    });
+    $("#bnDesfazer").addEventListener("click", () => { if (!bnSujo || confirm("Desfazer as alterações não salvas?")) renderBanner(); });
+
+    // Reduz a imagem no navegador; mantém a transparência (WebP) quando o arquivo tem fundo transparente
+    async function prepararBanner(file, maxLado) {
+      const bmp = await createImageBitmap(file);
+      const k = Math.min(1, maxLado / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      const g = c.getContext("2d");
+      g.drawImage(bmp, 0, 0, c.width, c.height);
+      let alfa = false;
+      if (/png|webp/.test(file.type)) {
+        const px = g.getImageData(0, 0, c.width, c.height).data;
+        for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { alfa = true; break; }
+      }
+      if (!alfa) { // JPG não tem transparência: preenche de branco por baixo
+        const c2 = document.createElement("canvas"); c2.width = c.width; c2.height = c.height;
+        const g2 = c2.getContext("2d"); g2.fillStyle = "#fff"; g2.fillRect(0, 0, c.width, c.height); g2.drawImage(c, 0, 0);
+        return new Promise((ok) => c2.toBlob(ok, "image/jpeg", 0.86));
+      }
+      return new Promise((ok) => c.toBlob(ok, "image/webp", 0.9)); // navegadores sem WebP devolvem PNG, que o servidor também aceita
+    }
+    async function enviarBanner(input) {
+      const f = input.files[0];
+      input.value = "";
+      if (!f) return;
+      const slot = input.closest("[data-slot]"), card = input.closest("[data-i]");
+      const btn = $("[data-enviar]", slot);
+      btn.disabled = true; btn.textContent = "Enviando…";
+      try {
+        const blob = await prepararBanner(f, slot.dataset.slot === "imagemCelular" ? 1000 : 1920);
+        const r = await api("POST", "banner-imagem", blob);
+        const b = coletarBanner();
+        b.slides[Number(card.dataset.i)][slot.dataset.slot] = r.arquivo;
+        renderBanner(b);
+        marcarSujo(true);
+        toast("Imagem enviada. Clique em Salvar banners para publicar.");
+      } catch (err) {
+        toast(err.message || "Não foi possível ler a imagem.", true);
+        btn.disabled = false; btn.textContent = "Enviar imagem";
+      }
+    }
+    $("#bnSalvar").addEventListener("click", async () => {
+      const b = coletarBanner();
+      $("#bnSalvar").disabled = true;
+      try {
+        const r = await api("PUT", "banner", b);
+        D.banner = r.banner;
+        renderBanner();
+        toast(r.banner.slides.some((s) => s.ativo) ? "Banners salvos. Já estão no site." : "Salvo. Sem banner ativo, o site mostra o destaque automático.");
+      } catch (err) { toast(err.message, true); }
+      $("#bnSalvar").disabled = false;
+    });
 
     /* ---------- Pendências (sem foto / sem descrição) e IA de descrições ---------- */
     const semDesc = (p) => !String(p.description || "").trim();

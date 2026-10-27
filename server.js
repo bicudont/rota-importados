@@ -33,6 +33,7 @@ const F = {
   loja: path.join(DATA_DIR, "loja.json"), // exportação original do Catálogo Pro
   ajustes: path.join(DATA_DIR, "ajustes.json"), // edições e produtos criados no painel
   site: path.join(DATA_DIR, "site.json"), // dados da loja (WhatsApp, Instagram, cotação manual…)
+  banner: path.join(DATA_DIR, "banner.json"), // banners do topo da página inicial e aviso da faixa superior
   pedidos: path.join(DATA_DIR, "privado", "pedidos.json"),
 };
 
@@ -54,6 +55,7 @@ http
 
     if (rel === "data/loja.json") return sendLoja(req, res);
     if (rel === "data/site.json" && !fs.existsSync(F.site)) return json(res, 200, {}, { "Cache-Control": "no-cache" });
+    if (rel === "data/banner.json" && !fs.existsSync(F.banner)) return json(res, 200, {}, { "Cache-Control": "no-cache" });
     if (rel.startsWith("data/")) {
       const file = path.normalize(path.join(DATA_DIR, rel.slice(5)));
       if (!inside(DATA_DIR, file) || inside(path.join(DATA_DIR, "privado"), file) || file === F.ajustes || file.endsWith(".tmp")) return notFound(res);
@@ -308,7 +310,9 @@ function adminApi(req, res, rota) {
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
   if (r === "POST foto") return enviarFoto(req, res);
-  if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
+  if (r === "PUT banner") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
+  if (r === "POST banner-imagem") return enviarImagemBanner(req, res);
+  if (r === "PUT exibicao")return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
   if (r === "POST ia/descricao") {
@@ -336,7 +340,82 @@ function dadosPainel(res) {
     ajustes: lerAjustes(),
     site: lerJSON(F.site, null) || {},
     pedidos: lerJSON(F.pedidos, []),
+    banner: lerJSON(F.banner, null) || {},
     ia: !!process.env.ANTHROPIC_API_KEY,
+  });
+}
+
+/* ---------- Banners do topo da página inicial ---------- */
+const ARQ_BANNER = /^bn[a-z0-9]{6,30}\.(jpg|png|webp)$/;
+const TIPOS_LINK = ["nenhum", "catalogo", "departamento", "marca", "produto", "whatsapp", "url"];
+
+function limparLink(l) {
+  l = l && typeof l === "object" ? l : {};
+  const tipo = TIPOS_LINK.includes(l.tipo) ? l.tipo : "nenhum";
+  const valor = texto(l.valor, 300);
+  if (tipo === "url" && !/^https?:\/\/[^\s]+$/i.test(valor)) throw new Error("Link externo inválido: use o endereço completo, começando com https://");
+  if (["departamento", "marca", "produto"].includes(tipo) && !valor) throw new Error("Escolha o departamento, a marca ou o produto do link.");
+  return { tipo, valor: ["nenhum", "catalogo"].includes(tipo) ? "" : valor };
+}
+
+function limparSlide(s, i) {
+  s = s && typeof s === "object" ? s : {};
+  const img = (v) => (ARQ_BANNER.test(String(v || "")) ? String(v) : "");
+  const botao = (b) => ({ texto: texto(b && b.texto, 40), link: limparLink(b && b.link) });
+  const slide = {
+    id: /^[a-z0-9]{4,20}$/.test(s.id) ? s.id : crypto.randomBytes(5).toString("hex"),
+    ativo: s.ativo !== false,
+    layout: ["lado", "fundo", "imagem"].includes(s.layout) ? s.layout : "lado",
+    etiqueta: texto(s.etiqueta, 60),
+    titulo: texto(s.titulo, 120),
+    subtitulo: texto(s.subtitulo, 240),
+    btn1: botao(s.btn1),
+    btn2: botao(s.btn2),
+    link: limparLink(s.link), // banner "só imagem": a imagem inteira vira o link
+    imagem: img(s.imagem),
+    imagemCelular: img(s.imagemCelular),
+    alt: texto(s.alt, 160),
+  };
+  const n = `Banner ${i + 1}`;
+  if (slide.layout !== "lado" && !slide.imagem) throw new Error(`${n}: envie a imagem.`);
+  if (slide.layout !== "imagem" && !slide.titulo) throw new Error(`${n}: escreva o título.`);
+  for (const b of [slide.btn1, slide.btn2]) if (b.texto && b.link.tipo === "nenhum") throw new Error(`${n}: o botão "${b.texto}" precisa de um link.`);
+  return slide;
+}
+
+function salvarBanner(d) {
+  const slides = (Array.isArray(d.slides) ? d.slides : []).slice(0, 8).map(limparSlide);
+  const faixa = { texto: texto(d.faixa && d.faixa.texto, 120), link: limparLink(d.faixa && d.faixa.link) };
+  const intervalo = Math.min(15, Math.max(4, parseInt(d.intervalo, 10) || 6));
+  const banner = { slides, faixa, intervalo };
+  gravarJSON(F.banner, banner);
+  limparImagensBanner(banner);
+  return { ok: true, banner };
+}
+
+// Apaga imagens enviadas que não estão em nenhum banner (só as com mais de 1 hora, para não apagar um envio em andamento)
+function limparImagensBanner(banner) {
+  const usadas = new Set(banner.slides.flatMap((s) => [s.imagem, s.imagemCelular]).filter(Boolean));
+  const dir = path.join(DATA_DIR, "banners");
+  let arqs = [];
+  try { arqs = fs.readdirSync(dir); } catch { return; }
+  for (const a of arqs) {
+    if (!ARQ_BANNER.test(a) || usadas.has(a)) continue;
+    try { if (Date.now() - fs.statSync(path.join(dir, a)).mtimeMs > 3600 * 1000) fs.unlinkSync(path.join(dir, a)); } catch {}
+  }
+}
+
+function enviarImagemBanner(req, res) {
+  lerCorpo(req, MAX_FOTO, (err, buf) => {
+    if (err) return json(res, 413, { erro: "Imagem grande demais (máx. 8 MB)." });
+    const ext = buf[0] === 0xff && buf[1] === 0xd8 ? "jpg"
+      : buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47 ? "png"
+      : buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP" ? "webp" : "";
+    if (!ext) return json(res, 400, { erro: "Envie a imagem em JPG, PNG ou WebP." });
+    const nome = "bn" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex") + "." + ext;
+    fs.mkdirSync(path.join(DATA_DIR, "banners"), { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, "banners", nome), buf);
+    json(res, 200, { ok: true, arquivo: nome });
   });
 }
 

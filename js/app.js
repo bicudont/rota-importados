@@ -39,7 +39,17 @@
     }
   }
 
-  const [loja, site] = await Promise.all([carregarLoja(), carregarSite()]);
+  // Banners do topo da página inicial (aba Banner do painel)
+  async function carregarBanner() {
+    try {
+      const r = await fetch("data/banner.json", { cache: "no-cache" });
+      return r.ok ? await r.json() : {};
+    } catch {
+      return {};
+    }
+  }
+
+  const [loja, site, banner] = await Promise.all([carregarLoja(), carregarSite(), carregarBanner()]);
   for (const k of ["nome", "slogan", "whatsapp", "instagram", "cidade", "horario"]) {
     if (site && typeof site[k] === "string" && site[k].trim()) S[k] = site[k].trim();
   }
@@ -181,6 +191,86 @@
     $("#heroStats").innerHTML = stats.map(([n, t]) => `<li><b>${n.toLocaleString("pt-BR")}</b><span>${t}</span></li>`).join("");
   }
 
+  /* ---------- Banners do painel (substituem o destaque automático quando houver algum ativo) ---------- */
+  function hrefBanner(l) {
+    if (!l) return null;
+    switch (l.tipo) {
+      case "catalogo": return { href: "#/catalogo" };
+      case "departamento": return l.valor ? { href: catalogHref({ cat: slug(l.valor) }) } : null;
+      case "marca": return l.valor ? { href: catalogHref({ marca: l.valor }) } : null;
+      case "produto": return l.valor ? { href: "#/produto/" + encodeURIComponent(l.valor) } : null;
+      case "whatsapp": return { href: waLink(l.valor || hello), ext: true };
+      case "url": return /^https?:\/\//i.test(l.valor || "") ? { href: l.valor, ext: true } : null;
+    }
+    return null;
+  }
+  const attrsLink = (h) => `href="${esc(h.href)}"${h.ext ? ' target="_blank" rel="noopener"' : ""}`;
+  {
+    const lista = (banner && Array.isArray(banner.slides) ? banner.slides : []).filter((s) => s.ativo !== false && (s.layout === "lado" ? s.titulo : s.imagem));
+    if (lista.length) {
+      const hero = $(".hero");
+      const url = (arq) => "data/banners/" + encodeURIComponent(arq);
+      const html = lista.map((s, i) => {
+        const carga = i === 0 ? ' fetchpriority="high"' : ' loading="lazy"';
+        const pic = (cls) => (s.imagem ? `<picture>${s.imagemCelular ? `<source media="(max-width: 768px)" srcset="${url(s.imagemCelular)}">` : ""}<img class="${cls}" src="${url(s.imagem)}" alt="${esc(s.alt || "")}"${carga} decoding="async"></picture>` : "");
+        const tag = i === 0 ? "h1" : "h2";
+        const botoes = [[s.btn1, "btn--primary"], [s.btn2, "btn--ghost"]].map(([b, cls]) => { const h = b && b.texto && hrefBanner(b.link); return h ? `<a class="btn ${cls}" ${attrsLink(h)}>${esc(b.texto)}</a>` : ""; }).join("");
+        const texto = `<div class="bn__txt">${s.etiqueta ? `<span class="pill">${esc(s.etiqueta)}</span>` : ""}<${tag} class="bn__titulo">${esc(s.titulo)}</${tag}>${s.subtitulo ? `<p class="hero__sub">${esc(s.subtitulo)}</p>` : ""}${botoes ? `<div class="hero__actions">${botoes}</div>` : ""}</div>`;
+        let corpo;
+        if (s.layout === "imagem") {
+          const h = hrefBanner(s.link);
+          const titulo = i === 0 ? `<h1 class="vh">${esc(s.alt || S.nome)}</h1>` : ""; // a página continua com um título principal
+          corpo = titulo + (h ? `<a class="bn__link" ${attrsLink(h)}>${pic("bn__arte")}</a>` : pic("bn__arte"));
+        } else if (s.layout === "fundo") corpo = `${pic("bn__bg")}<div class="container bn__inner">${texto}</div>`;
+        else corpo = `<div class="container bn__inner bn__inner--lado">${texto}${s.imagem ? `<div class="bn__visual">${pic("bn__img")}</div>` : ""}</div>`;
+        return `<div class="bn__slide bn--${s.layout}${i ? "" : " is-on"}" role="group" aria-roledescription="slide" aria-label="${i + 1} de ${lista.length}"${i ? ' aria-hidden="true" inert' : ""}>${corpo}</div>`;
+      }).join("");
+      const controles = lista.length > 1
+        ? `<div class="bn__ctrl"><button type="button" data-bn="-1" aria-label="Banner anterior">‹</button><div class="bn__dots">${lista.map((_, i) => `<button type="button" class="bn__dot" data-bn-ir="${i}" aria-label="Ir para o banner ${i + 1}"${i ? "" : ' aria-current="true"'}></button>`).join("")}</div><button type="button" data-bn="1" aria-label="Próximo banner">›</button><button type="button" class="bn__pausa" aria-label="Pausar a troca automática">❚❚</button></div>`
+        : "";
+      hero.classList.add("hero--bn");
+      hero.innerHTML = `<div class="bn" aria-roledescription="carrossel" aria-label="Destaques">${`<div class="bn__track">${html}</div>`}${controles}</div>`;
+
+      if (lista.length > 1) {
+        const slides = [...hero.querySelectorAll(".bn__slide")], dots = [...hero.querySelectorAll(".bn__dot")];
+        const espera = Math.min(15, Math.max(4, banner.intervalo || 6)) * 1000;
+        let atual = 0, timer = null, sobre = false;
+        let pausado = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const pausa = hero.querySelector(".bn__pausa");
+        const marcarPausa = () => { pausa.textContent = pausado ? "▶" : "❚❚"; pausa.setAttribute("aria-label", pausado ? "Retomar a troca automática" : "Pausar a troca automática"); };
+        const agendar = () => { clearTimeout(timer); if (!pausado && !sobre && !document.hidden) timer = setTimeout(() => ir(atual + 1), espera); };
+        function ir(n) {
+          atual = (n + slides.length) % slides.length;
+          slides.forEach((el, i) => {
+            const on = i === atual;
+            el.classList.toggle("is-on", on);
+            el.toggleAttribute("inert", !on);
+            on ? el.removeAttribute("aria-hidden") : el.setAttribute("aria-hidden", "true");
+          });
+          dots.forEach((d, i) => (i === atual ? d.setAttribute("aria-current", "true") : d.removeAttribute("aria-current")));
+          agendar();
+        }
+        hero.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-bn]"), d = e.target.closest("[data-bn-ir]");
+          if (b) ir(atual + Number(b.dataset.bn));
+          if (d) ir(Number(d.dataset.bnIr));
+          if (e.target.closest(".bn__pausa")) { pausado = !pausado; marcarPausa(); agendar(); }
+        });
+        hero.addEventListener("mouseenter", () => { sobre = true; clearTimeout(timer); });
+        hero.addEventListener("mouseleave", () => { sobre = false; agendar(); });
+        hero.addEventListener("focusin", () => { sobre = true; clearTimeout(timer); });
+        hero.addEventListener("focusout", (e) => { if (!hero.contains(e.relatedTarget)) { sobre = false; agendar(); } });
+        document.addEventListener("visibilitychange", agendar);
+        // Deslizar com o dedo no celular
+        let x0 = null;
+        hero.addEventListener("touchstart", (e) => (x0 = e.touches[0].clientX), { passive: true });
+        hero.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) ir(atual + (dx < 0 ? 1 : -1)); x0 = null; }, { passive: true });
+        marcarPausa();
+        agendar();
+      }
+    }
+  }
+
   // Diferenciais: descrevem como a loja funciona hoje (nada de garantias ou prazos não confirmados)
   {
     const perks = [
@@ -208,6 +298,12 @@
     if (COTACAO) {
       const c = COTACAO.pix || COTACAO.efetivo;
       itens.unshift(`<span>Cotação ${COTACAO.pix ? "Pix" : "em dinheiro"}: <b>US$ 1 = ${esc(money(c.rate, "BRL"))}</b></span>`);
+    }
+    // Aviso definido no painel (aba Banner)
+    const fx = banner && banner.faixa;
+    if (fx && fx.texto) {
+      const h = hrefBanner(fx.link);
+      itens.unshift(h ? `<a ${attrsLink(h)}><b>${esc(fx.texto)}</b></a>` : `<span><b>${esc(fx.texto)}</b></span>`);
     }
     $("#topbar").innerHTML = itens.join('<span class="topbar__sep" aria-hidden="true"></span>');
   }
