@@ -20,14 +20,16 @@ Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina 
 | Seção | O que faz |
 |---|---|
 | **Visão geral** | Pedidos novos, produtos no site, esgotados, sem foto, sem preço, ocultos, editados; data da última importação e cotações |
-| **Pedidos** | Pedidos feitos pelo carrinho do site, com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
+| **Pedidos** | Pedidos feitos pelo carrinho do site e lançados no painel (**+ Novo pedido**), com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
 | **Produtos** | Busca e filtros; editar nome, marca, departamento, preço (US$), estoque, etiquetas, descrição, fotos e visibilidade; criar produtos; ocultar/mostrar vários de uma vez |
 | **Importar** | Envio do ZIP do Catálogo Pro (mesma função de antes) |
 | **Loja** | Nome, slogan, WhatsApp, Instagram, cidade, horário e cotação manual do dólar |
 
 **Como as edições convivem com o Catálogo Pro:** o que você altera no painel continua valendo depois de novas importações. Se o Catálogo Pro exportar um valor *diferente* para o mesmo campo, vale o do Catálogo Pro (a alteração mais recente ganha). Em cada produto há o botão **Desfazer edições** para voltar aos dados do Catálogo Pro.
 
-**Pedidos:** são registrados quando o cliente clica em "Enviar pedido pelo WhatsApp". O envio da mensagem continua sendo feito pelo cliente no WhatsApp, então um pedido registrado pode não ter chegado ao seu WhatsApp. Os valores são os estimados no momento do pedido.
+**Dados do cliente** (no carrinho e no novo pedido do painel): nome completo, país (Brasil, Argentina ou Paraguai; Brasil vem selecionado), documento (CPF validado no Brasil; DNI na Argentina; CI no Paraguai) e endereço completo (rua, número, complemento opcional, bairro, cidade, estado/província/departamento e CEP — obrigatório só no Brasil).
+
+**Pedidos do site:** são registrados quando o cliente clica em "Enviar pedido pelo WhatsApp". O envio da mensagem continua sendo feito pelo cliente no WhatsApp, então um pedido registrado pode não ter chegado ao seu WhatsApp. Os valores são os estimados no momento do pedido.
 
 Arquivos gravados em `DATA_DIR`: `loja.json` (exportação original), `ajustes.json` (edições e produtos criados), `site.json` (dados da loja), `fotos/` e `privado/pedidos.json` (nunca servido ao público).
 

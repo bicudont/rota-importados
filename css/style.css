@@ -604,12 +604,13 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .drawer {
   position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(420px, 100%);
   background: var(--surface); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;
-  animation: slide .22s;
+  animation: slide .22s; overflow-y: auto; overscroll-behavior: contain;
 }
 @keyframes slide { from { transform: translateX(100%); } }
-.drawer__head { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--line); }
+/* O carrinho rola inteiro (itens + formulário); o título fica fixo no topo */
+.drawer__head { position: sticky; top: 0; z-index: 1; background: var(--surface); display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--line); }
 .drawer__head h3 { font-size: 1.15rem; }
-.drawer__items { flex: 1; overflow: auto; padding: 8px 20px; }
+.drawer__items { flex: 1 0 auto; padding: 8px 20px; }
 .drawer__empty { text-align: center; color: var(--muted); padding: 60px 0; display: grid; gap: 14px; justify-items: center; }
 .drawer__empty span { font-size: 3rem; }
 .item { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
@@ -624,12 +625,15 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .drawer__foot { padding: 20px; border-top: 1px solid var(--line); text-align: center; background: var(--bg); }
 .drawer__total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
 .drawer__total b { font: 700 1.4rem var(--font-head); color: var(--royal); }
-.checkout { display: grid; gap: 8px; }
-.checkout input, .checkout textarea {
+.checkout { display: grid; gap: 8px; text-align: left; }
+.checkout__title { font-weight: 600; font-size: .9rem; color: var(--navy-900); }
+.checkout__row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.checkout input, .checkout textarea, .checkout select {
   width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
   padding: 11px 14px; outline: 0; resize: none; transition: border-color var(--t), box-shadow var(--t);
 }
-.checkout input:focus, .checkout textarea:focus { border-color: var(--royal); box-shadow: var(--focus); }
+.checkout select { min-width: 0; color: var(--text); }
+.checkout input:focus, .checkout textarea:focus, .checkout select:focus { border-color: var(--royal); box-shadow: var(--focus); }
 .checkout .btn { margin-top: 4px; }
 .cart-note { font-size: .8rem; margin: -6px 0 12px; text-align: left; }
 

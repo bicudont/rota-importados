@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=22" />
+  <link rel="stylesheet" href="css/style.css?v=23" />
 </head>
 <body>
   <button class="skip" id="skip">Pular para o conteúdo</button>
@@ -227,9 +227,32 @@
       <div class="drawer__total"><span>Total estimado</span><b id="cartTotal">R$ 0,00</b></div>
       <p class="cart-note muted" id="cartNote"></p>
       <form id="checkout" class="checkout">
-        <input name="nome" placeholder="Seu nome *" required />
-        <input name="cidade" placeholder="Cidade / Bairro (opcional)" />
-        <textarea name="obs" rows="2" placeholder="Observações (opcional)"></textarea>
+        <p class="checkout__title">Dados para o pedido</p>
+        <input name="nome" placeholder="Nome completo *" aria-label="Nome completo" autocomplete="name" maxlength="120" required />
+        <select name="pais" aria-label="País" autocomplete="country-name">
+          <option selected>Brasil</option>
+          <option>Argentina</option>
+          <option>Paraguai</option>
+        </select>
+        <input name="doc" placeholder="CPF *" aria-label="CPF" inputmode="numeric" maxlength="14" required />
+        <div class="checkout__row">
+          <input name="cep" placeholder="CEP *" aria-label="CEP" inputmode="numeric" autocomplete="postal-code" maxlength="9" required />
+          <input name="estado" placeholder="Província *" aria-label="Província" maxlength="60" hidden disabled />
+          <select name="uf" aria-label="Estado" required>
+            <option value="">Estado *</option>
+            <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
+          </select>
+        </div>
+        <input name="rua" placeholder="Rua *" aria-label="Rua" autocomplete="address-line1" maxlength="160" required />
+        <div class="checkout__row">
+          <input name="numero" placeholder="Número *" aria-label="Número" maxlength="20" required />
+          <input name="complemento" placeholder="Complemento" aria-label="Complemento (opcional)" autocomplete="address-line2" maxlength="80" />
+        </div>
+        <div class="checkout__row">
+          <input name="bairro" placeholder="Bairro *" aria-label="Bairro" maxlength="100" required />
+          <input name="cidade" placeholder="Cidade *" aria-label="Cidade" autocomplete="address-level2" maxlength="100" required />
+        </div>
+        <textarea name="obs" rows="2" placeholder="Observações (opcional)" aria-label="Observações (opcional)"></textarea>
         <button type="submit" class="btn btn--whats btn--block">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>
           Finalizar no WhatsApp
@@ -247,7 +270,7 @@
     <symbol id="ico-whats" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.98L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-2.97-.4-4.25-1.17l-.3-.18-3.07.9.92-2.99-.2-.31a8.2 8.2 0 1 1 6.9 3.75Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3c-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.16 1.73 2.64 4.2 3.7 1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.66-1.17.2-.58.2-1.07.15-1.17-.06-.11-.22-.17-.47-.29Z"/></symbol>
   </svg>
 
-  <script src="js/config.js?v=22"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/config.js?v=23"></script>
+  <script src="js/app.js?v=23"></script>
 </body>
 </html>

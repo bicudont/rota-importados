@@ -132,6 +132,20 @@
     .st-novo { background: var(--warnbg); color: var(--warn); } .st-atendimento { background: #e8f0fe; color: var(--royal); }
     .st-confirmado { background: #e0f7ff; color: #00658c; } .st-entregue { background: var(--okbg); color: var(--ok); } .st-cancelado { background: #eef1f5; color: var(--muted); }
 
+    .cli { font-size: .88rem; display: grid; gap: 2px; }
+    .pick { position: relative; }
+    .pick__res { display: grid; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .pick__res:empty { display: none; }
+    .pick__res button { display: flex; justify-content: space-between; gap: 10px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); padding: 9px 12px; cursor: pointer; font-size: .88rem; }
+    .pick__res button:last-child { border-bottom: 0; }
+    .pick__res button:hover, .pick__res button:focus-visible { background: #eef4ff; outline: 0; }
+    .it { display: grid; grid-template-columns: minmax(0,1fr) 76px 120px 34px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .it__nm { font-size: .9rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    .it .field { min-height: 38px; padding: 6px 10px; }
+    .ped-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 1rem; }
+    .ped-total b { font: 700 1.25rem Poppins, sans-serif; color: var(--navy); }
+    @media (max-width: 560px) { .it { grid-template-columns: minmax(0,1fr) 64px 34px; } .it__preco { grid-column: 1 / 3; } }
+
     /* Importar */
     .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 30px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop:hover, .drop.over { border-color: var(--royal); background: #eef4ff; }
@@ -217,8 +231,8 @@
 
       <!-- Pedidos -->
       <section data-sec="pedidos" hidden>
-        <div class="head"><h1>Pedidos</h1><button class="btn" id="reloadPedidos">↻ Atualizar</button></div>
-        <p class="muted small" style="margin:-8px 0 14px">Registrados quando o cliente clica em “Enviar pedido pelo WhatsApp” no carrinho. O cliente ainda precisa enviar a mensagem no WhatsApp; valores são os estimados no momento do pedido.</p>
+        <div class="head"><h1>Pedidos</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="reloadPedidos">↻ Atualizar</button><button class="btn btn--primary" id="novoPed">+ Novo pedido</button></div></div>
+        <p class="muted small" style="margin:-8px 0 14px">Pedidos “Pelo site” são registrados quando o cliente clica em “Finalizar no WhatsApp” no carrinho (ele ainda precisa enviar a mensagem; valores estimados no momento do pedido). Use <b>+ Novo pedido</b> para lançar vendas combinadas direto com você.</p>
         <div class="chips" id="pedFiltro"></div>
         <div id="pedLista"></div>
       </section>
@@ -323,6 +337,54 @@
       <div class="dlg__foot">
         <div><button type="button" class="btn btn--danger" id="dRestaurar"></button><a class="btn" id="dVer" target="_blank" rel="noopener">Ver no site ↗</a></div>
         <div><button type="button" class="btn" id="dCancelar">Cancelar</button><button class="btn btn--primary" id="dSalvar" value="ok">Salvar</button></div>
+      </div>
+    </form>
+  </dialog>
+  <!-- Novo pedido -->
+  <dialog id="dlgPed" aria-labelledby="pedTitle">
+    <form class="dlg" id="pedForm" novalidate>
+      <div class="dlg__head"><h2 id="pedTitle">Novo pedido</h2><button type="button" class="x" data-fechar aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <h3>Cliente</h3>
+        <div><label class="lbl" for="nNome">Nome completo *</label><input class="field" id="nNome" name="nome" maxlength="120" autocomplete="off" required /></div>
+        <div class="grid2">
+          <div><label class="lbl" for="nPais">País *</label><select class="field" id="nPais" name="pais"><option selected>Brasil</option><option>Argentina</option><option>Paraguai</option></select></div>
+          <div><label class="lbl" for="nDoc" id="nDocLbl">CPF *</label><input class="field" id="nDoc" name="doc" maxlength="20" autocomplete="off" required /></div>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl" for="nCep" id="nCepLbl">CEP *</label><input class="field" id="nCep" name="cep" maxlength="10" autocomplete="off" /></div>
+          <div id="nUfBox"><label class="lbl" for="nUf">Estado *</label><select class="field" id="nUf" name="uf"><option value="">Selecione</option></select></div>
+          <div id="nEstadoBox" hidden><label class="lbl" for="nEstado" id="nEstadoLbl">Província *</label><input class="field" id="nEstado" name="estado" maxlength="60" autocomplete="off" /></div>
+        </div>
+        <div><label class="lbl" for="nRua">Rua *</label><input class="field" id="nRua" name="rua" maxlength="160" autocomplete="off" required /></div>
+        <div class="grid2">
+          <div><label class="lbl" for="nNum">Número *</label><input class="field" id="nNum" name="numero" maxlength="20" autocomplete="off" required /></div>
+          <div><label class="lbl" for="nComp">Complemento</label><input class="field" id="nComp" name="complemento" maxlength="80" autocomplete="off" /></div>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl" for="nBairro">Bairro *</label><input class="field" id="nBairro" name="bairro" maxlength="100" autocomplete="off" required /></div>
+          <div><label class="lbl" for="nCidade">Cidade *</label><input class="field" id="nCidade" name="cidade" maxlength="100" autocomplete="off" required /></div>
+        </div>
+        <div><label class="lbl" for="nObs">Observações do cliente</label><input class="field" id="nObs" name="obs" maxlength="1000" autocomplete="off" /></div>
+
+        <h3 style="margin-top:6px">Itens</h3>
+        <div class="pick">
+          <label class="lbl" for="nBusca">Adicionar produto</label>
+          <input class="field" id="nBusca" type="search" placeholder="Buscar por nome, SKU ou marca" autocomplete="off" />
+          <div class="pick__res" id="nRes"></div>
+        </div>
+        <div id="nItens"></div>
+        <div class="ped-total"><span>Total</span><b id="nTotal">—</b></div>
+
+        <div class="grid2">
+          <div><label class="lbl" for="nStatus">Situação</label><select class="field" id="nStatus" name="status"></select></div>
+          <div><label class="lbl" for="nNota">Anotação interna</label><input class="field" id="nNota" name="nota" maxlength="2000" placeholder="Ex.: pago no Pix" autocomplete="off" /></div>
+        </div>
+        <div class="msg err" id="nErro" role="alert" hidden></div>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" data-fechar>Cancelar</button><button class="btn btn--primary" id="nSalvar">Salvar pedido</button></div>
       </div>
     </form>
   </dialog>
@@ -517,10 +579,10 @@
       $("#pedLista").innerHTML = lista.length
         ? lista.map((p) => `<article class="order" data-pid="${p.id}">
             <div class="order__top">
-              <div><h3>Pedido #${p.id} <span class="st st-${p.status}">${STATUS[p.status]}</span></h3><div class="muted small">${dataBR(p.data, true)}</div></div>
+              <div><h3>Pedido #${p.id} <span class="st st-${p.status}">${STATUS[p.status]}</span></h3><div class="muted small">${dataBR(p.data, true)} · ${p.origem === "painel" ? "Lançado no painel" : "Pelo site"}</div></div>
               <b>${moeda(p.total, p.moeda)}</b>
             </div>
-            <div class="small"><b>${esc(p.cliente.nome || "Sem nome")}</b>${p.cliente.cidade ? " · " + esc(p.cliente.cidade) : ""}${p.cliente.obs ? `<div class="muted">Obs.: ${esc(p.cliente.obs)}</div>` : ""}</div>
+            ${clienteHTML(p.cliente)}
             <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moeda(i.preco * i.q, p.moeda)}</span></div>`).join("")}</div>
             <div class="order__foot">
               <select class="field" data-st aria-label="Situação do pedido #${p.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}"${k === p.status ? " selected" : ""}>${v}</option>`).join("")}</select>
@@ -529,6 +591,13 @@
             </div>
           </article>`).join("")
         : `<div class="card empty">${D.pedidos.length ? "Nenhum pedido nesta situação." : "Nenhum pedido registrado ainda. Eles aparecem aqui quando um cliente finaliza o carrinho no site."}</div>`;
+    }
+    // Pedidos antigos só têm nome e cidade; os novos têm documento e endereço completo
+    function clienteHTML(c) {
+      const end = c.rua
+        ? `${c.rua}, ${c.numero}${c.complemento ? " – " + c.complemento : ""} – ${c.bairro} – ${c.cidade}/${c.estado}${c.cep ? ` – ${c.pais === "Brasil" ? "CEP" : "CP"} ${c.cep}` : ""} – ${c.pais}`
+        : c.cidade;
+      return `<div class="cli"><b>${esc(c.nome || "Sem nome")}</b>${c.doc ? `<span>${esc(c.docTipo || "Doc.")}: ${esc(c.doc)}</span>` : ""}${end ? `<span>${esc(end)}</span>` : ""}${c.obs ? `<span class="muted">Obs.: ${esc(c.obs)}</span>` : ""}</div>`;
     }
     $("#pedFiltro").addEventListener("click", (e) => { const b = e.target.closest("[data-pf]"); if (b) { pedFiltro = b.dataset.pf; renderPedidos(); } });
     async function salvarPedido(id, campos) {
@@ -556,6 +625,141 @@
     });
     $("#reloadPedidos").addEventListener("click", async () => {
       try { D.pedidos = (await api("GET", "pedidos")).pedidos; renderPedidos(); renderGeral(); toast("Pedidos atualizados"); } catch (err) { toast(err.message, true); }
+    });
+
+    /* ---------- Novo pedido (lançado no painel) ---------- */
+    const DOC = { Brasil: "CPF", Argentina: "DNI", Paraguai: "CI" };
+    const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
+    const soDig = (s) => String(s || "").replace(/\D/g, "");
+    const fmtCPF = (v) => { const d = soDig(v).slice(0, 11); return [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean).join(".") + (d.length > 9 ? "-" + d.slice(9) : ""); };
+    const fmtCEP = (v) => { const d = soDig(v).slice(0, 8); return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d; };
+    function cpfValido(v) {
+      const c = soDig(v);
+      if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+      for (const n of [9, 10]) {
+        let s = 0;
+        for (let i = 0; i < n; i++) s += c[i] * (n + 1 - i);
+        if (((s * 10) % 11) % 10 !== +c[n]) return false;
+      }
+      return true;
+    }
+    const dlgPed = $("#dlgPed"), nf = $("#pedForm").elements;
+    $("#nUf").innerHTML += UFS.map((u) => `<option>${u}</option>`).join("");
+    $("#nStatus").innerHTML = Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+    let nItens = [];
+    const pedMoeda = () => (cot("pix") || cot("efetivo") ? "BRL" : "USD");
+    const pedFmt = (v) => (pedMoeda() === "USD" ? usd(v) : brl(v));
+
+    function ajustarPaisPed() {
+      const pais = nf.pais.value, br = pais === "Brasil";
+      $("#nDocLbl").textContent = DOC[pais] + " *";
+      nf.doc.inputMode = br ? "numeric" : "text";
+      $("#nCepLbl").textContent = br ? "CEP *" : "Código postal";
+      nf.cep.inputMode = br ? "numeric" : "text";
+      $("#nUfBox").hidden = !br;
+      $("#nEstadoBox").hidden = br;
+      $("#nEstadoLbl").textContent = (pais === "Argentina" ? "Província" : "Departamento") + " *";
+      if (br) { nf.doc.value = fmtCPF(nf.doc.value); nf.cep.value = fmtCEP(nf.cep.value); }
+    }
+    nf.pais.addEventListener("change", () => { nf.doc.value = ""; nf.cep.value = ""; ajustarPaisPed(); });
+    nf.doc.addEventListener("input", () => { if (nf.pais.value === "Brasil") nf.doc.value = fmtCPF(nf.doc.value); });
+    nf.cep.addEventListener("input", () => { if (nf.pais.value === "Brasil") nf.cep.value = fmtCEP(nf.cep.value); });
+
+    function abrirNovoPedido() {
+      $("#pedForm").reset();
+      nItens = [];
+      $("#nErro").hidden = true;
+      $("#nRes").innerHTML = "";
+      ajustarPaisPed();
+      renderItensPed();
+      dlgPed.showModal();
+      nf.nome.focus();
+    }
+    // Preço sugerido = o mesmo que o site mostra (US$ convertido pela cotação Pix, ou US$ sem cotação)
+    const precoSugerido = (p) => { if (!(p.price > 0)) return null; const c = cot("pix") || cot("efetivo"); return c ? Math.round(p.price * c.rate * 100) / 100 : p.price; };
+
+    function renderItensPed() {
+      $("#nItens").innerHTML = nItens.length
+        ? nItens.map((i, k) => `<div class="it" data-k="${k}">
+            <div class="it__nm" title="${esc(i.nome)}">${esc(i.nome)}${i.sku ? `<div class="muted small">${esc(i.sku)}</div>` : ""}</div>
+            <input class="field" data-q type="number" min="1" max="9999" value="${i.q}" aria-label="Quantidade de ${esc(i.nome)}" />
+            <input class="field it__preco" data-pr inputmode="decimal" value="${i.preco == null ? "" : String(i.preco).replace(".", ",")}" placeholder="Preço unit. (${pedMoeda() === "USD" ? "US$" : "R$"})" aria-label="Preço unitário de ${esc(i.nome)}" />
+            <button type="button" class="x" data-rmi aria-label="Remover ${esc(i.nome)}">×</button>
+          </div>`).join("")
+        : `<p class="muted small">Nenhum item ainda. Busque um produto acima.</p>`;
+      totalPed();
+    }
+    function totalPed() {
+      const t = nItens.reduce((s, i) => s + (i.preco || 0) * i.q, 0);
+      $("#nTotal").textContent = nItens.length ? pedFmt(t) + (nItens.some((i) => i.preco == null) ? " + itens sem preço" : "") : "—";
+    }
+    $("#nBusca").addEventListener("input", () => {
+      const q = norm($("#nBusca").value).trim().split(/\s+/).filter(Boolean);
+      const res = q.length ? PROD.filter((p) => q.every((t) => p._busca.includes(t))).slice(0, 8) : [];
+      $("#nRes").innerHTML = res.map((p) => `<button type="button" data-add="${esc(p.sku)}"><span>${esc(p.name)} <span class="muted">${esc(p.sku)}</span>${p.stock === 0 ? ' <span class="badge b-out">Esgotado</span>' : ""}</span><span>${precoSugerido(p) != null ? pedFmt(precoSugerido(p)) : "sem preço"}</span></button>`).join("");
+    });
+    // Enter na busca adiciona o primeiro resultado (em vez de enviar o formulário)
+    $("#nBusca").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const b = $("#nRes [data-add]");
+      if (b) b.click();
+    });
+    $("#nRes").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-add]");
+      if (!b) return;
+      const p = PROD.find((x) => x.sku === b.dataset.add);
+      const ex = nItens.find((i) => i.sku === p.sku);
+      if (ex) ex.q++;
+      else nItens.push({ sku: p.sku, nome: p.name, q: 1, preco: precoSugerido(p) });
+      $("#nBusca").value = "";
+      $("#nRes").innerHTML = "";
+      $("#nErro").hidden = true;
+      renderItensPed();
+      $("#nBusca").focus();
+    });
+    $("#nItens").addEventListener("input", (e) => {
+      const row = e.target.closest("[data-k]");
+      if (!row) return;
+      const it = nItens[row.dataset.k];
+      if (e.target.matches("[data-q]")) it.q = Math.max(1, parseInt(e.target.value, 10) || 1);
+      if (e.target.matches("[data-pr]")) { const v = numOuNull(e.target.value); it.preco = v >= 0 ? v : null; }
+      totalPed();
+    });
+    $("#nItens").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-rmi]");
+      if (b) { nItens.splice(b.closest("[data-k]").dataset.k, 1); renderItensPed(); }
+    });
+    $$("[data-fechar]", dlgPed).forEach((b) => b.addEventListener("click", () => dlgPed.close()));
+    $("#novoPed").addEventListener("click", abrirNovoPedido);
+
+    $("#pedForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const g = (k) => nf[k].value.trim();
+      const pais = g("pais"), br = pais === "Brasil";
+      const cliente = {
+        nome: g("nome"), pais, doc: g("doc"), cep: g("cep"), estado: br ? g("uf") : g("estado"),
+        rua: g("rua"), numero: g("numero"), complemento: g("complemento"), bairro: g("bairro"), cidade: g("cidade"), obs: g("obs"),
+      };
+      const regiao = br ? "o estado" : pais === "Argentina" ? "a província" : "o departamento";
+      const faltas = [["nome", "o nome completo"], ["doc", "o " + DOC[pais]], ["cep", br && "o CEP"], ["estado", regiao], ["rua", "a rua"], ["numero", "o número"], ["bairro", "o bairro"], ["cidade", "a cidade"]];
+      const falta = faltas.find(([k, txt]) => txt && !cliente[k]);
+      const erro = (t, campo) => { $("#nErro").textContent = t; $("#nErro").hidden = false; if (campo) campo.focus(); };
+      if (falta) return erro(`Informe ${falta[1]}.`, nf[falta[0] === "estado" ? (br ? "uf" : "estado") : falta[0]]);
+      if (br && !cpfValido(cliente.doc)) return erro("CPF inválido. Confira os números.", nf.doc);
+      if (br && soDig(cliente.cep).length !== 8) return erro("O CEP tem 8 números.", nf.cep);
+      if (!nItens.length) return erro("Adicione pelo menos um item.", $("#nBusca"));
+      $("#nErro").hidden = true;
+      $("#nSalvar").disabled = true;
+      try {
+        const r = await api("POST", "pedido", { cliente, itens: nItens, moeda: pedMoeda(), status: g("status"), nota: g("nota") });
+        D.pedidos.unshift(r.pedido);
+        pedFiltro = "";
+        renderPedidos(); renderGeral();
+        dlgPed.close();
+        toast(`Pedido #${r.pedido.id} salvo`);
+      } catch (err) { erro(err.message); }
+      $("#nSalvar").disabled = false;
     });
 
     /* ---------- Produtos ---------- */

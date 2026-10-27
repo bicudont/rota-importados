@@ -298,7 +298,8 @@ function adminApi(req, res, rota) {
   if (r === "POST foto") return enviarFoto(req, res);
   if (r === "PUT site") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
-  if (r === "PUT pedido") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, alterarPedido(d)));
+  if (r === "POST pedido") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, pedidoManual(d)));
+  if (r === "PUT pedido")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, alterarPedido(d)));
   if (r === "DELETE pedido") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirPedido(d.id)));
   json(res, 404, { erro: "Rota desconhecida." });
 }
@@ -450,30 +451,83 @@ function novoPedido(req, res) {
   if (!e || e.ate < Date.now()) envios.set(ip, { n: 1, ate: Date.now() + 3600 * 1000 });
   else e.n++;
 
-  lerCorpoJSON(req, res, 65536, (d) => {
-    if (!Array.isArray(d.itens) || !d.itens.length) throw new Error("Pedido vazio.");
-    const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
-    const pedidos = lerJSON(F.pedidos, []);
-    const id = pedidos.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1;
-    pedidos.unshift({
-      id,
-      data: new Date().toISOString(),
-      status: "novo",
-      cliente: { nome: texto(d.nome, 120), cidade: texto(d.cidade, 120), obs: texto(d.obs, 1000) },
-      itens: d.itens.slice(0, 100).map((i) => ({
-        sku: texto(i.sku, 120),
-        nome: texto(i.nome, 200),
-        variacao: texto(i.v, 120),
-        q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
-        preco: num(i.preco),
-      })),
-      total: num(d.total),
-      moeda: texto(d.moeda, 3) || "BRL",
-      nota: "",
-    });
-    gravarJSON(F.pedidos, pedidos.slice(0, 5000));
-    json(res, 200, { ok: true, id });
-  });
+  lerCorpoJSON(req, res, 65536, (d) => json(res, 200, { ok: true, id: gravarPedido(d, "site").id }));
+}
+
+// Pedido lançado manualmente no painel (ex.: venda combinada direto no WhatsApp ou na loja)
+function pedidoManual(d) {
+  if ("status" in d && !STATUS.includes(d.status)) throw new Error("Status inválido.");
+  return { ok: true, pedido: gravarPedido(d, "painel") };
+}
+
+/* ---------- Dados do cliente ---------- */
+const PAISES = { Brasil: "CPF", Argentina: "DNI", Paraguai: "CI" };
+const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
+
+function cpfValido(v) {
+  const c = String(v || "").replace(/\D/g, "");
+  if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+  for (const n of [9, 10]) {
+    let s = 0;
+    for (let i = 0; i < n; i++) s += c[i] * (n + 1 - i);
+    if (((s * 10) % 11) % 10 !== +c[n]) return false;
+  }
+  return true;
+}
+
+// Nome completo, documento (CPF no Brasil, DNI na Argentina, CI no Paraguai) e endereço completo
+function limparCliente(c) {
+  c = c && typeof c === "object" ? c : {};
+  const t = (k, n) => texto(c[k], n);
+  const pais = PAISES[c.pais] ? c.pais : "Brasil";
+  const cli = {
+    nome: t("nome", 120), pais, docTipo: PAISES[pais], doc: t("doc", 20),
+    cep: t("cep", 10), estado: t("estado", 60), rua: t("rua", 160), numero: t("numero", 20),
+    complemento: t("complemento", 80), bairro: t("bairro", 100), cidade: t("cidade", 100), obs: t("obs", 1000),
+  };
+  const regiao = pais === "Brasil" ? "o estado" : pais === "Argentina" ? "a província" : "o departamento";
+  const falta = [["nome", "o nome completo"], ["doc", "o " + cli.docTipo], ["rua", "a rua"], ["numero", "o número"], ["bairro", "o bairro"], ["cidade", "a cidade"], ["estado", regiao]].find(([k]) => !cli[k]);
+  if (falta) throw new Error(`Informe ${falta[1]} do cliente.`);
+  if (pais === "Brasil") {
+    if (!cpfValido(cli.doc)) throw new Error("CPF inválido.");
+    if (!UFS.includes(cli.estado)) throw new Error("Estado inválido.");
+    const cep = cli.cep.replace(/\D/g, "");
+    if (cep.length !== 8) throw new Error("CEP inválido.");
+    const d = cli.doc.replace(/\D/g, "");
+    cli.doc = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    cli.cep = cep.slice(0, 5) + "-" + cep.slice(5);
+  }
+  return cli;
+}
+
+function gravarPedido(d, origem) {
+  if (!Array.isArray(d.itens) || !d.itens.length) throw new Error("Pedido vazio.");
+  const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
+  const itens = d.itens.slice(0, 100).map((i) => ({
+    sku: texto(i.sku, 120),
+    nome: texto(i.nome, 200),
+    variacao: texto(i.v, 120),
+    q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
+    preco: num(i.preco),
+  }));
+  if (itens.some((i) => !i.nome)) throw new Error("Há um item sem nome.");
+  const cliente = limparCliente(d.cliente);
+  const pedidos = lerJSON(F.pedidos, []);
+  const pedido = {
+    id: pedidos.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1,
+    data: new Date().toISOString(),
+    origem,
+    status: origem === "painel" && STATUS.includes(d.status) ? d.status : "novo",
+    cliente,
+    itens,
+    // No painel o total é sempre recalculado a partir dos itens
+    total: origem === "painel" ? Math.round(itens.reduce((s, i) => s + (i.preco || 0) * i.q, 0) * 100) / 100 : num(d.total),
+    moeda: d.moeda === "USD" ? "USD" : "BRL",
+    nota: origem === "painel" ? texto(d.nota, 2000) : "",
+  };
+  pedidos.unshift(pedido);
+  gravarJSON(F.pedidos, pedidos.slice(0, 5000));
+  return pedido;
 }
 
 function alterarPedido(d) {
