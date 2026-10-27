@@ -76,7 +76,10 @@
       .filter((c) => usados.has(c.id) && !vistos.has(c.id) && vistos.add(c.id));
 
     const b = loja.brand || {};
-    if (String(b.whatsapp || "").replace(/\D/g, "").length >= 10) S.whatsapp = String(b.whatsapp).replace(/\D/g, "");
+    // O WhatsApp do config.js tem prioridade; o do Catálogo Pro só é usado se o config.js estiver vazio
+    const waSite = String(S.whatsapp || "").replace(/\D/g, "");
+    const waCatalogo = String(b.whatsapp || "").replace(/\D/g, "");
+    if (waSite.length < 10 && waCatalogo.length >= 10) S.whatsapp = waCatalogo;
     if (b.slogan) S.slogan = b.slogan;
   } else {
     PRODUTOS = window.PRODUTOS;

@@ -4,7 +4,8 @@
 window.STORE = {
   nome: "Rota Importados",
   slogan: "Importados originais, direto pra você.",
-  // Número do WhatsApp com DDI + DDD, só números (ex: 5511999998888)
+  // Número do WhatsApp com DDI + DDD, só números (ex: 5511999998888).
+  // Tem prioridade sobre o WhatsApp cadastrado no Catálogo Pro.
   whatsapp: "5511920889155",
   // Deixe vazio ("") o que não quiser mostrar no site — nada aparece sem estar preenchido
   instagram: "", // ex: "https://instagram.com/rotaimportados"

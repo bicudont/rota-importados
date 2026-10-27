@@ -43,7 +43,7 @@ Em **Websites → rotaimportados.com → Node.js → Variáveis de ambiente**:
 
 ## Dados da loja
 
-Em **`js/config.js`**: nome, slogan, número do WhatsApp, Instagram, cidade e horário. **Campos vazios não aparecem no site.** Se o Catálogo Pro tiver um WhatsApp preenchido, ele é usado no lugar do número do `config.js`. Os produtos de exemplo desse arquivo só aparecem enquanto não existir um `loja.json`.
+Em **`js/config.js`**: nome, slogan, número do WhatsApp, Instagram, cidade e horário. **Campos vazios não aparecem no site.** O WhatsApp do `config.js` tem prioridade; o do Catálogo Pro só é usado se o `config.js` estiver vazio. Os produtos de exemplo desse arquivo só aparecem enquanto não existir um `loja.json`.
 
 ## Visual
 
