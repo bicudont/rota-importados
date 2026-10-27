@@ -6,9 +6,10 @@ window.STORE = {
   slogan: "Importados originais, direto pra você.",
   // Número do WhatsApp com DDI + DDD, só números (ex: 5511999998888)
   whatsapp: "5500000000000",
-  instagram: "https://instagram.com/rotaimportados",
-  cidade: "Brasil",
-  horario: "Seg a Sáb · 9h às 19h",
+  // Deixe vazio ("") o que não quiser mostrar no site — nada aparece sem estar preenchido
+  instagram: "", // ex: "https://instagram.com/rotaimportados"
+  cidade: "",
+  horario: "", // ex: "Seg a Sáb · 9h às 19h"
 };
 
 /* =========================================================

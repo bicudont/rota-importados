@@ -117,9 +117,10 @@
 
   /* ---------- Textos gerais ---------- */
   $("#heroSlogan").textContent = S.slogan;
-  $("#footerInfo").textContent = `${S.slogan} · ${S.horario}`;
+  $("#footerInfo").textContent = [S.slogan, S.cidade, S.horario].filter(Boolean).join(" · ");
   $("#year").textContent = new Date().getFullYear();
-  $("#footerInsta").href = S.instagram;
+  if (S.instagram) $("#footerInsta").href = S.instagram;
+  else $("#footerInsta").remove();
   const hello = `Olá, ${S.nome}! Vim pelo catálogo e gostaria de mais informações.`;
   ["#heroWhats", "#floatWhats", "#footerWhats", "#emptyWhats", "#headWhats", "#menuWhats"].forEach((s) => {
     const a = $(s);
@@ -380,10 +381,8 @@
   // Painel de filtros no celular
   const filtersEl = $("#filters");
   $("#openFilters").addEventListener("click", () => {
-    closeAll();
-    overlay.hidden = false;
+    abrirPainel(filtersEl);
     filtersEl.classList.add("open");
-    document.body.style.overflow = "hidden";
   });
   $("#closeFilters").addEventListener("click", closeAll);
   $("#applyFilters").addEventListener("click", () => { closeAll(); $("#catalogo").scrollIntoView(); });
@@ -736,20 +735,46 @@
 
   /* ---------- Overlay / painéis laterais ---------- */
   const overlay = $("#overlay"), drawer = $("#drawer"), menu = $("#menu");
+  const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+  let painel = null, abridor = null;
+
   function closeAll() {
     [overlay, drawer, menu].forEach((el) => (el.hidden = true));
     filtersEl.classList.remove("open");
     document.body.style.overflow = "";
+    // Devolve o foco para quem abriu o painel (teclado)
+    if (painel && abridor && document.contains(abridor)) abridor.focus({ preventScroll: true });
+    painel = abridor = null;
+  }
+  function abrirPainel(el) {
+    closeAll();
+    abridor = document.activeElement;
+    painel = el;
+    overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => { const f = el.querySelector(FOCAVEIS); if (f) f.focus({ preventScroll: true }); });
   }
   function show(el) {
-    closeAll();
-    overlay.hidden = false;
+    abrirPainel(el);
     el.hidden = false;
-    document.body.style.overflow = "hidden";
   }
   overlay.addEventListener("click", closeAll);
   document.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeAll(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeAll();
+    // Mantém o Tab dentro do painel aberto
+    if (e.key === "Tab" && painel) {
+      const itens = [...painel.querySelectorAll(FOCAVEIS)].filter((x) => x.offsetParent !== null);
+      if (!itens.length) return;
+      const primeiro = itens[0], ultimo = itens[itens.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+    }
+  });
+  $("#skip").addEventListener("click", () => {
+    const alvo = VIEW === "catalogo" ? $("#catTitle") : VIEW === "produto" ? $("#produto h1") : $("#main");
+    if (alvo) { alvo.setAttribute("tabindex", "-1"); alvo.focus(); }
+  });
 
   /* ---------- Carrinho ---------- */
   const KEY = "rota_cart_v1";
