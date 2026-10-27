@@ -999,71 +999,11 @@
   $("#clearCart").addEventListener("click", () => { cart = []; save(); renderCart(); });
   $("#openCart").addEventListener("click", () => show(drawer));
 
-  /* ---------- Dados do cliente: país, documento e endereço ---------- */
-  const DOC = { Brasil: "CPF", Argentina: "DNI", Paraguai: "CI" };
-  const soDig = (s) => String(s || "").replace(/\D/g, "");
-  const fmtCPF = (v) => { const d = soDig(v).slice(0, 11); return [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean).join(".") + (d.length > 9 ? "-" + d.slice(9) : ""); };
-  const fmtCEP = (v) => { const d = soDig(v).slice(0, 8); return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d; };
-  function cpfValido(v) {
-    const c = soDig(v);
-    if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
-    for (const n of [9, 10]) {
-      let s = 0;
-      for (let i = 0; i < n; i++) s += c[i] * (n + 1 - i);
-      if (((s * 10) % 11) % 10 !== +c[n]) return false;
-    }
-    return true;
-  }
-  const co = $("#checkout").elements;
-  const ehBrasil = () => co.pais.value === "Brasil";
-  // Brasil: CPF, CEP obrigatório e lista de estados. Argentina/Paraguai: DNI/CI, província/departamento e código postal opcional.
-  function ajustarPais() {
-    const br = ehBrasil(), doc = DOC[co.pais.value];
-    co.doc.placeholder = doc + " *";
-    co.doc.setAttribute("aria-label", doc);
-    co.doc.inputMode = br ? "numeric" : "text";
-    co.doc.maxLength = br ? 14 : 20;
-    co.cep.placeholder = br ? "CEP *" : "Código postal";
-    co.cep.setAttribute("aria-label", br ? "CEP" : "Código postal (opcional)");
-    co.cep.required = br;
-    co.cep.inputMode = br ? "numeric" : "text";
-    co.uf.hidden = co.uf.disabled = !br;
-    co.estado.hidden = co.estado.disabled = br;
-    const reg = co.pais.value === "Argentina" ? "Província" : "Departamento";
-    co.estado.placeholder = reg + " *";
-    co.estado.setAttribute("aria-label", reg);
-    co.estado.required = !br;
-    if (br) { co.doc.value = fmtCPF(co.doc.value); co.cep.value = fmtCEP(co.cep.value); }
-    co.doc.setCustomValidity("");
-    co.cep.setCustomValidity("");
-  }
-  // Documento e código postal mudam de formato conforme o país: ao trocar, começa do zero
-  co.pais.addEventListener("change", () => { co.doc.value = ""; co.cep.value = ""; ajustarPais(); });
-  co.doc.addEventListener("input", () => { co.doc.setCustomValidity(""); if (ehBrasil()) co.doc.value = fmtCPF(co.doc.value); });
-  co.cep.addEventListener("input", () => { co.cep.setCustomValidity(""); if (ehBrasil()) co.cep.value = fmtCEP(co.cep.value); });
-  ajustarPais();
-
-  function dadosCliente(f) {
-    const g = (k) => String(f.get(k) || "").trim();
-    const pais = DOC[g("pais")] ? g("pais") : "Brasil", br = pais === "Brasil";
-    return {
-      nome: g("nome"), pais, docTipo: DOC[pais], doc: br ? fmtCPF(g("doc")) : g("doc"),
-      cep: br ? fmtCEP(g("cep")) : g("cep"), estado: br ? g("uf") : g("estado"),
-      rua: g("rua"), numero: g("numero"), complemento: g("complemento"), bairro: g("bairro"), cidade: g("cidade"), obs: g("obs"),
-    };
-  }
-  const enderecoTxt = (c) =>
-    `${c.rua}, ${c.numero}${c.complemento ? " – " + c.complemento : ""} – ${c.bairro} – ${c.cidade}/${c.estado}${c.cep ? ` – ${c.pais === "Brasil" ? "CEP" : "CP"} ${c.cep}` : ""} – ${c.pais}`;
-
+  // Dados do cliente no carrinho: só nome e cidade, ambos opcionais
   $("#checkout").addEventListener("submit", (e) => {
     e.preventDefault();
-    if (ehBrasil()) {
-      if (!cpfValido(co.doc.value)) co.doc.setCustomValidity("CPF inválido. Confira os números.");
-      if (soDig(co.cep.value).length !== 8) co.cep.setCustomValidity("O CEP tem 8 números.");
-      if (!e.target.reportValidity()) return;
-    }
     const f = new FormData(e.target);
-    const cli = dadosCliente(f);
+    const cli = { nome: String(f.get("nome") || "").trim(), cidade: String(f.get("cidade") || "").trim() };
     const lines = cart.map((i) => {
       const p = byId(i.id);
       return `• ${i.q}x *${p.nome}*${i.v ? ` (${i.v})` : ""}${skuTxt(p)} — ${p.preco == null ? "sob consulta" : fmt(p.preco * i.q)}`;
@@ -1075,10 +1015,8 @@
       "",
       `*Total estimado:* ${fmt(total())}${COTACAO && COTACAO.principal === "pix" ? " (Pix)" : ""}${temConsulta() ? " + itens sob consulta" : ""}`,
       "",
-      `*Nome completo:* ${cli.nome}`,
-      `*${cli.docTipo}:* ${cli.doc}`,
-      `*Endereço:* ${enderecoTxt(cli)}`,
-      cli.obs ? `*Obs.:* ${cli.obs}` : "",
+      cli.nome ? `*Nome:* ${cli.nome}` : "",
+      cli.cidade ? `*Cidade:* ${cli.cidade}` : "",
       "",
       "Aguardo confirmação de disponibilidade, pagamento e entrega. Obrigado!",
     ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");

@@ -687,7 +687,9 @@ function gravarPedido(d, origem) {
     preco: num(i.preco),
   }));
   if (itens.some((i) => !i.nome)) throw new Error("Há um item sem nome.");
-  const cliente = limparCliente(d.cliente);
+  // Carrinho do site: só nome e cidade, opcionais. Pedido lançado no painel: dados completos.
+  const c = d.cliente && typeof d.cliente === "object" ? d.cliente : {};
+  const cliente = origem === "painel" ? limparCliente(c) : { nome: texto(c.nome, 120), cidade: texto(c.cidade, 100) };
   const pedidos = lerJSON(F.pedidos, []);
   const pedido = {
     id: pedidos.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1,

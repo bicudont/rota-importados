@@ -669,8 +669,6 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .drawer__total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
 .drawer__total b { font: 700 1.4rem var(--font-head); color: var(--royal); }
 .checkout { display: grid; gap: 8px; text-align: left; }
-.checkout__title { font-weight: 600; font-size: .9rem; color: var(--navy-900); }
-.checkout__row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .checkout input, .checkout textarea, .checkout select {
   width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
   padding: 11px 14px; outline: 0; resize: none; transition: border-color var(--t), box-shadow var(--t);
