@@ -66,6 +66,7 @@
     .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
     .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
     .card + .card { margin-top: 16px; }
+    .grid2 > .card + .card { margin-top: 0; } /* lado a lado, sem deslocar o segundo */
 
     /* Visão geral */
     .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -233,8 +234,8 @@
       <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
       <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
       <button class="tab" data-tab="pendencias">⚠️ <span>Pendências</span><b class="count" id="nPend" hidden></b></button>
-      <button class="tab" data-tab="importar">⬆️ <span>Importar</span></button>
-      <button class="tab" data-tab="exportar">📄 <span>Exportar</span></button>
+      <button class="tab" data-tab="importar">🔄 <span>Importar/Exportar</span></button>
+      <button class="tab" data-tab="exportar">📄 <span>Catálogo PDF</span></button>
       <button class="tab" data-tab="loja">⚙️ <span>Loja</span></button>
       <div class="side__foot">
         <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
@@ -316,7 +317,8 @@
 
       <!-- Importar -->
       <section data-sec="importar" hidden>
-        <div class="head"><h1>Importar do Catálogo Pro</h1></div>
+        <div class="head"><h1>Importar e exportar produtos</h1></div>
+        <h2 style="margin-bottom:10px">Importar do Catálogo Pro</h2>
         <div class="card">
           <p class="muted">No <b>Catálogo Pro</b>, use <b>Configurações → Site da loja → Exportar para o site</b> e envie aqui o(s) arquivo(s) <code>loja-AAAA-MM-DD.zip</code>. Se vier em partes, selecione todas.</p>
           <p class="muted small" style="margin-top:8px">Edições feitas no painel continuam valendo depois da importação, a menos que o Catálogo Pro traga um valor diferente para o mesmo campo (aí vale o mais recente, o do Catálogo Pro).</p>
@@ -327,6 +329,28 @@
           <div class="files" id="files"></div>
           <button class="btn btn--primary" id="send" disabled style="margin-top:16px;width:100%">Enviar para o site</button>
           <div class="log" id="log" aria-live="polite"></div>
+        </div>
+
+        <h2 style="margin:24px 0 10px">Exportar produtos</h2>
+        <div class="grid2">
+          <div class="card stack">
+            <div>
+              <h3>Arquivo ZIP (backup)</h3>
+              <p class="muted small" style="margin-top:4px">Mesmo formato da importação (<code>loja.json</code> + pasta <code>fotos</code>), com os produtos como estão no site: dados do Catálogo Pro, edições e produtos criados no painel, e a cotação. Pode ser reimportado aqui para restaurar tudo.</p>
+            </div>
+            <label class="switch"><input type="checkbox" id="xFotos" checked /> Incluir fotos <span class="muted small" id="xFotosN"></span></label>
+            <a class="btn btn--primary" id="xZip" href="/admin/api/exportar.zip?fotos=1">Baixar ZIP</a>
+            <p class="muted small" id="xZipInfo"></p>
+          </div>
+          <div class="card stack">
+            <div>
+              <h3>Planilha (Excel)</h3>
+              <p class="muted small" style="margin-top:4px">Lista de produtos em CSV, que abre no Excel ou no Google Planilhas: SKU, nome, marca, departamento, preços, estoque, situação no site, fotos, etiquetas e descrição.</p>
+            </div>
+            <label class="switch"><input type="checkbox" id="xSoVis" /> Só produtos visíveis no site</label>
+            <button class="btn btn--primary" id="xCsv">Baixar planilha</button>
+            <p class="muted small" id="xCsvInfo"></p>
+          </div>
         </div>
       </section>
 
@@ -556,7 +580,8 @@
 
     function montar() {
       const aj = D.ajustes;
-      PROD = (D.loja ? D.loja.products : []).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
+      const novos = new Set(aj.novos.map((p) => p.sku)); // mesma regra do servidor: vale a versão do painel
+      PROD = (D.loja ? D.loja.products : []).filter((p) => !novos.has(p.sku)).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
         .concat(aj.novos.map((p) => ({ ...p, _novo: true, _editados: [] })));
       PROD.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand].join(" ")); });
       const setores = [...new Set(PROD.map((p) => p.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -594,6 +619,7 @@
       renderProdutos();
       renderLoja();
       renderExportar();
+      renderExportarProdutos();
     }
 
     /* ---------- Abas ---------- */
@@ -603,6 +629,7 @@
       $$(".tab[data-tab]").forEach((b) => (b.dataset.tab === t ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
       history.replaceState(null, "", "#" + t);
       if (t === "exportar" && D) renderExportar();
+      if (t === "importar" && D) renderExportarProdutos();
       if (!inicio) { scrollTo(0, 0); $(`[data-sec="${t}"] h1`).focus({ preventScroll: true }); }
     }
     $$("[data-sec] h1").forEach((h) => h.setAttribute("tabindex", "-1"));
@@ -1379,6 +1406,46 @@
     $("#eNenhuma").addEventListener("click", () => { visiveis().forEach((p) => eFora.add(setorDe(p))); renderExportar(); });
     $("#eCompleto").addEventListener("click", () => exportar("completo"));
     $("#ePorCat").addEventListener("click", () => exportar("porSetor"));
+
+    /* ---------- Exportar produtos (ZIP e planilha) ---------- */
+    function renderExportarProdutos() {
+      const nFotos = new Set(PROD.flatMap((p) => p._fotos)).size;
+      $("#xFotosN").textContent = `(${nFotos.toLocaleString("pt-BR")} fotos)`;
+      $("#xZip").href = "/admin/api/exportar.zip?fotos=" + ($("#xFotos").checked ? "1" : "0");
+      $("#xZipInfo").textContent = $("#xFotos").checked && nFotos > 200 ? "Com muitas fotos o arquivo fica grande e pode levar alguns minutos para baixar." : "";
+      $("#xCsvInfo").textContent = `${PROD.filter((p) => !$("#xSoVis").checked || p.active !== false).length.toLocaleString("pt-BR")} produtos`;    }
+    $("#xFotos").addEventListener("change", renderExportarProdutos);
+    $("#xSoVis").addEventListener("change", renderExportarProdutos);
+    $("#xZip").addEventListener("click", (e) => { if (!PROD.length) { e.preventDefault(); toast("Ainda não há produtos para exportar.", true); } });
+
+    // CSV com ";" e vírgula decimal (padrão do Excel em português), com BOM para manter os acentos
+    $("#xCsv").addEventListener("click", () => {
+      const lista = PROD.filter((p) => !$("#xSoVis").checked || p.active !== false);
+      if (!lista.length) return toast("Nenhum produto para exportar.", true);
+      const pix = cot("pix"), efe = cot("efetivo");
+      const num = (v) => (v == null || v === "" || isNaN(v) ? "" : String(Math.round(v * 100) / 100).replace(".", ","));
+      const cel = (v) => { const s = String(v == null ? "" : v).replace(/\r?\n/g, " "); return /[";]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const cab = ["SKU", "Nome", "Marca", "Departamento", "Tipo", "Volume", "Preço US$", "Preço R$ Pix", "Preço R$ dinheiro", "Estoque", "Situação no site", "Fotos", "Etiquetas", "Descrição", "Origem"];
+      const linhas = lista.map((p) => [
+        p.sku, p.name, p.brand, p.sector, p.tipo, p.volume,
+        num(p.price > 0 ? p.price : null),
+        num(p.price > 0 && pix ? p.price * pix.rate : null),
+        num(p.price > 0 && efe ? p.price * efe.rate : null),
+        p.stock == null ? "" : p.stock,
+        p.active === false ? "Oculto" : p.stock === 0 ? "Esgotado" : "Visível",
+        p._fotos.length, p.tags, p.description,
+        p._novo ? "Criado no painel" : p._editados.length ? "Catálogo Pro (editado no painel)" : "Catálogo Pro",
+      ].map(cel).join(";"));
+      const blob = new Blob(["﻿" + [cab.join(";"), ...linhas].join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `produtos-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      toast(`Planilha com ${lista.length.toLocaleString("pt-BR")} produtos baixada`);
+    });
 
     /* ---------- Loja ---------- */
     function renderLoja() {

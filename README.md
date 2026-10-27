@@ -23,8 +23,8 @@ Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina 
 | **Pedidos** | Pedidos feitos pelo carrinho do site e lançados no painel (**+ Novo pedido**), com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
 | **Produtos** | Busca e filtros; editar nome, marca, departamento, preço (US$), estoque, etiquetas, descrição, fotos e visibilidade; criar produtos; ocultar/mostrar vários de uma vez |
 | **Pendências** | Produtos visíveis sem foto e/ou sem descrição, com busca e filtro por departamento. **IA de descrições**: gera textos para os produtos sem descrição (selecionados ou a página inteira); cada texto aparece para revisar e editar, e só vai para o site quando você clica em Salvar |
-| **Importar** | Envio do ZIP do Catálogo Pro (mesma função de antes) |
-| **Exportar** | Catálogo em PDF (A4) para enviar a clientes: filtros com/sem estoque, com/sem foto e por departamento; PDF completo, um PDF por departamento ou o de um departamento só. Capa com sumário, 9 produtos por página, preço igual ao do site (opcional) e link de cada produto para o site |
+| **Importar/Exportar** | Importar: envio do ZIP do Catálogo Pro (mesma função de antes). Exportar: **ZIP de backup** no mesmo formato (`loja.json` + fotos, com edições e produtos do painel, com ou sem fotos), que pode ser reimportado aqui; e **planilha CSV** para Excel (todos ou só visíveis) |
+| **Catálogo PDF** | Catálogo em PDF (A4) para enviar a clientes: filtros com/sem estoque, com/sem foto e por departamento; PDF completo, um PDF por departamento ou o de um departamento só. Capa com sumário, 9 produtos por página, preço igual ao do site (opcional) e link de cada produto para o site |
 | **Loja** | Nome, slogan, WhatsApp, Instagram, cidade, horário e cotação manual do dólar |
 
 **Como as edições convivem com o Catálogo Pro:** o que você altera no painel continua valendo depois de novas importações. Se o Catálogo Pro exportar um valor *diferente* para o mesmo campo, vale o do Catálogo Pro (a alteração mais recente ganha). Em cada produto há o botão **Desfazer edições** para voltar aos dados do Catálogo Pro.

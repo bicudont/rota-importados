@@ -162,7 +162,9 @@ function montarLoja() {
   if (!valida && !aj.novos.length) return (lojaCache = { vazio: true });
 
   const out = valida ? { ...loja } : { type: "catalogo-pro-site", version: 1, currency: "USD", sectors: [], rates: {}, products: [] };
-  out.products = out.products.map((p) => aplicarAjuste(p, p.sku && aj.produtos[p.sku])).concat(aj.novos);
+  // Produtos criados no painel entram no fim; se um backup reimportado também os trouxer, vale a versão do painel
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  out.products = out.products.filter((p) => !novos.has(p.sku)).map((p) => aplicarAjuste(p, p.sku && aj.produtos[p.sku])).concat(aj.novos);
   const rates = { ...(out.rates || {}) };
   for (const k of ["pix", "efetivo"]) {
     const c = site.cotacao && site.cotacao[k];
@@ -291,6 +293,7 @@ function adminApi(req, res, rota) {
 
   const r = `${req.method} ${rota}`;
   if (r === "GET dados") return dadosPainel(res);
+  if (r === "GET exportar.zip") return exportarZip(req, res).catch(() => res.destroy());
   if (r === "PUT produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, salvarProduto(d)));
   if (r === "POST produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, criarProduto(d)));
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
@@ -669,6 +672,71 @@ function aplicarZip(buf) {
       ).length
     : null;
   return { ok: true, produtos: loja ? loja.products.length : null, fotos, fotosFaltando: faltando };
+}
+
+/* ---------- Exportação: ZIP no mesmo formato da importação ---------- */
+// loja.json como aparece no site (Catálogo Pro + edições e produtos do painel + cotação manual) e,
+// opcionalmente, as fotos. Pode ser reimportado aqui pelo painel (backup).
+const CRC = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
+function crc32(buf) {
+  let c = -1;
+  for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 255] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+
+async function exportarZip(req, res) {
+  let loja;
+  try { loja = montarLoja(); } catch { loja = { vazio: true }; }
+  if (loja.vazio) return json(res, 404, { erro: "Ainda não há produtos para exportar." });
+  const comFotos = new URL(req.url, "http://x").searchParams.get("fotos") === "1";
+  const dados = JSON.parse(loja.body.toString("utf8"));
+  dados.generated = new Date().toISOString();
+  const arquivos = [{ nome: "loja.json", dados: Buffer.from(JSON.stringify(dados)) }];
+  if (comFotos) {
+    const ids = new Set(dados.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])).map(String).filter((id) => ID_FOTO.test(id)));
+    for (const id of ids) arquivos.push({ nome: `fotos/${id}.jpg`, arquivo: path.join(DATA_DIR, "fotos", id + ".jpg") });
+  }
+
+  const data = new Date().toISOString().slice(0, 10);
+  res.writeHead(200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="loja-${data}${comFotos ? "" : "-sem-fotos"}.zip"`,
+    "Cache-Control": "no-store",
+  });
+  // Escreve arquivo por arquivo (sem montar o ZIP inteiro na memória)
+  const escrever = (b) => new Promise((ok) => (res.write(b) ? ok() : res.once("drain", ok)));
+  const central = [];
+  let pos = 0;
+  const agora = new Date();
+  const dosHora = (agora.getHours() << 11) | (agora.getMinutes() << 5) | (agora.getSeconds() >> 1);
+  const dosData = ((agora.getFullYear() - 1980) << 9) | ((agora.getMonth() + 1) << 5) | agora.getDate();
+  for (const a of arquivos) {
+    let bruto;
+    try { bruto = a.dados || (await fs.promises.readFile(a.arquivo)); } catch { continue; } // foto que não está no servidor
+    if (res.destroyed) return;
+    const comprime = a.nome.endsWith(".json"); // JPG já é comprimido
+    const corpo = comprime ? zlib.deflateRawSync(bruto) : bruto;
+    const nome = Buffer.from(a.nome, "utf8");
+    const crc = crc32(bruto);
+    const h = Buffer.alloc(30);
+    h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(comprime ? 8 : 0, 8);
+    h.writeUInt16LE(dosHora, 10); h.writeUInt16LE(dosData, 12); h.writeUInt32LE(crc, 14);
+    h.writeUInt32LE(corpo.length, 18); h.writeUInt32LE(bruto.length, 22); h.writeUInt16LE(nome.length, 26); h.writeUInt16LE(0, 28);
+    const c = Buffer.alloc(46);
+    c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(comprime ? 8 : 0, 10);
+    c.writeUInt16LE(dosHora, 12); c.writeUInt16LE(dosData, 14); c.writeUInt32LE(crc, 16); c.writeUInt32LE(corpo.length, 20); c.writeUInt32LE(bruto.length, 24);
+    c.writeUInt16LE(nome.length, 28); c.writeUInt32LE(pos, 42);
+    central.push(Buffer.concat([c, nome]));
+    await escrever(Buffer.concat([h, nome]));
+    await escrever(corpo);
+    pos += 30 + nome.length + corpo.length;
+  }
+  const cd = Buffer.concat(central);
+  const fim = Buffer.alloc(22);
+  fim.writeUInt32LE(0x06054b50, 0); fim.writeUInt16LE(central.length, 8); fim.writeUInt16LE(central.length, 10);
+  fim.writeUInt32LE(cd.length, 12); fim.writeUInt32LE(pos, 16);
+  await escrever(cd);
+  res.end(fim);
 }
 
 // Leitor de ZIP (armazenado ou deflate), usando o diretório central
