@@ -299,8 +299,9 @@
 
   // Faixa superior: aviso do painel, formas de pagamento e atendimento pelo WhatsApp (a cotação do dólar é interna)
   {
-    const itens = [`<a href="${waLink(hello)}" target="_blank" rel="noopener">Atendimento pelo WhatsApp</a>`];
-    if (PRODUTOS.some((p) => p.preco != null)) itens.unshift(`<span>Pix ou cartão${CARTAO.n > 1 ? ` em até <b>${CARTAO.n}x</b>` : ""}</span>`);
+    // Palavras-chave em branco (<b>), o restante no tom mais suave da faixa
+    const itens = [`<a href="${waLink(hello)}" target="_blank" rel="noopener">Atendimento pelo <b>WhatsApp</b></a>`];
+    if (PRODUTOS.some((p) => p.preco != null)) itens.unshift(`<span><b>Pix</b> ou <b>cartão</b>${CARTAO.n > 1 ? ` em até <b>${CARTAO.n}x</b>` : ""}</span>`);
     // Aviso definido no painel (aba Banner)
     const fx = banner && banner.faixa;
     if (fx && fx.texto) {
