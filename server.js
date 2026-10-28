@@ -7,9 +7,11 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 const crypto = require("crypto");
+const os = require("os");
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
+const PASTA_ESTAVEL = "rota-importados-dados";
 const DATA_DIR = escolherPastaDados();
 const SENHA = process.env.ADMIN_SENHA || "";
 const MAX_UPLOAD = 80 * 1024 * 1024;
@@ -40,13 +42,14 @@ const F = {
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
 
 // Onde ficam catálogo, fotos, edições, pedidos e banners.
-// Um deploy recria a pasta do app e apagaria uma pasta data/ dentro dela; por isso, sem DATA_DIR,
-// os dados vão para uma pasta ao lado do app ("rota-importados-dados"). Na primeira vez, copia o que
-// existir em data/. Se não for possível escrever lá, continua usando data/ (como antes).
+// A Hostinger monta cada deploy numa pasta nova (…/hbuilds/versions/<código>/), então qualquer pasta
+// dentro ou ao lado do app some no deploy seguinte. Sem DATA_DIR, os dados ficam na pasta pessoal da
+// conta (~/rota-importados-dados), que nenhum deploy toca. Na primeira vez, copia os dados mais recentes
+// que encontrar nas versões anteriores. Se não puder escrever lá, usa data/ dentro do app (como antes).
 function escolherPastaDados() {
   if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR);
   const antiga = path.join(ROOT, "data");
-  const nova = path.resolve(ROOT, "..", "rota-importados-dados");
+  const nova = path.join(os.homedir(), PASTA_ESTAVEL);
   try {
     fs.mkdirSync(nova, { recursive: true });
     const teste = path.join(nova, ".teste-escrita");
@@ -57,16 +60,48 @@ function escolherPastaDados() {
     return antiga;
   }
   try {
-    const vazia = !fs.readdirSync(nova).length;
-    if (vazia && fs.existsSync(antiga) && fs.readdirSync(antiga).length) {
-      fs.cpSync(antiga, nova, { recursive: true });
-      console.log(`Dados copiados de ${antiga} para ${nova}.`);
+    if (!fs.existsSync(path.join(nova, "loja.json"))) {
+      const origem = dadosAnteriores(nova);
+      if (origem) {
+        fs.cpSync(origem, nova, { recursive: true, force: false });
+        console.log(`Dados copiados de ${origem} para ${nova}.`);
+      }
     }
   } catch (e) {
     console.warn(`Não foi possível copiar os dados antigos: ${e.message}`);
   }
   return nova;
 }
+
+// Procura, entre os lugares onde versões anteriores guardavam os dados, o loja.json mais recente
+function dadosAnteriores(nova) {
+  const candidatas = [path.join(ROOT, "data"), path.resolve(ROOT, "..", PASTA_ESTAVEL)];
+  const partes = ROOT.split(path.sep);
+  const iv = partes.lastIndexOf("versions");
+  if (iv > 0) {
+    const versoes = partes.slice(0, iv + 1).join(path.sep) || path.sep;
+    let lista = [];
+    try { lista = fs.readdirSync(versoes); } catch {}
+    for (const v of lista) {
+      candidatas.push(path.join(versoes, v, PASTA_ESTAVEL));
+      let sub = [];
+      try { sub = fs.readdirSync(path.join(versoes, v)); } catch {}
+      for (const s of sub) candidatas.push(path.join(versoes, v, s, "data"));
+    }
+  }
+  let melhor = null, quando = 0;
+  for (const c of candidatas) {
+    if (path.resolve(c) === path.resolve(nova)) continue;
+    try {
+      const t = fs.statSync(path.join(c, "loja.json")).mtimeMs;
+      if (t > quando) { melhor = c; quando = t; }
+    } catch {}
+  }
+  return melhor;
+}
+
+// Seguro = fora da pasta do app e fora das pastas de versão que a Hostinger troca a cada deploy
+const dadosSeguros = () => !inside(ROOT, DATA_DIR) && !DATA_DIR.split(path.sep).includes("hbuilds") && path.resolve(ROOT, "..", PASTA_ESTAVEL) !== DATA_DIR;
 
 http
   .createServer((req, res) => {
@@ -371,7 +406,7 @@ function dadosPainel(res) {
     pedidos: lerJSON(F.pedidos, []),
     banner: lerJSON(F.banner, null) || {},
     ia: !!process.env.ANTHROPIC_API_KEY,
-    dados: { pasta: DATA_DIR, segura: !inside(ROOT, DATA_DIR) }, // segura = fora da pasta do app (sobrevive a deploys)
+    dados: { pasta: DATA_DIR, segura: dadosSeguros() }, // segura = sobrevive a deploys
   });
 }
 

@@ -1,4 +1,4 @@
-# Rota Importados — Catálogo
+﻿# Rota Importados — Catálogo
 
 Loja-catálogo da Rota Importados: o cliente navega pelos produtos, monta o carrinho e **finaliza o pedido pelo WhatsApp**. Os produtos vêm do **Catálogo Pro** (arquivo `loja.json` + fotos). Roda como app Node.js na Hostinger, sem dependências.
 
@@ -60,13 +60,13 @@ Em **Websites → rotaimportados.com → Node.js → Variáveis de ambiente**:
 | Variável | Valor |
 |---|---|
 | `ADMIN_SENHA` | a senha do painel `/admin` (sem ela o painel fica desativado) |
-| `DATA_DIR` | opcional: pasta onde salvar catálogo, fotos, edições, pedidos e banners. Padrão: a pasta `rota-importados-dados`, **ao lado** da pasta do app (fora do alcance dos deploys); na primeira vez, o que existir em `data/` é copiado para lá. Se não der para criar essa pasta, usa `data/` dentro do app |
+| `DATA_DIR` | opcional: pasta onde salvar catálogo, fotos, edições, pedidos e banners. Padrão: `~/rota-importados-dados`, na pasta pessoal da conta (a Hostinger monta cada deploy numa pasta de versão nova, então nada dentro ou ao lado do app sobrevive); na primeira vez, copia os dados mais recentes das versões anteriores. Se não der para criar essa pasta, usa `data/` dentro do app |
 | `ANTHROPIC_API_KEY` | opcional: chave da API da Anthropic (console.anthropic.com) para a IA de descrições. Sem ela, a IA fica desativada e o resto funciona normalmente |
 | `IA_MODELO` | opcional: modelo do Claude usado pela IA (padrão: `claude-opus-5-5`) |
 
 A IA usa a biblioteca oficial `@anthropic-ai/sdk` (em `package.json`); a Hostinger a instala no deploy. Ela escreve só com os dados do produto (nome, marca, departamento, tipo, notas, volume, etiquetas) e é instruída a não inventar características; mesmo assim, revise cada texto. O custo é cobrado pela Anthropic na conta da chave, por descrição gerada.
 
-⚠️ Um novo deploy recria a pasta do app: por isso os dados ficam, por padrão, na pasta ao lado (`rota-importados-dados`). Na **Visão geral** do painel, "Dados guardados" mostra "✓ fora da pasta do app" quando está tudo seguro; se aparecer o aviso ⚠️, defina `DATA_DIR`.
+⚠️ Um novo deploy recria a pasta do app: por isso os dados ficam, por padrão, na pasta pessoal da conta (`~/rota-importados-dados`). Na **Visão geral** do painel, "Dados guardados" mostra "✓ fora da pasta do app" quando está tudo seguro; se aparecer o aviso ⚠️, defina `DATA_DIR`.
 
 ## Dados da loja
 
