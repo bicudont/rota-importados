@@ -163,6 +163,8 @@
     .botao { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
     @media (max-width: 760px) { .imgs, .botoes, .lnk { grid-template-columns: 1fr; } }
 
+    .cot-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
     /* Pendências */
     .rev { background: #fffdf5; border: 1px solid #f3dfb0; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
     .rv { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 12px; padding: 12px 0; border-top: 1px solid #f3dfb0; }
@@ -253,7 +255,7 @@
       <button class="tab" data-tab="pendencias">⚠️ <span>Pendências</span><b class="count" id="nPend" hidden></b></button>
       <button class="tab" data-tab="importar">🔄 <span>Importar/Exportar</span></button>
       <button class="tab" data-tab="exportar">📄 <span>Catálogo PDF</span></button>
-      <button class="tab" data-tab="loja">⚙️ <span>Loja</span></button>
+      <button class="tab" data-tab="loja">⚙️ <span>Loja</span><b class="count" id="nCot" hidden title="Cotação do dólar desatualizada">!</b></button>
       <div class="side__foot">
         <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
         <button class="tab" id="logout">🚪 <span class="lbl-long">Sair</span></button>
@@ -264,6 +266,10 @@
       <!-- Visão geral -->
       <section data-sec="geral">
         <div class="head"><h1>Visão geral</h1><a class="btn" href="/" target="_blank" rel="noopener">Abrir o site ↗</a></div>
+        <div class="msg warn cot-lembrete" id="cotLembrete" hidden style="margin-bottom:12px">
+          <span id="cotLembreteTxt"></span>
+          <button class="btn btn--sm btn--primary" data-ir="loja:cotacao">Atualizar cotação</button>
+        </div>
         <div class="msg warn" id="dadosRisco" hidden style="margin-bottom:12px">⚠️ Os dados da loja (fotos, edições, pedidos e banners) estão dentro da pasta do app e podem ser apagados no próximo deploy. Defina a variável <code>DATA_DIR</code> na Hostinger apontando para uma pasta fora do app.</div>
         <div class="msg warn" id="semLoja" hidden>Ainda não há produtos do Catálogo Pro no site. Vá em <b>Importar</b> e envie o ZIP exportado.</div>
         <div class="stats" id="stats"></div>
@@ -468,7 +474,16 @@
           </div>
           <div><label class="lbl" for="lHorario">Horário de atendimento</label><input class="field" id="lHorario" name="horario" placeholder="Ex.: Seg a Sáb, 9h às 18h" maxlength="120" /></div>
           <div>
-            <h2 style="margin:6px 0 4px">Cotação do dólar</h2>
+            <h2 style="margin:6px 0 4px">Pagamento no cartão</h2>
+            <p class="muted small" style="margin-bottom:10px">O site mostra o preço no Pix e, embaixo, o preço no cartão (Pix + acréscimo) com o valor da parcela. O dólar nunca aparece para o cliente.</p>
+            <div class="grid2">
+              <div><label class="lbl" for="lCartPct">Acréscimo no cartão (%)</label><input class="field" id="lCartPct" type="number" min="0" max="200" step="0.1" /><div class="hint" id="lCartEx"></div></div>
+              <div><label class="lbl" for="lCartN">Parcelas (máximo)</label><input class="field" id="lCartN" type="number" min="1" max="24" step="1" /></div>
+            </div>
+          </div>
+          <div>
+            <h2 style="margin:6px 0 4px">Cotação do dólar (interna)</h2>
+            <div class="msg small" id="cotStatusLoja" style="margin:6px 0 10px"></div>
             <p class="muted small" style="margin-bottom:10px">Deixe vazio para usar a cotação exportada pelo Catálogo Pro. Se preencher, vale este valor até você apagá-lo.</p>
             <div class="grid2">
               <div><label class="lbl" for="lPix">Cotação Pix (R$ por US$ 1)</label><input class="field" id="lPix" inputmode="decimal" /><div class="hint" id="lPixHint"></div></div>
@@ -664,6 +679,33 @@
       return r && r.rate > 0 ? { rate: r.rate, date: r.date, manual: false } : null;
     };
     const emReais = (v) => { const c = cot("pix") || cot("efetivo"); return v != null && c ? brl(Math.round(v * c.rate * 100) / 100) : ""; };
+    // Preços que o cliente vê (mesma regra do site): Pix = US$ × cotação; cartão = Pix + acréscimo, em até N parcelas
+    const cartaoCfg = () => {
+      const c = (D && D.site.cartao) || {};
+      return { pct: c.acrescimo >= 0 ? c.acrescimo : 35, n: c.parcelas >= 1 ? c.parcelas : 12 };
+    };
+    const precoPix = (v) => { const c = cot("pix") || cot("efetivo"); return v > 0 && c ? Math.round(v * c.rate * 100) / 100 : null; };
+    const precoCartao = (pix) => Math.round(pix * (1 + cartaoCfg().pct / 100) * 100) / 100;
+    const cartaoResumo = (pix) => { const n = cartaoCfg().n, t = precoCartao(pix); return `${brl(t)}${n > 1 ? ` em até ${n}x de ${brl(Math.round((t / n) * 100) / 100)}` : ""}`; };
+
+    // Lembrete diário: a cotação em uso (manual ou do Catálogo Pro) precisa ser de hoje (horário de Brasília)
+    const hojeBR = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    function statusCotacao() {
+      const c = cot("pix") || cot("efetivo");
+      if (!c) return { ok: false, txt: "Nenhuma cotação do dólar definida: os preços aparecem como “Sob consulta” no site." };
+      const desc = `${brl(c.rate)} ${cot("pix") ? "(Pix)" : "(dinheiro)"}${c.manual ? ", definida no painel" : ", do Catálogo Pro"}`;
+      if (c.date && c.date.slice(0, 10) >= hojeBR()) return { ok: true, txt: `✓ Cotação de hoje em uso: ${desc}.` };
+      return { ok: false, txt: `⏰ A cotação do dólar em uso é de ${c.date ? dataBR(c.date) : "data desconhecida"} (${desc}). Atualize com a cotação de hoje.` };
+    }
+    function renderLembreteCotacao() {
+      const s = statusCotacao();
+      $("#cotLembrete").hidden = s.ok;
+      $("#cotLembreteTxt").textContent = s.txt;
+      $("#nCot").hidden = s.ok;
+      const el = $("#cotStatusLoja");
+      el.textContent = s.ok ? s.txt : s.txt + " Digite o valor de hoje abaixo e salve (mesmo que não tenha mudado).";
+      el.className = "msg small " + (s.ok ? "ok" : "warn");
+    }
 
     async function carregar() {
       D = await api("GET", "dados");
@@ -727,6 +769,7 @@
       ].join("");
       $("#semLoja").hidden = !!D.loja;
       $("#dadosRisco").hidden = !D.dados || D.dados.segura;
+      renderLembreteCotacao();
       const pix = cot("pix"), efe = cot("efetivo");
       const linha = (a, b) => `<div><span class="muted">${a}</span><b>${b}</b></div>`;
       const cotTxt = (c) => (c ? `${brl(c.rate)}${c.date ? " · " + dataBR(c.date) : ""}${c.manual ? " (manual)" : ""}` : "—");
@@ -753,6 +796,7 @@
       const [aba, filtro] = b.dataset.ir.split(":");
       if (aba === "produtos") { $("#pStatus").value = filtro || ""; $("#pBusca").value = ""; $("#pSetor").value = ""; pag = 0; renderProdutos(); }
       abrirAba(aba);
+      if (filtro === "cotacao") { $("#lPix").scrollIntoView({ block: "center" }); $("#lPix").focus({ preventScroll: true }); }
     });
 
     /* ---------- Pedidos ---------- */
@@ -1060,7 +1104,8 @@
     function precoBR() {
       const v = numOuNull($("#dPreco").value);
       const c = cot("pix") || cot("efetivo");
-      $("#dPrecoBR").textContent = v > 0 && c ? `No site: ${emReais(v)} (${cot("pix") ? "Pix" : "dinheiro"}, US$ 1 = ${brl(c.rate)})` : v === null ? "Aparece como “Sob consulta”." : "";
+      const pix = precoPix(v);
+      $("#dPrecoBR").textContent = pix != null ? `No site: ${brl(pix)} no Pix · cartão ${cartaoResumo(pix)} (US$ 1 = ${brl(c.rate)})` : v === null ? "Aparece como “Sob consulta”." : v > 0 ? "Sem cotação: aparece como “Sob consulta”." : "";
     }
     $("#dPreco").addEventListener("input", precoBR);
     function renderFotos() {
@@ -1579,13 +1624,15 @@
     function itemPDF(p) {
       let preco = null, precoNota = "", precoSub = "";
       if ($("#ePreco").checked) {
-        const pix = cot("pix"), efe = cot("efetivo"), princ = pix || efe;
-        if (!(p.price > 0)) preco = "";
-        else if (princ) {
-          preco = brl(Math.round(p.price * princ.rate * 100) / 100);
-          precoNota = pix ? "no Pix" : "em dinheiro";
-          precoSub = [usd(p.price), pix && efe ? brl(Math.round(p.price * efe.rate * 100) / 100) + " em dinheiro" : ""].filter(Boolean).join(" · ");
-        } else preco = usd(p.price);
+        // Igual ao site: só reais (Pix em destaque e cartão embaixo); sem cotação, "Sob consulta"
+        const pix = precoPix(p.price);
+        if (pix == null) preco = "";
+        else {
+          preco = brl(pix);
+          precoNota = "no Pix";
+          const { n } = cartaoCfg(), t = precoCartao(pix);
+          precoSub = n > 1 ? `ou ${n}x de ${brl(Math.round((t / n) * 100) / 100)} no cartão` : `ou ${brl(t)} no cartão`; // curto, como nos cards do site
+        }
       }
       return {
         nome: p.name, marca: p.brand || "", sku: p.sku, preco, precoNota, precoSub,
@@ -1605,7 +1652,7 @@
       const wa = soDig(D.site.whatsapp || S.whatsapp || (D.loja && D.loja.brand && D.loja.brand.whatsapp));
       const waTxt = wa.length === 13 && wa.startsWith("55") ? `+55 (${wa.slice(2, 4)}) ${wa.slice(4, 9)}-${wa.slice(9)}` : wa ? "+" + wa : "";
       const c = cot("pix") || cot("efetivo");
-      const aviso = $("#ePreco").checked ? `Preços sujeitos a alteração${c && c.date ? " · cotação de " + dataBR(c.date) : ""}` : "";
+      const aviso = $("#ePreco").checked ? `Preços sujeitos a alteração${c && c.date ? " · atualizados em " + dataBR(c.date) : ""}` : "";
       return { nome: D.site.nome || S.nome || "Rota Importados", whatsapp: waTxt, site: location.host, aviso };
     }
     const paginasDe = (gs) => 1 + gs.reduce((s, g) => s + Math.ceil(g.produtos.length / 9), 0);
@@ -1708,11 +1755,12 @@
       const pix = cot("pix"), efe = cot("efetivo");
       const num = (v) => (v == null || v === "" || isNaN(v) ? "" : String(Math.round(v * 100) / 100).replace(".", ","));
       const cel = (v) => { const s = String(v == null ? "" : v).replace(/\r?\n/g, " "); return /[";]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-      const cab = ["SKU", "Nome", "Marca", "Departamento", "Tipo", "Volume", "Preço US$", "Preço R$ Pix", "Preço R$ dinheiro", "Estoque", "Situação no site", "Fotos", "Etiquetas", "Descrição", "Origem"];
+      const cab = ["SKU", "Nome", "Marca", "Departamento", "Tipo", "Volume", "Preço US$", "Preço R$ Pix", "Preço R$ cartão", "Preço R$ dinheiro", "Estoque", "Situação no site", "Fotos", "Etiquetas", "Descrição", "Origem"];
       const linhas = lista.map((p) => [
         p.sku, p.name, p.brand, p.sector, p.tipo, p.volume,
         num(p.price > 0 ? p.price : null),
         num(p.price > 0 && pix ? p.price * pix.rate : null),
+        num(precoPix(p.price) != null ? precoCartao(precoPix(p.price)) : null),
         num(p.price > 0 && efe ? p.price * efe.rate : null),
         p.stock == null ? "" : p.stock,
         p.active === false ? "Oculto" : p.stock === 0 ? "Esgotado" : "Visível",
@@ -1741,16 +1789,32 @@
       const doCat = (k) => { const r = D.loja && D.loja.rates && D.loja.rates[k]; return r && r.rate > 0 ? `Catálogo Pro: ${brl(r.rate)}${r.date ? " (" + dataBR(r.date) + ")" : ""}` : "O Catálogo Pro não exportou essa cotação."; };
       $("#lPixHint").textContent = doCat("pix");
       $("#lEfetHint").textContent = doCat("efetivo");
+      const cc = cartaoCfg();
+      $("#lCartPct").value = String(cc.pct).replace(".", ",");
+      $("#lCartN").value = cc.n;
+      exemploCartao();
     }
+    // Exemplo ao vivo: R$ 100 no Pix → quanto fica no cartão
+    function exemploCartao() {
+      const pct = numOuNull($("#lCartPct").value), n = parseInt($("#lCartN").value, 10);
+      if (!(pct >= 0) || !(n >= 1)) return ($("#lCartEx").textContent = "");
+      const t = Math.round(100 * (1 + pct / 100) * 100) / 100;
+      $("#lCartEx").textContent = `Ex.: ${brl(100)} no Pix → ${brl(t)} no cartão${n > 1 ? ` (${n}x de ${brl(Math.round((t / n) * 100) / 100)})` : ""}`;
+    }
+    $("#lCartPct").addEventListener("input", exemploCartao);
+    $("#lCartN").addEventListener("input", exemploCartao);
     $("#lojaForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const pix = numOuNull($("#lPix").value), efe = numOuNull($("#lEfet").value);
       if ((pix != null && !(pix > 0)) || (efe != null && !(efe > 0))) return toast("Cotação inválida. Ex.: 5,22", true);
+      const acrescimo = numOuNull($("#lCartPct").value), parcelas = parseInt($("#lCartN").value, 10);
+      if (!(acrescimo >= 0 && acrescimo <= 200)) return toast("Acréscimo do cartão inválido (0 a 200%).", true);
+      if (!(parcelas >= 1 && parcelas <= 24)) return toast("Parcelas inválidas (1 a 24).", true);
       $("#lojaSalvar").disabled = true;
       try {
         const r = await api("PUT", "site", {
           nome: $("#lNome").value, slogan: $("#lSlogan").value, whatsapp: $("#lWhats").value, instagram: $("#lInsta").value,
-          cidade: $("#lCidade").value, horario: $("#lHorario").value, cotacao: { pix, efetivo: efe },
+          cidade: $("#lCidade").value, horario: $("#lHorario").value, cotacao: { pix, efetivo: efe }, cartao: { acrescimo, parcelas },
         });
         D.site = r.site; renderLoja(); renderGeral(); renderProdutos();
         toast("Dados da loja salvos");

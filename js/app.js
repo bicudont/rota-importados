@@ -58,8 +58,10 @@
     const rates = loja.rates || {};
     const pix = rates.pix && rates.pix.rate > 0 ? rates.pix : null;
     const efetivo = rates.efetivo && rates.efetivo.rate > 0 ? rates.efetivo : null;
+    // O dólar é só a base interna de preço: o cliente vê apenas reais (Pix e cartão).
+    // Sem cotação, um preço em US$ vira "Sob consulta" em vez de aparecer em dólar.
     const principal = base === "USD" ? pix || efetivo : null;
-    MOEDA = principal ? "BRL" : base;
+    MOEDA = base === "USD" ? "BRL" : base;
     COTACAO = base === "USD" && (pix || efetivo) ? { pix, efetivo, principal: principal === pix ? "pix" : "efetivo" } : null;
 
     const recente = Date.now() - 30 * 864e5;
@@ -67,7 +69,7 @@
       .filter((p) => p.active !== false && p.name)
       .map((p, i) => {
         const usd = typeof p.price === "number" && p.price > 0 ? p.price : null;
-        const preco = usd == null ? null : principal ? Math.round(usd * principal.rate * 100) / 100 : usd;
+        const preco = usd == null ? null : principal ? Math.round(usd * principal.rate * 100) / 100 : base === "USD" ? null : usd;
         const tags = String(p.tags || "").split(/[,;|]/).map((t) => t.trim()).filter(Boolean);
         const novo = p.added && Date.parse(p.added) > recente;
         return {
@@ -113,6 +115,18 @@
   }
 
   const fmt = (v) => money(v, MOEDA);
+  // Cartão: preço do Pix + acréscimo (padrão 35%), em até N parcelas (padrão 12) — definidos na aba Loja do painel
+  const CARTAO = {
+    pct: site && site.cartao && site.cartao.acrescimo >= 0 ? site.cartao.acrescimo : 35,
+    n: site && site.cartao && site.cartao.parcelas >= 1 ? site.cartao.parcelas : 12,
+  };
+  const noCartao = (v) => Math.round(v * (1 + CARTAO.pct / 100) * 100) / 100;
+  const parcela = (v) => Math.round((noCartao(v) / CARTAO.n) * 100) / 100;
+  const cartaoResumo = (v) => `${fmt(noCartao(v))}${CARTAO.n > 1 ? ` em até ${CARTAO.n}x de ${fmt(parcela(v))}` : ""}`;
+  const cartaoTxt = (v, curto) =>
+    CARTAO.n > 1
+      ? curto ? `ou ${CARTAO.n}x de ${fmt(parcela(v))} no cartão` : `ou ${fmt(noCartao(v))} no cartão em até ${CARTAO.n}x de ${fmt(parcela(v))}`
+      : `ou ${fmt(noCartao(v))} no cartão`;
   const catName = (id) => (CATS.find((c) => c.id === id) || {}).nome || "";
   const byId = (id) => PRODUTOS.find((p) => p.id === id);
   const foto = (p) => p.imagens[0] || fallback(p.nome);
@@ -277,28 +291,16 @@
       ["💬", "Atendimento pelo WhatsApp", "Tire dúvidas sobre qualquer produto"],
       ["🛒", "Pedido em poucos cliques", "Monte o carrinho e envie pelo WhatsApp"],
     ];
-    if (COTACAO) perks.push(["💱", "Cotação do dia", "Preços em US$ e em R$"]);
+    if (PRODUTOS.some((p) => p.preco != null)) perks.push(["💳", CARTAO.n > 1 ? `Pix ou cartão em até ${CARTAO.n}x` : "Pix ou cartão", "Pague como preferir"]);
     if (temEstoque) perks.push(["📦", "Estoque atualizado", "Disponibilidade de cada produto"]);
     $("#perks").innerHTML = perks.map(([i, b, s]) => `<div class="perk"><span aria-hidden="true">${i}</span><div><b>${b}</b><small>${s}</small></div></div>`).join("");
     $("#perks").style.setProperty("--cols", perks.length);
   }
 
-  if (COTACAO) {
-    const c = COTACAO, partes = [];
-    if (c.pix) partes.push(`Pix: US$ 1 = ${money(c.pix.rate, "BRL")}`);
-    if (c.efetivo) partes.push(`Dinheiro: US$ 1 = ${money(c.efetivo.rate, "BRL")}`);
-    const quando = (c.pix || c.efetivo).date;
-    $("#rates").innerHTML = `💱 Cotação ${quando ? "de " + esc(new Date(quando + (quando.length === 10 ? "T12:00" : "")).toLocaleDateString("pt-BR")) : "do dia"} · ${partes.map(esc).join(" · ")}`;
-    $("#rates").hidden = false;
-  }
-
-  // Faixa superior: só informações reais (cotação do Catálogo Pro e atendimento pelo WhatsApp)
+  // Faixa superior: aviso do painel, formas de pagamento e atendimento pelo WhatsApp (a cotação do dólar é interna)
   {
     const itens = [`<a href="${waLink(hello)}" target="_blank" rel="noopener">Atendimento pelo WhatsApp</a>`];
-    if (COTACAO) {
-      const c = COTACAO.pix || COTACAO.efetivo;
-      itens.unshift(`<span>Cotação ${COTACAO.pix ? "Pix" : "em dinheiro"}: <b>US$ 1 = ${esc(money(c.rate, "BRL"))}</b></span>`);
-    }
+    if (PRODUTOS.some((p) => p.preco != null)) itens.unshift(`<span>Pix ou cartão${CARTAO.n > 1 ? ` em até <b>${CARTAO.n}x</b>` : ""}</span>`);
     // Aviso definido no painel (aba Banner)
     const fx = banner && banner.faixa;
     if (fx && fx.texto) {
@@ -521,15 +523,11 @@
   $("#closeFilters").addEventListener("click", closeAll);
   $("#applyFilters").addEventListener("click", () => { closeAll(); $("#catalogo").scrollIntoView(); });
 
-  function priceHTML(p) {
+  // Preço para o cliente: Pix em destaque e cartão embaixo (curto nos cards, completo na página do produto)
+  function priceHTML(p, completo) {
     if (p.preco == null) return `<div class="price"><b>Sob consulta</b></div>`;
-    let h = `<div class="price"><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}${COTACAO && COTACAO.principal === "pix" ? "<small>no Pix</small>" : ""}</div>`;
-    if (p.usd != null && COTACAO) {
-      const extra = [money(p.usd, "USD")];
-      if (COTACAO.principal === "pix" && COTACAO.efetivo) extra.push(`${money(Math.round(p.usd * COTACAO.efetivo.rate * 100) / 100, "BRL")} em dinheiro`);
-      h += `<div class="price-alt">${extra.map(esc).join(" · ")}</div>`;
-    }
-    return h;
+    return `<div class="price"><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}<small>no Pix</small></div>` +
+      `<div class="price-alt">${esc(cartaoTxt(p.preco, !completo))}</div>`;
   }
 
   const off = (p) => (p.preco && p.precoAntigo ? Math.round((1 - p.preco / p.precoAntigo) * 100) : 0);
@@ -755,7 +753,7 @@
           </div>
           <h1 class="pdp__title">${esc(p.nome)}</h1>
           ${dispHTML(p)}
-          <div class="pdp__price">${priceHTML(p)}</div>
+          <div class="pdp__price">${priceHTML(p, true)}</div>
           ${p.variacoes && p.variacoes.length ? `<div class="pdp__block"><span class="label">Opção</span><div class="opts">${p.variacoes.map((o, i) => `<button class="opt${i ? "" : " active"}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>` : ""}
           ${out ? "" : `<div class="pdp__block"><span class="label">Quantidade</span>
             <div class="qty"><button data-q="-1" aria-label="Diminuir">−</button><span id="pQty" aria-live="polite">1</span><button data-q="1" aria-label="Aumentar">+</button></div></div>`}
@@ -763,7 +761,7 @@
             ${out ? "" : `<button class="btn btn--primary btn--block" id="pAdd">Adicionar ao carrinho</button>`}
             <a class="btn btn--whats btn--block" id="pBuy" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-whats"/></svg>${out ? "Avise-me quando chegar" : "Comprar agora no WhatsApp"}</a>
           </div>
-          <p class="pdp__note">${COTACAO ? "Preços calculados pela cotação do dia. " : ""}Pagamento e entrega são combinados pelo WhatsApp.</p>
+          <p class="pdp__note">Pagamento e entrega são combinados pelo WhatsApp.</p>
         </div>
       </div>
       <div class="pdp__extra">
@@ -781,7 +779,7 @@
       $("#pBuy").href = waLink(
         out
           ? `Olá! O produto *${p.nome}*${skuTxt(p)} vai voltar ao estoque?`
-          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? ` — ${fmt(p.preco * q)}` : ""}\n\nPodemos combinar pagamento e entrega?`
+          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? ` — ${fmt(p.preco * q)} no Pix (cartão: ${cartaoResumo(p.preco * q)})` : ""}\n\nPodemos combinar pagamento e entrega?`
       );
     };
     updBuy();
@@ -817,11 +815,7 @@
   // Informações complementares: só fatos do sistema (cotação, data do catálogo, fluxo do pedido)
   function infoCompra(p) {
     const itens = [["💬", "Pedido pelo WhatsApp: adicione ao carrinho ou use “Comprar agora” e a mensagem chega pronta para a loja."]];
-    if (COTACAO && p.usd != null) {
-      const c = COTACAO[COTACAO.principal];
-      const quando = c.date ? ` de ${esc(new Date(c.date + (c.date.length === 10 ? "T12:00" : "")).toLocaleDateString("pt-BR"))}` : " do dia";
-      itens.push(["💱", `Preço em R$ calculado pela cotação ${COTACAO.principal === "pix" ? "Pix" : "em dinheiro"}${quando} (US$ 1 = ${esc(money(c.rate, "BRL"))}).`]);
-    }
+    if (p.preco != null) itens.push(["💳", `Pix: ${esc(fmt(p.preco))}. Cartão: ${esc(cartaoResumo(p.preco))}.`]);
     if (p.estoque != null && loja && loja.generated && !isNaN(Date.parse(loja.generated))) {
       itens.push(["📦", `Estoque conforme a atualização do catálogo em ${new Date(loja.generated).toLocaleDateString("pt-BR")}.`]);
     }
@@ -980,7 +974,7 @@
       })
       .join("");
     $("#cartTotal").textContent = fmt(total()) + (temConsulta() ? " +" : "");
-    $("#cartNote").textContent = COTACAO && COTACAO.principal === "pix" ? "Valores no Pix. Outras formas de pagamento: combine no WhatsApp." : "";
+    $("#cartNote").textContent = total() > 0 ? `Valores no Pix. No cartão: ${cartaoResumo(total())}.` : "";
   }
 
   $("#cartItems").addEventListener("click", (e) => {
@@ -1013,7 +1007,8 @@
       "",
       ...lines,
       "",
-      `*Total estimado:* ${fmt(total())}${COTACAO && COTACAO.principal === "pix" ? " (Pix)" : ""}${temConsulta() ? " + itens sob consulta" : ""}`,
+      `*Total no Pix:* ${fmt(total())}${temConsulta() ? " + itens sob consulta" : ""}`,
+      total() > 0 ? `*No cartão:* ${cartaoResumo(total())}` : "",
       "",
       cli.nome ? `*Nome:* ${cli.nome}` : "",
       cli.cidade ? `*Cidade:* ${cli.cidade}` : "",

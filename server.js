@@ -628,8 +628,15 @@ function salvarSite(d) {
     const n = v === "" || v == null ? null : Number(v);
     if (n == null) continue;
     if (!(n > 0 && n < 100)) throw new Error("Cotação inválida.");
-    site.cotacao[k] = { rate: Math.round(n * 10000) / 10000, date: new Date().toISOString().slice(0, 10) };
+    // Data no horário de Brasília (o lembrete diário do painel compara com o dia de hoje)
+    site.cotacao[k] = { rate: Math.round(n * 10000) / 10000, date: new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) };
   }
+  // Cartão: preço do Pix + acréscimo (%), em até N parcelas
+  const c = d.cartao || {};
+  const acrescimo = Number(c.acrescimo), parcelas = parseInt(c.parcelas, 10);
+  if (!(acrescimo >= 0 && acrescimo <= 200)) throw new Error("Acréscimo do cartão inválido (0 a 200%).");
+  if (!(parcelas >= 1 && parcelas <= 24)) throw new Error("Parcelas inválidas (1 a 24).");
+  site.cartao = { acrescimo: Math.round(acrescimo * 100) / 100, parcelas };
   const atual = lerJSON(F.site, null) || {};
   if (atual.ocultar) site.ocultar = atual.ocultar; // regras de exibição são salvas pela aba Pendências
   gravarJSON(F.site, site);
