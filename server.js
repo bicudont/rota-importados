@@ -203,7 +203,7 @@ function montarLoja() {
   }
   out.rates = rates;
   // O site recebe só o que deve aparecer (regras de exibição do painel); o backup usa a lista completa
-  const pub = { ...out, products: out.products.filter((p) => !foraDoSite(p, site.ocultar)) };
+  const pub = { ...out, products: out.products.filter((p) => p.active !== false && !foraDoSite(p, site.ocultar)) };
   const body = Buffer.from(JSON.stringify(pub));
   const etag = `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
   return (lojaCache = { completo: out, body, etag });

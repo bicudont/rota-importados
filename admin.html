@@ -163,6 +163,7 @@
     .botao { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
     @media (max-width: 760px) { .imgs, .botoes, .lnk { grid-template-columns: 1fr; } }
 
+    .exib-acts { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
     .cot-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
     /* Pendências */
@@ -352,22 +353,34 @@
       <!-- Pendências -->
       <section data-sec="pendencias" hidden>
         <div class="head"><h1>Pendências</h1></div>
-        <p class="muted small" style="margin:-8px 0 14px">Produtos ativos que estão sem foto ou sem descrição. Clique em um produto para editar e adicionar fotos; use a IA para escrever as descrições que faltam.</p>
+        <p class="muted small" style="margin:-8px 0 14px">Produtos sem foto ou sem descrição. Escolha o que aparece para quem visita o site: por regra (todos os sem foto, por exemplo) ou produto por produto, na lista abaixo. Clique em um produto para editar e adicionar fotos; use a IA para escrever as descrições que faltam.</p>
         <div class="card" style="margin-bottom:16px">
           <h2>Exibição no site</h2>
-          <p class="muted small" style="margin:4px 0 12px">Desmarque para tirar esses produtos do site. Nada é apagado: ao marcar de novo, eles voltam. Vale na hora.</p>
+          <p class="muted small" style="margin:4px 0 12px">Marque o que deve aparecer para os clientes e clique em <b>Salvar exibição</b>. Nada é apagado: ao marcar de novo e salvar, os produtos voltam.</p>
           <div class="stack" style="gap:10px">
             <label class="switch"><input type="checkbox" data-exib="semFoto" /> Mostrar produtos sem foto <span class="muted small" data-exib-n="semFoto"></span></label>
             <label class="switch"><input type="checkbox" data-exib="semDescricao" /> Mostrar produtos sem descrição <span class="muted small" data-exib-n="semDescricao"></span></label>
             <label class="switch"><input type="checkbox" data-exib="semEstoque" /> Mostrar produtos sem estoque (esgotados) <span class="muted small" data-exib-n="semEstoque"></span></label>
           </div>
           <p class="small" id="exibResumo" style="margin-top:12px"></p>
+          <div class="exib-acts">
+            <b class="small" id="exibSujo" style="color:var(--warn)" hidden>• Alterações não salvas</b>
+            <button class="btn btn--sm" id="exibDesfazer" hidden>Desfazer</button>
+            <button class="btn btn--primary" id="exibSalvar" disabled>Salvar exibição</button>
+          </div>
         </div>
         <div class="chips" id="pdChips"></div>
         <div class="toolbar">
           <input class="field search" id="pdBusca" type="search" placeholder="Buscar por nome, SKU ou marca" aria-label="Buscar pendências" />
           <select class="field" id="pdSetor" aria-label="Departamento"></select>
           <div></div>
+        </div>
+        <div class="bulk" id="pdSelBar">
+          <label class="switch"><input type="checkbox" id="pdTodos" /> Selecionar todos desta página</label>
+          <b class="small" id="pdSelN"></b>
+          <button class="btn btn--sm" id="pdOcultar" disabled>🚫 Ocultar do site</button>
+          <button class="btn btn--sm" id="pdMostrar" disabled>👁️ Mostrar no site</button>
+          <button class="btn btn--sm" id="pdLimpar" disabled>Limpar seleção</button>
         </div>
         <div class="bulk" id="pdIA">
           <span>✨ <b>IA de descrições</b> <span class="muted small" id="pdIAinfo"></span></span>
@@ -1408,30 +1421,40 @@
     }
     const noSite = (p) => p.active !== false && !motivoFora(p);
     const REGRAS = { semFoto, semDescricao: semDesc, semEstoque: (p) => p.stock === 0 };
+    // Exibição no site: as caixas mostram uma prévia; só valem para o site depois de "Salvar exibição"
+    let exibSujo = false;
+    const ocultarDasCaixas = () => { const o = {}; $$("[data-exib]").forEach((i) => (o[i.dataset.exib] = !i.checked)); return o; };
+    const foraCom = (p, o) => (o.semFoto && semFoto(p)) || (o.semDescricao && semDesc(p)) || (o.semEstoque && p.stock === 0);
     function renderExibicao() {
-      const o = D.site.ocultar || {};
+      if (!exibSujo) { const o = D.site.ocultar || {}; $$("[data-exib]").forEach((i) => (i.checked = !o[i.dataset.exib])); }
       const ativos = PROD.filter((p) => p.active !== false);
-      $$("[data-exib]").forEach((i) => (i.checked = !o[i.dataset.exib]));
       $$("[data-exib-n]").forEach((s) => (s.textContent = `(${ativos.filter(REGRAS[s.dataset.exibN]).length.toLocaleString("pt-BR")})`));
-      const fora = ativos.filter((p) => motivoFora(p)).length;
+      const o = ocultarDasCaixas();
+      const fora = ativos.filter((p) => foraCom(p, o)).length;
+      const prefixo = exibSujo ? "Depois de salvar: " : "";
       $("#exibResumo").innerHTML = fora
-        ? `<b>${fora.toLocaleString("pt-BR")}</b> produto(s) fora do site por essas regras · <b>${(ativos.length - fora).toLocaleString("pt-BR")}</b> aparecem no site.`
-        : `Todos os ${ativos.length.toLocaleString("pt-BR")} produtos ativos aparecem no site.`;
+        ? `${prefixo}<b>${(ativos.length - fora).toLocaleString("pt-BR")}</b> produto(s) aparecem no site · <b>${fora.toLocaleString("pt-BR")}</b> ficam fora por essas regras.`
+        : `${prefixo}todos os ${ativos.length.toLocaleString("pt-BR")} produtos ativos aparecem no site.`;
+      $("#exibSujo").hidden = $("#exibDesfazer").hidden = !exibSujo;
+      $("#exibSalvar").disabled = !exibSujo;
     }
-    document.addEventListener("change", async (e) => {
+    document.addEventListener("change", (e) => {
       if (!e.target.matches("[data-exib]")) return;
-      const caixas = $$("[data-exib]");
-      const ocultar = {};
-      caixas.forEach((i) => (ocultar[i.dataset.exib] = !i.checked));
-      caixas.forEach((i) => (i.disabled = true));
-      try {
-        const r = await api("PUT", "exibicao", ocultar);
-        D.site = r.site;
-        renderGeral(); renderProdutos();
-        toast(e.target.checked ? "Esses produtos voltaram ao site" : "Esses produtos saíram do site");
-      } catch (err) { toast(err.message, true); renderExibicao(); }
-      caixas.forEach((i) => (i.disabled = false));
+      exibSujo = true;
+      renderExibicao();
     });
+    $("#exibDesfazer").addEventListener("click", () => { exibSujo = false; renderExibicao(); });
+    $("#exibSalvar").addEventListener("click", async () => {
+      $("#exibSalvar").disabled = true;
+      try {
+        const r = await api("PUT", "exibicao", ocultarDasCaixas());
+        D.site = r.site;
+        exibSujo = false;
+        renderGeral(); renderProdutos();
+        toast("Exibição salva. O site já mostra assim.");
+      } catch (err) { toast(err.message, true); $("#exibSalvar").disabled = false; }
+    });
+    window.addEventListener("beforeunload", (e) => { if (exibSujo) { e.preventDefault(); e.returnValue = ""; } });
     const PD = {
       desc: ["Sem descrição", semDesc],
       foto: ["Sem foto", semFoto],
@@ -1445,13 +1468,14 @@
     function pdFiltrados() {
       const q = norm($("#pdBusca").value).trim().split(/\s+/).filter(Boolean);
       const setor = $("#pdSetor").value;
-      return PROD.filter((p) => p.active !== false && PD[pdTipo][1](p) && (!setor || (p.sector || "Outros") === setor) && q.every((t) => p._busca.includes(t)));
+      // Inclui os ocultos, para que possam ser mostrados de novo
+      return PROD.filter((p) => PD[pdTipo][1](p) && (!setor || (p.sector || "Outros") === setor) && q.every((t) => p._busca.includes(t)));
     }
     function renderPendencias() {
       if (!D) return;
       renderExibicao();
       const vis = PROD.filter((p) => p.active !== false);
-      $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${vis.filter(fn).length.toLocaleString("pt-BR")})</button>`).join("");
+      $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${PROD.filter(fn).length.toLocaleString("pt-BR")})</button>`).join("");
       const nPend = vis.filter(PD.qualquer[1]).length;
       $("#nPend").hidden = !nPend;
       $("#nPend").textContent = nPend > 999 ? "999+" : nPend;
@@ -1466,10 +1490,10 @@
         ? pagina.map((p) => {
             const sd = semDesc(p), sf = semFoto(p);
             return `<div class="row row--pd" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
-              <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)} para a IA"${sd ? "" : " disabled title=\"Já tem descrição\""}${pdSel.has(p.sku) ? " checked" : ""} />
+              <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)}"${pdSel.has(p.sku) ? " checked" : ""} />
               <img src="${sf ? SEMFOTO : fotoURL(p._fotos[0])}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
               <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
-              <div class="c-vis">${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
+              <div class="c-vis">${p.active === false ? '<span class="badge b-off">🚫 Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição">Fora do site: ${motivoFora(p)}</span>` : '<span class="badge b-new">No site</span>'}${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
             </div>`;
           }).join("")
         : `<div class="empty">${PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
@@ -1477,10 +1501,18 @@
       $("#pdPrev").disabled = pdPag === 0;
       $("#pdNext").disabled = pdPag >= total - 1;
 
+      // Seleção: ocultar/mostrar no site e IA
+      const naPagina = pagina.map((p) => p.sku);
+      $("#pdTodos").checked = naPagina.length > 0 && naPagina.every((s) => pdSel.has(s));
+      $("#pdTodos").disabled = !naPagina.length;
+      $("#pdSelN").textContent = pdSel.size ? `${pdSel.size} selecionado(s)` : "Nenhum selecionado";
+      ["#pdOcultar", "#pdMostrar", "#pdLimpar"].forEach((s) => ($(s).disabled = !pdSel.size));
+
       $("#pdSemIA").hidden = !!D.ia;
       const semDescPag = pagina.filter(semDesc).length;
-      $("#pdIAinfo").textContent = D.ia ? (pdSel.size ? `${pdSel.size} selecionado(s)` : "Selecione produtos sem descrição ou gere para a página inteira.") : "(desativada)";
-      $("#pdGerarSel").disabled = !D.ia || !pdSel.size;
+      const selSemDesc = selecionadosSemDesc().length;
+      $("#pdIAinfo").textContent = D.ia ? (selSemDesc ? `${selSemDesc} selecionado(s) sem descrição` : "Selecione produtos sem descrição ou gere para a página inteira.") : "(desativada)";
+      $("#pdGerarSel").disabled = !D.ia || !selSemDesc;
       $("#pdGerarPag").disabled = !D.ia || !semDescPag;
       $("#pdGerarPag").textContent = `Gerar para esta página (${semDescPag})`;
     }
@@ -1575,7 +1607,30 @@
       const row = e.target.closest("[data-sku]");
       if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirEditor(row.dataset.sku); }
     });
-    $("#pdGerarSel").addEventListener("click", () => gerarIA([...pdSel]));
+    function selecionadosSemDesc() { return [...pdSel].filter((s) => { const p = PROD.find((x) => x.sku === s); return p && semDesc(p); }); }
+    $("#pdGerarSel").addEventListener("click", () => gerarIA(selecionadosSemDesc()));
+    $("#pdTodos").addEventListener("change", (e) => {
+      const lista = pdFiltrados().slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
+      lista.forEach((p) => (e.target.checked ? pdSel.add(p.sku) : pdSel.delete(p.sku)));
+      renderPendencias();
+    });
+    $("#pdLimpar").addEventListener("click", () => { pdSel.clear(); renderPendencias(); });
+    // Ocultar/mostrar no site os produtos selecionados (salva na hora)
+    async function visibilidadeSelecionados(ativo) {
+      const skus = [...pdSel];
+      if (!skus.length) return;
+      if (!ativo && !confirm(`Ocultar ${skus.length} produto(s) do site? Eles continuam salvos e podem voltar com "Mostrar no site".`)) return;
+      ["#pdOcultar", "#pdMostrar"].forEach((s) => ($(s).disabled = true));
+      try {
+        const r = await api("PUT", "produtos", { skus, active: ativo });
+        D.ajustes = r.ajustes;
+        pdSel.clear();
+        montar(); renderProdutos(); renderGeral();
+        toast(ativo ? `${skus.length} produto(s) voltaram ao site` : `${skus.length} produto(s) ocultados do site`);
+      } catch (err) { toast(err.message, true); renderPendencias(); }
+    }
+    $("#pdOcultar").addEventListener("click", () => visibilidadeSelecionados(false));
+    $("#pdMostrar").addEventListener("click", () => visibilidadeSelecionados(true));
     $("#pdGerarPag").addEventListener("click", () => gerarIA(pdFiltrados().slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG).filter(semDesc).map((p) => p.sku)));
     $("#pdRevLista").addEventListener("input", (e) => {
       if (!e.target.matches("[data-rv-txt]")) return;
