@@ -264,6 +264,7 @@
       <!-- Visão geral -->
       <section data-sec="geral">
         <div class="head"><h1>Visão geral</h1><a class="btn" href="/" target="_blank" rel="noopener">Abrir o site ↗</a></div>
+        <div class="msg warn" id="dadosRisco" hidden style="margin-bottom:12px">⚠️ Os dados da loja (fotos, edições, pedidos e banners) estão dentro da pasta do app e podem ser apagados no próximo deploy. Defina a variável <code>DATA_DIR</code> na Hostinger apontando para uma pasta fora do app.</div>
         <div class="msg warn" id="semLoja" hidden>Ainda não há produtos do Catálogo Pro no site. Vá em <b>Importar</b> e envie o ZIP exportado.</div>
         <div class="stats" id="stats"></div>
         <div class="grid2">
@@ -725,6 +726,7 @@
         st(n.editados, "Editados no painel", "produtos:editado"),
       ].join("");
       $("#semLoja").hidden = !!D.loja;
+      $("#dadosRisco").hidden = !D.dados || D.dados.segura;
       const pix = cot("pix"), efe = cot("efetivo");
       const linha = (a, b) => `<div><span class="muted">${a}</span><b>${b}</b></div>`;
       const cotTxt = (c) => (c ? `${brl(c.rate)}${c.date ? " · " + dataBR(c.date) : ""}${c.manual ? " (manual)" : ""}` : "—");
@@ -735,6 +737,7 @@
         linha("Marcas", new Set(PROD.map((p) => p.brand).filter(Boolean)).size),
         linha("Cotação Pix", cotTxt(pix)),
         linha("Cotação em dinheiro", cotTxt(efe)),
+        D.dados ? `<div><span class="muted">Dados guardados</span><b title="${esc(D.dados.pasta)}">${D.dados.segura ? "✓ fora da pasta do app" : "⚠️ dentro da pasta do app"}</b></div>` : "",
       ].join("");
       $("#nNovos").hidden = !n.novos;
       $("#nNovos").textContent = n.novos;

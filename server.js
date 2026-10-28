@@ -10,7 +10,7 @@ const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
-const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, "data"));
+const DATA_DIR = escolherPastaDados();
 const SENHA = process.env.ADMIN_SENHA || "";
 const MAX_UPLOAD = 80 * 1024 * 1024;
 const MAX_FOTO = 8 * 1024 * 1024;
@@ -38,6 +38,35 @@ const F = {
 };
 
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
+
+// Onde ficam catálogo, fotos, edições, pedidos e banners.
+// Um deploy recria a pasta do app e apagaria uma pasta data/ dentro dela; por isso, sem DATA_DIR,
+// os dados vão para uma pasta ao lado do app ("rota-importados-dados"). Na primeira vez, copia o que
+// existir em data/. Se não for possível escrever lá, continua usando data/ (como antes).
+function escolherPastaDados() {
+  if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR);
+  const antiga = path.join(ROOT, "data");
+  const nova = path.resolve(ROOT, "..", "rota-importados-dados");
+  try {
+    fs.mkdirSync(nova, { recursive: true });
+    const teste = path.join(nova, ".teste-escrita");
+    fs.writeFileSync(teste, "ok");
+    fs.unlinkSync(teste);
+  } catch (e) {
+    console.warn(`Não foi possível usar ${nova} (${e.code || e.message}); os dados ficam em ${antiga} e podem ser apagados em um novo deploy.`);
+    return antiga;
+  }
+  try {
+    const vazia = !fs.readdirSync(nova).length;
+    if (vazia && fs.existsSync(antiga) && fs.readdirSync(antiga).length) {
+      fs.cpSync(antiga, nova, { recursive: true });
+      console.log(`Dados copiados de ${antiga} para ${nova}.`);
+    }
+  } catch (e) {
+    console.warn(`Não foi possível copiar os dados antigos: ${e.message}`);
+  }
+  return nova;
+}
 
 http
   .createServer((req, res) => {
@@ -342,6 +371,7 @@ function dadosPainel(res) {
     pedidos: lerJSON(F.pedidos, []),
     banner: lerJSON(F.banner, null) || {},
     ia: !!process.env.ANTHROPIC_API_KEY,
+    dados: { pasta: DATA_DIR, segura: !inside(ROOT, DATA_DIR) }, // segura = fora da pasta do app (sobrevive a deploys)
   });
 }
 
