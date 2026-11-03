@@ -906,7 +906,9 @@ function aplicarZip(buf) {
 }
 
 // "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
-// Mesmo SKU de um extra já existente: atualiza. SKU que já existe no Catálogo Pro: ignora.
+// Mesmo SKU de um extra já existente: atualiza só os campos enviados (ex.: só o preço ou só a foto).
+// SKU que já existe no Catálogo Pro: ignora.
+const CAMPOS_EXTRAS = ["name", "brand", "sector", "price", "stock", "active", "tags", "description", "photos"];
 function adicionarExtras(lista) {
   const aj = lerAjustes();
   const loja = lerJSON(F.loja, null);
@@ -919,11 +921,14 @@ function adicionarExtras(lista) {
       const sku = texto(item.sku, 60);
       if (!/^[A-Za-z0-9_-]{1,60}$/.test(sku)) throw new Error("SKU inválido");
       if (doCatalogo.has(sku)) { r.ignorados++; continue; }
-      const campos = limparCampos({ name: item.name, brand: item.brand, sector: item.sector, price: item.price, stock: item.stock, active: item.active !== false, tags: item.tags || "", description: item.description || "", photos: item.photos || [] });
+      const enviados = {};
+      for (const k of CAMPOS_EXTRAS) if (k in item) enviados[k] = item[k];
+      const campos = limparCampos(enviados);
       if (indice.has(sku)) { const i = indice.get(sku); aj.novos[i] = { ...aj.novos[i], ...campos, updated: agora }; r.atualizados++; }
       else {
+        if (!campos.name) { r.ignorados++; continue; } // atualização de um produto que não existe aqui
         indice.set(sku, aj.novos.length);
-        aj.novos.push({ sku, tipo: "", notes: "", volume: null, ...campos, added: agora.slice(0, 10), updated: agora });
+        aj.novos.push({ sku, tipo: "", notes: "", volume: null, brand: "", sector: "", price: null, stock: null, tags: "", description: "", photos: [], active: true, ...campos, added: agora.slice(0, 10), updated: agora });
         r.novos++;
       }
     } catch { r.erros++; }
