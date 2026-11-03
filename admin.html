@@ -315,11 +315,13 @@
             <option value="editado">Editados no painel</option>
             <option value="novo">Criados no painel</option>
           </select>
-          <button class="btn" id="pSelPag">Selecionar esta página</button>
-          <button class="btn" id="pSelTodos">Selecionar todos</button>
+          <button class="btn" data-selpag>Selecionar esta página</button>
+          <button class="btn" data-seltodos>Selecionar todos</button>
         </div>
         <div class="bulk" id="bulk" hidden>
           <b id="bulkN"></b>
+          <button class="btn btn--sm" data-selpag>Selecionar esta página</button>
+          <button class="btn btn--sm" data-seltodos>Selecionar todos</button>
           <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
           <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
           <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
@@ -1232,7 +1234,7 @@
       pag = Math.min(pag, total - 1);
       const pagina = filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
       $("#pLista").innerHTML = pagina.length
-        ? `<div class="row row--head"><span></span><span></span><span>Produto</span><span class="num">Preço</span><span class="num">Estoque</span><span>Site</span></div>` +
+        ? `<div class="row row--head"><input type="checkbox" id="pSelCab" aria-label="Selecionar todos desta página" title="Selecionar todos desta página" /><span></span><span>Produto</span><span class="num">Preço</span><span class="num">Estoque</span><span>Site</span></div>` +
           pagina.map((p) => {
             const preco = p.price > 0 ? `${usd(p.price)}<div class="meta">${emReais(p.price)}</div>` : `<span class="muted small">Sob consulta</span>`;
             return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
@@ -1255,12 +1257,20 @@
       $("#bulkN").textContent = `${sel.size.toLocaleString("pt-BR")} selecionado(s)`;
       // "Selecionar todos" pega todos os produtos do filtro atual, de todas as páginas
       const n = filtrados.length.toLocaleString("pt-BR");
-      $("#pSelTodos").textContent = filtrados.length > POR_PAG ? `Selecionar todos (${n})` : "Selecionar todos";
-      $("#pSelTodos").disabled = !filtrados.length || filtrados.every((p) => sel.has(p.sku));
-      $("#pSelPag").hidden = filtrados.length <= POR_PAG;
+      const pagina = filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
+      const todos = !!filtrados.length && filtrados.every((p) => sel.has(p.sku));
+      const pagToda = !!pagina.length && pagina.every((p) => sel.has(p.sku));
+      $$("[data-seltodos]").forEach((b) => {
+        b.textContent = todos ? "Todos selecionados" : filtrados.length > POR_PAG ? `Selecionar todos (${n})` : "Selecionar todos";
+        b.disabled = !filtrados.length || todos;
+      });
+      $$("[data-selpag]").forEach((b) => { b.hidden = filtrados.length <= POR_PAG; b.disabled = pagToda; });
+      const cab = $("#pSelCab");
+      if (cab) { cab.checked = pagToda; cab.indeterminate = !pagToda && pagina.some((p) => sel.has(p.sku)); }
     }
-    $("#pSelTodos").addEventListener("click", () => { filtrados.forEach((p) => sel.add(p.sku)); renderProdutos(); });
-    $("#pSelPag").addEventListener("click", () => { filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG).forEach((p) => sel.add(p.sku)); renderProdutos(); });
+    const paginaAtual = () => filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
+    $$("[data-seltodos]").forEach((b) => b.addEventListener("click", () => { filtrados.forEach((p) => sel.add(p.sku)); renderProdutos(); }));
+    $$("[data-selpag]").forEach((b) => b.addEventListener("click", () => { paginaAtual().forEach((p) => sel.add(p.sku)); renderProdutos(); }));
     let tBusca;
     $("#pBusca").addEventListener("input", () => { clearTimeout(tBusca); tBusca = setTimeout(() => { pag = 0; renderProdutos(); }, 200); });
     $("#pSetor").addEventListener("change", () => { pag = 0; renderProdutos(); });
@@ -1268,6 +1278,7 @@
     $("#pPrev").addEventListener("click", () => { pag--; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
     $("#pNext").addEventListener("click", () => { pag++; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
     $("#pLista").addEventListener("click", (e) => {
+      if (e.target.id === "pSelCab") { paginaAtual().forEach((p) => (e.target.checked ? sel.add(p.sku) : sel.delete(p.sku))); return renderProdutos(); }
       const row = e.target.closest("[data-sku]");
       if (!row) return;
       if (e.target.matches("[data-sel]")) { e.target.checked ? sel.add(row.dataset.sku) : sel.delete(row.dataset.sku); return renderBulk(); }
