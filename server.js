@@ -199,7 +199,11 @@ function gravarJSON(file, obj) {
 
 const lerAjustes = () => {
   const a = lerJSON(F.ajustes, null) || {};
-  return { produtos: a.produtos && typeof a.produtos === "object" ? a.produtos : {}, novos: Array.isArray(a.novos) ? a.novos : [] };
+  return {
+    produtos: a.produtos && typeof a.produtos === "object" ? a.produtos : {},
+    novos: Array.isArray(a.novos) ? a.novos : [],
+    excluidos: Array.isArray(a.excluidos) ? a.excluidos : [], // SKUs do Catálogo Pro excluídos no painel (podem ser restaurados)
+  };
 };
 
 /* ---------- loja.json público = Catálogo Pro + ajustes do painel + cotação manual ---------- */
@@ -239,7 +243,8 @@ function montarLoja() {
   }
   out.rates = rates;
   // O site recebe só o que deve aparecer (regras de exibição do painel); o backup usa a lista completa
-  const pub = { ...out, products: out.products.filter((p) => p.active !== false && !foraDoSite(p, site.ocultar)) };
+  const excluidos = new Set(aj.excluidos);
+  const pub = { ...out, products: out.products.filter((p) => p.active !== false && !excluidos.has(p.sku) && !foraDoSite(p, site.ocultar)) };
   const body = Buffer.from(JSON.stringify(pub));
   const etag = `W/"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
   return (lojaCache = { completo: out, body, etag });
@@ -374,6 +379,8 @@ function adminApi(req, res, rota) {
   if (r === "POST produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, criarProduto(d)));
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
+  if (r === "POST excluir") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, excluirProdutos(d)));
+  if (r === "POST restaurar") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, restaurarProdutos(d)));
   if (r === "POST foto") return enviarFoto(req, res);
   if (r === "PUT nao-duplicados") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, marcarNaoDuplicado(d)));
   if (r === "PUT banner")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
@@ -640,6 +647,36 @@ function removerAjuste(skuIn) {
   const aj = lerAjustes();
   if (ehNovo(aj, sku)) aj.novos = aj.novos.filter((p) => p.sku !== sku);
   else delete aj.produtos[sku];
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj };
+}
+
+// Excluir: produto criado no painel ou extra é apagado de vez; produto do Catálogo Pro vai para "Excluídos"
+// (some do site e do painel, continua excluído mesmo se o Catálogo Pro reenviar, e pode ser restaurado)
+const listaSkus = (d) => {
+  const skus = (Array.isArray(d.skus) ? d.skus : []).map((s) => texto(s, 120)).filter(Boolean).slice(0, 10000);
+  if (!skus.length) throw new Error("Nenhum produto selecionado.");
+  return new Set(skus);
+};
+function excluirProdutos(d) {
+  const skus = listaSkus(d);
+  const aj = lerAjustes();
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  const exc = new Set(aj.excluidos);
+  let apagados = 0, paraExcluidos = 0;
+  for (const s of skus) {
+    if (novos.has(s)) apagados++;
+    else if (!exc.has(s)) { exc.add(s); paraExcluidos++; }
+  }
+  aj.novos = aj.novos.filter((p) => !skus.has(p.sku));
+  aj.excluidos = [...exc];
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj, apagados, paraExcluidos };
+}
+function restaurarProdutos(d) {
+  const skus = listaSkus(d);
+  const aj = lerAjustes();
+  aj.excluidos = aj.excluidos.filter((s) => !skus.has(s));
   gravarJSON(F.ajustes, aj);
   return { ok: true, ajustes: aj };
 }

@@ -382,6 +382,8 @@
           <b class="small" id="pdSelN"></b>
           <button class="btn btn--sm" id="pdOcultar" disabled>🚫 Ocultar do site</button>
           <button class="btn btn--sm" id="pdMostrar" disabled>👁️ Mostrar no site</button>
+          <button class="btn btn--sm btn--danger" id="pdExcluir" disabled>🗑️ Excluir</button>
+          <button class="btn btn--sm" id="pdRestaurar" hidden disabled>♻️ Restaurar</button>
           <button class="btn btn--sm" id="pdLimpar" disabled>Limpar seleção</button>
         </div>
         <div class="bulk" id="pdIA">
@@ -659,6 +661,7 @@
     /* ---------- Dados ---------- */
     let D = null; // { loja, importadoEm, ajustes, site, pedidos }
     let PROD = []; // produtos como aparecem no site (Catálogo Pro + ajustes)
+    let EXCLUIDOS = []; // produtos do Catálogo Pro excluídos no painel (podem ser restaurados)
     const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 
     // Mesma regra do servidor: a edição vale, a menos que o Catálogo Pro tenha mudado o campo depois
@@ -675,9 +678,12 @@
     function montar() {
       const aj = D.ajustes;
       const novos = new Set(aj.novos.map((p) => p.sku)); // mesma regra do servidor: vale a versão do painel
-      PROD = (D.loja ? D.loja.products : []).filter((p) => !novos.has(p.sku)).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
+      const excluidos = new Set(aj.excluidos || []); // excluídos no painel: ficam fora de tudo, só na lista "Excluídos"
+      const todos = (D.loja ? D.loja.products : []).filter((p) => !novos.has(p.sku)).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
         .concat(aj.novos.map((p) => ({ ...p, _novo: true, _editados: [] })));
-      PROD.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand].join(" ")); });
+      todos.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand].join(" ")); });
+      PROD = todos.filter((p) => !excluidos.has(p.sku));
+      EXCLUIDOS = todos.filter((p) => excluidos.has(p.sku));
       const setores = [...new Set(PROD.map((p) => p.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       const marcas = [...new Set(PROD.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       const atual = $("#pSetor").value;
@@ -1464,6 +1470,7 @@
       ambos: ["Sem foto e sem descrição", (p) => semDesc(p) && semFoto(p)],
       qualquer: ["Todas as pendências", (p) => semDesc(p) || semFoto(p)],
       dup: ["Possíveis duplicados", (p) => duplicados().skus.has(p.sku)],
+      lixeira: ["🗑️ Excluídos", () => false], // lista à parte (EXCLUIDOS), ver renderPendencias
     };
 
     // Possíveis duplicados: mesmo nome (sem acentos, maiúsculas e pontuação) ou mesmo código com/sem zeros à esquerda.
@@ -1492,13 +1499,14 @@
       }).filter((g) => !ign.has(g.chave)).sort((a, b) => a.itens[0].name.localeCompare(b.itens[0].name));
       return (cacheDup = { prod: PROD, ign: D.naoDuplicados, grupos, skus: new Set(grupos.flatMap((g) => g.itens.map((p) => p.sku))) });
     }
-    function linhaPd(p, extra) {
+    function linhaPd(p, extra, lixo) {
       const sd = semDesc(p), sf = semFoto(p);
+      const del = lixo ? `<button class="btn btn--sm btn--danger" data-del title="Excluir este produto" aria-label="Excluir ${esc(p.name)}">🗑️</button>` : "";
       return `<div class="row row--pd" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
         <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)}"${pdSel.has(p.sku) ? " checked" : ""} />
         <img src="${sf ? SEMFOTO : fotoURL(p._fotos[0])}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
         <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}${extra || ""}</div></div>
-        <div class="c-vis">${p.active === false ? '<span class="badge b-off">🚫 Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição">Fora do site: ${motivoFora(p)}</span>` : '<span class="badge b-new">No site</span>'}${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
+        <div class="c-vis">${pdTipo === "lixeira" ? '<span class="badge b-out">🗑️ Excluído</span>' : p.active === false ? '<span class="badge b-off">🚫 Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição">Fora do site: ${motivoFora(p)}</span>` : '<span class="badge b-new">No site</span>'}${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}${del}</div>
       </div>`;
     }
     let pdTipo = "desc", pdPag = 0, paginaPd = [];
@@ -1515,7 +1523,7 @@
       if (!D) return;
       renderExibicao();
       const vis = PROD.filter((p) => p.active !== false);
-      $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${PROD.filter(fn).length.toLocaleString("pt-BR")})</button>`).join("");
+      $("#pdChips").innerHTML = Object.entries(PD).map(([k, [nome, fn]]) => `<button class="chip" data-pd="${k}" aria-pressed="${pdTipo === k}">${nome} (${(k === "lixeira" ? EXCLUIDOS.length : PROD.filter(fn).length).toLocaleString("pt-BR")})</button>`).join("");
       const nPend = vis.filter(PD.qualquer[1]).length;
       $("#nPend").hidden = !nPend;
       $("#nPend").textContent = nPend > 999 ? "999+" : nPend;
@@ -1533,17 +1541,18 @@
         pagina = pg.flatMap((g) => g.itens);
         const extra = (p) => ` · ${p.price > 0 ? usd(p.price) : "sem preço"} · estoque ${p.stock == null ? "—" : p.stock}${p._novo ? " · criado no painel" : ""}`;
         $("#pdLista").innerHTML = pg.length
-          ? pg.map((g) => `<div class="dup"><div class="dup__head"><div style="min-width:0"><b>${esc(g.motivo)}</b> <span class="muted small">${g.itens.length} produtos</span></div><button class="btn btn--sm" data-naodup="${esc(g.chave)}">Não são duplicados</button></div>${g.itens.map((p) => linhaPd(p, extra(p))).join("")}</div>`).join("")
+          ? pg.map((g) => `<div class="dup"><div class="dup__head"><div style="min-width:0"><b>${esc(g.motivo)}</b> <span class="muted small">${g.itens.length} produtos</span></div><button class="btn btn--sm" data-naodup="${esc(g.chave)}">Não são duplicados</button></div>${g.itens.map((p) => linhaPd(p, extra(p), true)).join("")}</div>`).join("")
           : `<div class="empty">Nenhum possível duplicado encontrado. 🎉</div>`;
         $("#pdInfo").textContent = grupos.length ? `Grupos ${pdPag * POR_G + 1}–${Math.min(grupos.length, (pdPag + 1) * POR_G)} de ${grupos.length} · selecione os que sobram e use “Ocultar do site”` : "";
         $("#pdPrev").disabled = pdPag === 0;
         $("#pdNext").disabled = pdPag >= total - 1;
       } else {
-        const lista = pdFiltrados();
+        const lista = pdTipo === "lixeira" ? excluidosFiltrados() : pdFiltrados();
         const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
         pdPag = Math.min(pdPag, total - 1);
         pagina = lista.slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
-        $("#pdLista").innerHTML = pagina.length ? pagina.map((p) => linhaPd(p)).join("") : `<div class="empty">${PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
+        $("#pdLista").innerHTML = pagina.length ? pagina.map((p) => linhaPd(p)).join("")
+          : `<div class="empty">${pdTipo === "lixeira" ? "Nenhum produto excluído." : PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
         $("#pdInfo").textContent = lista.length ? `${(pdPag * POR_PAG + 1).toLocaleString("pt-BR")}–${Math.min(lista.length, (pdPag + 1) * POR_PAG).toLocaleString("pt-BR")} de ${lista.length.toLocaleString("pt-BR")} produtos` : "";
         $("#pdPrev").disabled = pdPag === 0;
         $("#pdNext").disabled = pdPag >= total - 1;
@@ -1554,7 +1563,11 @@
       $("#pdTodos").checked = naPagina.length > 0 && naPagina.every((s) => pdSel.has(s));
       $("#pdTodos").disabled = !naPagina.length;
       $("#pdSelN").textContent = pdSel.size ? `${pdSel.size} selecionado(s)` : "Nenhum selecionado";
-      ["#pdOcultar", "#pdMostrar", "#pdLimpar"].forEach((s) => ($(s).disabled = !pdSel.size));
+      ["#pdOcultar", "#pdMostrar", "#pdLimpar", "#pdExcluir", "#pdRestaurar"].forEach((s) => ($(s).disabled = !pdSel.size));
+      // Na lista de excluídos só faz sentido restaurar
+      const naLixeira = pdTipo === "lixeira";
+      ["#pdOcultar", "#pdMostrar", "#pdExcluir"].forEach((s) => ($(s).hidden = naLixeira));
+      $("#pdRestaurar").hidden = !naLixeira;
 
       $("#pdSemIA").hidden = !!D.ia;
       const semDescPag = pagina.filter(semDesc).length;
@@ -1655,6 +1668,7 @@
       }
       const row = e.target.closest("[data-sku]");
       if (!row) return;
+      if (e.target.closest("[data-del]")) return excluirProdutos([row.dataset.sku]);
       if (e.target.matches("[data-pdsel]")) { e.target.checked ? pdSel.add(row.dataset.sku) : pdSel.delete(row.dataset.sku); return renderPendencias(); }
       abrirEditor(row.dataset.sku);
     });
@@ -1683,6 +1697,42 @@
         toast(ativo ? `${skus.length} produto(s) voltaram ao site` : `${skus.length} produto(s) ocultados do site`);
       } catch (err) { toast(err.message, true); renderPendencias(); }
     }
+    function excluidosFiltrados() {
+      const q = norm($("#pdBusca").value).trim().split(/\s+/).filter(Boolean), setor = $("#pdSetor").value;
+      return EXCLUIDOS.filter((p) => (!setor || (p.sector || "Outros") === setor) && q.every((t) => p._busca.includes(t)));
+    }
+    // Excluir: criados no painel/extras somem de vez; do Catálogo Pro vão para "Excluídos" (restauráveis)
+    async function excluirProdutos(skus) {
+      if (!skus.length) return;
+      const lista = skus.map((s) => PROD.find((p) => p.sku === s)).filter(Boolean);
+      const deVez = lista.filter((p) => p._novo).length, catalogo = lista.length - deVez;
+      const nome = lista.length === 1 ? `“${lista[0].name}”` : `${lista.length} produtos`;
+      const um = (n) => n === 1;
+      const avisos = [
+        deVez && (um(deVez) ? `${um(lista.length) ? "Ele foi criado" : "1 foi criado"} no painel ou importado como extra: será apagado de vez.` : `${deVez} foram criados no painel ou importados como extras: serão apagados de vez.`),
+        catalogo && (um(catalogo) ? `${um(lista.length) ? "Ele vem" : "1 vem"} do Catálogo Pro: sai do site e do painel e vai para “Excluídos”, de onde pode ser restaurado.` : `${catalogo} vêm do Catálogo Pro: saem do site e do painel e vão para “Excluídos”, de onde podem ser restaurados.`),
+      ].filter(Boolean);
+      if (!confirm(`Excluir ${nome}?\n\n${avisos.join("\n")}`)) return;
+      try {
+        const r = await api("POST", "excluir", { skus });
+        D.ajustes = r.ajustes;
+        skus.forEach((s) => pdSel.delete(s));
+        montar(); renderProdutos(); renderGeral();
+        toast(`${r.apagados + r.paraExcluidos} produto(s) excluído(s)`);
+      } catch (err) { toast(err.message, true); }
+    }
+    async function restaurarProdutos(skus) {
+      if (!skus.length) return;
+      try {
+        const r = await api("POST", "restaurar", { skus });
+        D.ajustes = r.ajustes;
+        skus.forEach((s) => pdSel.delete(s));
+        montar(); renderProdutos(); renderGeral();
+        toast(`${skus.length} produto(s) restaurado(s)`);
+      } catch (err) { toast(err.message, true); }
+    }
+    $("#pdExcluir").addEventListener("click", () => excluirProdutos([...pdSel]));
+    $("#pdRestaurar").addEventListener("click", () => restaurarProdutos([...pdSel]));
     $("#pdOcultar").addEventListener("click", () => visibilidadeSelecionados(false));
     $("#pdMostrar").addEventListener("click", () => visibilidadeSelecionados(true));
     $("#pdGerarPag").addEventListener("click", () => gerarIA(pdFiltrados().slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG).filter(semDesc).map((p) => p.sku)));
