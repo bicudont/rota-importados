@@ -820,7 +820,7 @@ function itensPedido(lista) {
   if (!Array.isArray(lista) || !lista.length) throw new Error("Pedido vazio.");
   const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
   const itens = lista.slice(0, 100).map((i) => ({
-    sku: texto(i.sku, 120),
+    sku: skuExtra(texto(i.sku, 120)),
     nome: texto(i.nome, 200),
     variacao: texto(i.v != null ? i.v : i.variacao, 120),
     q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
@@ -940,6 +940,38 @@ function aplicarZip(buf) {
   return { ok: true, produtos: loja ? loja.products.length : null, fotos, fotosFaltando: faltando, extras: resumoExtras };
 }
 
+// Prefixo dos códigos de produtos extras: o antigo "EPIC-" passa a ser sempre "ADM1-"
+const PREFIXO_ANTIGO = /^EPIC-/i, PREFIXO_NOVO = "ADM1-";
+const skuExtra = (sku) => String(sku).replace(PREFIXO_ANTIGO, PREFIXO_NOVO);
+
+// Troca, uma vez, os códigos EPIC- já gravados (produtos, pedidos e grupos "não são duplicados")
+function migrarSkusEpic() {
+  try {
+    const aj = lerAjustes();
+    let n = 0;
+    const existentes = new Set(aj.novos.map((p) => p.sku));
+    aj.novos.forEach((p) => {
+      if (!PREFIXO_ANTIGO.test(p.sku)) return;
+      const novo = skuExtra(p.sku);
+      if (existentes.has(novo)) return; // já existe um com o código novo: mantém os dois como estão
+      p.sku = novo; n++;
+    });
+    if (n) gravarJSON(F.ajustes, aj);
+    const pedidos = lerJSON(F.pedidos, null);
+    if (Array.isArray(pedidos) && pedidos.some((p) => (p.itens || []).some((i) => PREFIXO_ANTIGO.test(i.sku || "")))) {
+      pedidos.forEach((p) => (p.itens || []).forEach((i) => { if (i.sku) i.sku = skuExtra(i.sku); }));
+      gravarJSON(F.pedidos, pedidos);
+    }
+    const nd = lerJSON(F.naoDuplicados, null);
+    if (Array.isArray(nd) && nd.some((k) => /EPIC-/i.test(k))) {
+      gravarJSON(F.naoDuplicados, nd.map((k) => k.split("|").map(skuExtra).sort().join("|")));
+    }
+    if (n) console.log(`${n} código(s) EPIC- trocados por ${PREFIXO_NOVO}.`);
+  } catch (e) {
+    console.warn("Não foi possível trocar os códigos EPIC-: " + e.message);
+  }
+}
+
 // "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
 // Mesmo SKU de um extra já existente: atualiza só os campos enviados (ex.: só o preço ou só a foto).
 // SKU que já existe no Catálogo Pro: ignora.
@@ -953,7 +985,7 @@ function adicionarExtras(lista) {
   const r = { novos: 0, atualizados: 0, ignorados: 0, erros: 0 };
   for (const item of lista.slice(0, 20000)) {
     try {
-      const sku = texto(item.sku, 60);
+      const sku = skuExtra(texto(item.sku, 60));
       if (!/^[A-Za-z0-9_-]{1,60}$/.test(sku)) throw new Error("SKU inválido");
       if (doCatalogo.has(sku)) { r.ignorados++; continue; }
       const enviados = {};
@@ -1068,3 +1100,6 @@ function lerZip(buf) {
   }
   return out;
 }
+
+// Ajustes únicos nos dados gravados (rodam antes de o servidor atender o primeiro pedido)
+migrarSkusEpic();

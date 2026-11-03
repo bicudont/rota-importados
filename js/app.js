@@ -134,7 +134,8 @@
       ? curto ? `ou ${CARTAO.n}x de ${fmt(parcela(v))} no cartão` : `ou ${fmt(noCartao(v))} no cartão em até ${CARTAO.n}x de ${fmt(parcela(v))}`
       : `ou ${fmt(noCartao(v))} no cartão`;
   const catName = (id) => (CATS.find((c) => c.id === id) || {}).nome || "";
-  const byId = (id) => PRODUTOS.find((p) => p.id === id);
+  // Códigos "EPIC-" passaram a ser "ADM1-": links e carrinhos antigos continuam encontrando o produto
+  const byId = (id) => PRODUTOS.find((p) => p.id === id) || (/^EPIC-/i.test(id) ? PRODUTOS.find((p) => p.id === id.replace(/^EPIC-/i, "ADM1-")) : undefined);
   const foto = (p) => p.imagens[0] || fallback(p.nome);
   const esgotado = (p) => p.estoque === 0;
   const waLink = (text) => `https://wa.me/${S.whatsapp}${text ? "?text=" + encodeURIComponent(text) : ""}`;
@@ -938,7 +939,7 @@
   const KEY = "rota_cart_v1";
   let cart = [];
   try { cart = JSON.parse(localStorage.getItem(KEY)) || []; } catch { cart = []; }
-  cart = cart.filter((i) => byId(i.id) && !esgotado(byId(i.id)));
+  cart = cart.filter((i) => byId(i.id) && !esgotado(byId(i.id))).map((i) => ({ ...i, id: byId(i.id).id })); // atualiza códigos antigos (EPIC- → ADM1-)
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch {} };
 
   function addToCart(id, v, q) {
