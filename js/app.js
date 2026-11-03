@@ -102,6 +102,12 @@
       .map((s) => ({ id: slug(s.name), nome: s.name }))
       .concat(PRODUTOS.map((p) => ({ id: p.categoria, nome: p.setor })))
       .filter((c) => usados.has(c.id) && !vistos.has(c.id) && vistos.add(c.id));
+    // Ordem definida no painel (aba Loja); departamentos que não estão na lista vêm depois, na ordem original
+    const ordem = (site && Array.isArray(site.ordemSetores) ? site.ordemSetores : []).map(slug);
+    if (ordem.length) {
+      const pos = (c) => { const i = ordem.indexOf(c.id); return i < 0 ? ordem.length : i; };
+      CATS = CATS.map((c, i) => ({ c, i })).sort((a, b) => pos(a.c) - pos(b.c) || a.i - b.i).map((x) => x.c);
+    }
 
     const b = loja.brand || {};
     // O WhatsApp do painel/config.js tem prioridade; o do Catálogo Pro só é usado se ambos estiverem vazios

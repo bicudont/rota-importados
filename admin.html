@@ -165,6 +165,13 @@
     @media (max-width: 760px) { .imgs, .botoes, .lnk { grid-template-columns: 1fr; } }
 
     .exib-acts { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .ordem { list-style: none; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .ordem li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .ordem li:last-child { border-bottom: 0; }
+    .ordem li.mexeu { background: #fff8e8; }
+    .ordem .pos { font-weight: 700; color: var(--muted); text-align: right; }
+    .ordem .acts { display: flex; gap: 4px; }
+    .ordem .acts button { width: 34px; min-height: 32px; padding: 0; }
     .cot-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
     /* Pendências */
@@ -510,6 +517,19 @@
           </div>
           <div><button class="btn btn--primary" id="lojaSalvar">Salvar dados da loja</button></div>
         </form>
+
+        <div class="card" style="margin-top:16px">
+          <h2>Ordem dos departamentos</h2>
+          <p class="muted small" style="margin:4px 0 12px">Vale para o site (menu de departamentos, barra de navegação, seção “Departamentos” e vitrines da página inicial, filtros do catálogo) e para o catálogo em PDF. Use as setas e clique em <b>Salvar ordem</b>.</p>
+          <ol class="ordem" id="ordemLista"></ol>
+          <div class="exib-acts">
+            <b class="small" id="ordemSujo" style="color:var(--warn)" hidden>• Alterações não salvas</b>
+            <button class="btn btn--sm" id="ordemAlfa">Ordem alfabética</button>
+            <button class="btn btn--sm" id="ordemQtd">Mais produtos primeiro</button>
+            <button class="btn btn--sm" id="ordemDesfazer" hidden>Desfazer</button>
+            <button class="btn btn--primary" id="ordemSalvar" disabled>Salvar ordem</button>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -1947,9 +1967,9 @@
       const esg = p.stock === 0, temFoto = p._fotos.length > 0;
       return (esg ? $("#eSemEst").checked : $("#eComEst").checked) && (temFoto ? $("#eComFoto").checked : $("#eSemFoto").checked);
     }
-    // Mesma ordem de departamentos do Catálogo Pro; os demais em ordem alfabética
+    // Ordem definida na aba Loja; depois a do Catálogo Pro; os demais em ordem alfabética
     function ordemSetores(lista) {
-      const ordem = ((D.loja && D.loja.sectors) || []).map((s) => s.name);
+      const ordem = [...(D.site.ordemSetores || []), ...((D.loja && D.loja.sectors) || []).map((s) => s.name)];
       const pos = (s) => { const i = ordem.indexOf(s); return i < 0 ? 1e4 : i; };
       return [...new Set(lista)].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
     }
@@ -2111,8 +2131,58 @@
       toast(`Planilha com ${lista.length.toLocaleString("pt-BR")} produtos baixada`);
     });
 
+    /* ---------- Ordem dos departamentos (site e catálogo PDF) ---------- */
+    let ordemEd = null; // cópia em edição (null = mostra a salva)
+    const setoresUsados = () => [...new Set(PROD.map((p) => p.sector || "Outros"))];
+    function renderOrdem() {
+      if (!ordemEd) ordemEd = ordemSetores(setoresUsados());
+      const salva = ordemSetores(setoresUsados());
+      const qtd = (s) => PROD.filter((p) => noSite(p) && (p.sector || "Outros") === s).length;
+      $("#ordemLista").innerHTML = ordemEd.map((s, i) => `<li data-i="${i}"${salva[i] !== s ? ' class="mexeu"' : ""}>
+          <span class="pos">${i + 1}</span>
+          <span style="min-width:0"><b>${esc(s)}</b> <span class="muted small">${qtd(s).toLocaleString("pt-BR")} no site</span></span>
+          <span class="acts">
+            <button class="btn btn--sm" data-ord="topo" aria-label="Levar ${esc(s)} para o topo"${i ? "" : " disabled"}>⤒</button>
+            <button class="btn btn--sm" data-ord="-1" aria-label="Subir ${esc(s)}"${i ? "" : " disabled"}>↑</button>
+            <button class="btn btn--sm" data-ord="1" aria-label="Descer ${esc(s)}"${i < ordemEd.length - 1 ? "" : " disabled"}>↓</button>
+          </span><span></span>
+        </li>`).join("");
+      const sujo = ordemEd.some((s, i) => salva[i] !== s);
+      $("#ordemSujo").hidden = $("#ordemDesfazer").hidden = !sujo;
+      $("#ordemSalvar").disabled = !sujo;
+    }
+    $("#ordemLista").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-ord]");
+      if (!b) return;
+      const i = Number(b.closest("[data-i]").dataset.i);
+      const [s] = ordemEd.splice(i, 1);
+      const j = b.dataset.ord === "topo" ? 0 : i + Number(b.dataset.ord);
+      ordemEd.splice(j, 0, s);
+      renderOrdem();
+      const alvo = $(`#ordemLista [data-i="${j}"] [data-ord="${b.dataset.ord === "topo" ? "1" : b.dataset.ord}"]`);
+      if (alvo && !alvo.disabled) alvo.focus();
+    });
+    $("#ordemAlfa").addEventListener("click", () => { ordemEd = [...ordemEd].sort((a, b) => a.localeCompare(b)); renderOrdem(); });
+    $("#ordemQtd").addEventListener("click", () => {
+      const qtd = {}; PROD.filter(noSite).forEach((p) => { const s = p.sector || "Outros"; qtd[s] = (qtd[s] || 0) + 1; });
+      ordemEd = [...ordemEd].sort((a, b) => (qtd[b] || 0) - (qtd[a] || 0) || a.localeCompare(b));
+      renderOrdem();
+    });
+    $("#ordemDesfazer").addEventListener("click", () => { ordemEd = null; renderOrdem(); });
+    $("#ordemSalvar").addEventListener("click", async () => {
+      $("#ordemSalvar").disabled = true;
+      try {
+        const r = await api("PUT", "ordem-setores", { ordem: ordemEd });
+        D.site = r.site;
+        ordemEd = null;
+        renderOrdem(); renderExportar();
+        toast("Ordem salva. O site e o catálogo já usam esta ordem.");
+      } catch (err) { toast(err.message, true); $("#ordemSalvar").disabled = false; }
+    });
+
     /* ---------- Loja ---------- */
     function renderLoja() {
+      renderOrdem();
       const s = D.site;
       $("#lNome").value = s.nome || ""; $("#lSlogan").value = s.slogan || ""; $("#lWhats").value = s.whatsapp || "";
       $("#lInsta").value = s.instagram || ""; $("#lCidade").value = s.cidade || ""; $("#lHorario").value = s.horario || "";

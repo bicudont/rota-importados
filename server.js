@@ -385,7 +385,8 @@ function adminApi(req, res, rota) {
   if (r === "PUT nao-duplicados") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, marcarNaoDuplicado(d)));
   if (r === "PUT banner")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
   if (r === "POST banner-imagem") return enviarImagemBanner(req, res);
-  if (r === "PUT exibicao")return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
+  if (r === "PUT ordem-setores") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarOrdemSetores(d)));
+  if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
   if (r === "POST ia/descricao") {
@@ -727,6 +728,16 @@ function salvarSite(d) {
   site.cartao = { acrescimo: Math.round(acrescimo * 100) / 100, parcelas };
   const atual = lerJSON(F.site, null) || {};
   if (atual.ocultar) site.ocultar = atual.ocultar; // regras de exibição são salvas pela aba Pendências
+  if (atual.ordemSetores) site.ordemSetores = atual.ordemSetores; // ordem dos departamentos tem botão próprio
+  gravarJSON(F.site, site);
+  return { ok: true, site };
+}
+
+// Ordem dos departamentos no site e no catálogo PDF (lista de nomes; os que faltarem vêm depois)
+function salvarOrdemSetores(d) {
+  const lista = (Array.isArray(d.ordem) ? d.ordem : []).map((s) => texto(s, 120)).filter(Boolean).slice(0, 500);
+  const site = lerJSON(F.site, null) || {};
+  site.ordemSetores = [...new Set(lista)];
   gravarJSON(F.site, site);
   return { ok: true, site };
 }
