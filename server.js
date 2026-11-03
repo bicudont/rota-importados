@@ -37,6 +37,7 @@ const F = {
   site: path.join(DATA_DIR, "site.json"), // dados da loja (WhatsApp, Instagram, cotação manual…)
   banner: path.join(DATA_DIR, "banner.json"), // banners do topo da página inicial e aviso da faixa superior
   pedidos: path.join(DATA_DIR, "privado", "pedidos.json"),
+  naoDuplicados: path.join(DATA_DIR, "privado", "nao-duplicados.json"), // grupos marcados como "não são duplicados"
 };
 
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
@@ -374,7 +375,8 @@ function adminApi(req, res, rota) {
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
   if (r === "POST foto") return enviarFoto(req, res);
-  if (r === "PUT banner") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
+  if (r === "PUT nao-duplicados") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, marcarNaoDuplicado(d)));
+  if (r === "PUT banner")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
   if (r === "POST banner-imagem") return enviarImagemBanner(req, res);
   if (r === "PUT exibicao")return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
@@ -405,9 +407,22 @@ function dadosPainel(res) {
     site: lerJSON(F.site, null) || {},
     pedidos: lerJSON(F.pedidos, []),
     banner: lerJSON(F.banner, null) || {},
+    naoDuplicados: lerJSON(F.naoDuplicados, []),
     ia: !!process.env.ANTHROPIC_API_KEY,
     dados: { pasta: DATA_DIR, segura: dadosSeguros() }, // segura = sobrevive a deploys
   });
+}
+
+/* ---------- Possíveis duplicados: grupos que você marcou como "não são duplicados" ---------- */
+// A chave é a lista de SKUs do grupo, em ordem; se o grupo mudar (entra ou sai produto), ele volta a aparecer
+function marcarNaoDuplicado(d) {
+  const chave = texto(d.chave, 2000);
+  if (!chave) throw new Error("Grupo inválido.");
+  const lista = new Set(lerJSON(F.naoDuplicados, []));
+  d.ignorar === false ? lista.delete(chave) : lista.add(chave);
+  const out = [...lista].slice(-5000);
+  gravarJSON(F.naoDuplicados, out);
+  return { ok: true, naoDuplicados: out };
 }
 
 /* ---------- Banners do topo da página inicial ---------- */
@@ -579,13 +594,14 @@ function limparCampos(c) {
   return out;
 }
 
-const ehNovo = (sku) => /^ADM-/.test(sku);
+// Produto criado no painel ou trazido por "produtos extras" (fica em ajustes.novos, não no Catálogo Pro)
+const ehNovo = (aj, sku) => aj.novos.some((p) => p.sku === sku);
 
 function salvarProduto(d) {
   const sku = texto(d.sku, 120);
   const campos = limparCampos(d.campos || {});
   const aj = lerAjustes();
-  if (ehNovo(sku)) {
+  if (ehNovo(aj, sku)) {
     const i = aj.novos.findIndex((p) => p.sku === sku);
     if (i < 0) throw new Error("Produto não encontrado.");
     aj.novos[i] = { ...aj.novos[i], ...campos, updated: new Date().toISOString() };
@@ -610,7 +626,7 @@ function criarProduto(d) {
   const campos = limparCampos({ active: true, ...(d.campos || {}) });
   if (!campos.name) throw new Error("Informe o nome do produto.");
   const aj = lerAjustes();
-  let n = aj.novos.reduce((m, p) => Math.max(m, Number(String(p.sku).slice(4)) || 0), 0) + 1;
+  let n = aj.novos.reduce((m, p) => Math.max(m, /^ADM-\d+$/.test(p.sku) ? Number(p.sku.slice(4)) : 0), 0) + 1;
   const agora = new Date().toISOString();
   const p = { sku: "ADM-" + String(n).padStart(4, "0"), name: "", description: "", sector: "", brand: "", tipo: "", notes: "", volume: null, stock: null, price: null, tags: "", photos: [], ...campos, added: agora.slice(0, 10), updated: agora };
   aj.novos.push(p);
@@ -622,7 +638,7 @@ function criarProduto(d) {
 function removerAjuste(skuIn) {
   const sku = texto(skuIn, 120);
   const aj = lerAjustes();
-  if (ehNovo(sku)) aj.novos = aj.novos.filter((p) => p.sku !== sku);
+  if (ehNovo(aj, sku)) aj.novos = aj.novos.filter((p) => p.sku !== sku);
   else delete aj.produtos[sku];
   gravarJSON(F.ajustes, aj);
   return { ok: true, ajustes: aj };
@@ -818,7 +834,7 @@ function importar(req, res) {
 
 function aplicarZip(buf) {
   const entries = lerZip(buf);
-  let loja = null, fotos = 0;
+  let loja = null, extras = null, fotos = 0;
   fs.mkdirSync(path.join(DATA_DIR, "fotos"), { recursive: true });
 
   for (const e of entries) {
@@ -828,6 +844,10 @@ function aplicarZip(buf) {
         throw new Error("loja.json não é uma exportação do Catálogo Pro.");
       }
       loja = data;
+    } else if (e.name === "produtos-extras.json") {
+      const data = JSON.parse(e.data().toString("utf8"));
+      if (data.type !== "rota-produtos-extras" || !Array.isArray(data.produtos)) throw new Error("produtos-extras.json em formato inválido.");
+      extras = data.produtos;
     } else {
       const m = /^fotos\/([A-Za-z0-9_-]{1,120})\.jpe?g$/.exec(e.name);
       if (!m) continue; // ignora qualquer outro arquivo
@@ -837,14 +857,42 @@ function aplicarZip(buf) {
   }
 
   if (loja) gravarJSON(F.loja, loja);
-  if (!loja && !fotos) throw new Error("O ZIP não tem loja.json nem fotos.");
+  if (!loja && !extras && !fotos) throw new Error("O ZIP não tem loja.json, produtos-extras.json nem fotos.");
+  const resumoExtras = extras ? adicionarExtras(extras) : null;
 
   const faltando = loja
     ? [...new Set(loja.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])))].filter(
         (id) => !fs.existsSync(path.join(DATA_DIR, "fotos", id + ".jpg"))
       ).length
     : null;
-  return { ok: true, produtos: loja ? loja.products.length : null, fotos, fotosFaltando: faltando };
+  return { ok: true, produtos: loja ? loja.products.length : null, fotos, fotosFaltando: faltando, extras: resumoExtras };
+}
+
+// "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
+// Mesmo SKU de um extra já existente: atualiza. SKU que já existe no Catálogo Pro: ignora.
+function adicionarExtras(lista) {
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const doCatalogo = new Set(loja && Array.isArray(loja.products) ? loja.products.map((p) => p.sku) : []);
+  const indice = new Map(aj.novos.map((p, i) => [p.sku, i]));
+  const agora = new Date().toISOString();
+  const r = { novos: 0, atualizados: 0, ignorados: 0, erros: 0 };
+  for (const item of lista.slice(0, 20000)) {
+    try {
+      const sku = texto(item.sku, 60);
+      if (!/^[A-Za-z0-9_-]{1,60}$/.test(sku)) throw new Error("SKU inválido");
+      if (doCatalogo.has(sku)) { r.ignorados++; continue; }
+      const campos = limparCampos({ name: item.name, brand: item.brand, sector: item.sector, price: item.price, stock: item.stock, active: item.active !== false, tags: item.tags || "", description: item.description || "", photos: item.photos || [] });
+      if (indice.has(sku)) { const i = indice.get(sku); aj.novos[i] = { ...aj.novos[i], ...campos, updated: agora }; r.atualizados++; }
+      else {
+        indice.set(sku, aj.novos.length);
+        aj.novos.push({ sku, tipo: "", notes: "", volume: null, ...campos, added: agora.slice(0, 10), updated: agora });
+        r.novos++;
+      }
+    } catch { r.erros++; }
+  }
+  gravarJSON(F.ajustes, aj);
+  return r;
 }
 
 /* ---------- Exportação: ZIP no mesmo formato da importação ---------- */

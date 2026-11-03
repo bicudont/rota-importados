@@ -173,6 +173,8 @@
     .rv textarea.field { min-height: 92px; margin-top: 6px; }
     .rv__acts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
     .row--pd { grid-template-columns: 28px 52px minmax(0, 1fr) auto; }
+    .dup { border-bottom: 6px solid var(--bg); }
+    .dup__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #fff8e8; border-bottom: 1px solid var(--line); }
     @media (max-width: 560px) { .row--pd { grid-template-columns: 24px 44px minmax(0,1fr); } .row--pd .c-vis { grid-column: 3; } }
 
     /* Exportar */
@@ -1220,7 +1222,8 @@
           if (r.status === 401) { mostrarLogin("Sua sessão expirou. Entre novamente."); break; }
           if (!r.ok) { log(`✕ ${f.name}: ${j.erro}`, "err"); continue; }
           last = j;
-          log(`✓ ${f.name}: ${j.produtos != null ? j.produtos + " produtos, " : ""}${j.fotos} fotos`, "ok");
+          const ex = j.extras ? `${j.extras.novos} produtos novos, ${j.extras.atualizados} atualizados${j.extras.ignorados ? `, ${j.extras.ignorados} já existiam no catálogo` : ""}${j.extras.erros ? `, ${j.extras.erros} com erro` : ""}, ` : "";
+          log(`✓ ${f.name}: ${j.produtos != null ? j.produtos + " produtos, " : ""}${ex}${j.fotos} fotos`, "ok");
         } catch {
           log(`✕ ${f.name}: falha de conexão`, "err");
         }
@@ -1460,8 +1463,45 @@
       foto: ["Sem foto", semFoto],
       ambos: ["Sem foto e sem descrição", (p) => semDesc(p) && semFoto(p)],
       qualquer: ["Todas as pendências", (p) => semDesc(p) || semFoto(p)],
+      dup: ["Possíveis duplicados", (p) => duplicados().skus.has(p.sku)],
     };
-    let pdTipo = "desc", pdPag = 0;
+
+    // Possíveis duplicados: mesmo nome (sem acentos, maiúsculas e pontuação) ou mesmo código com/sem zeros à esquerda.
+    // Nomes só parecidos ficam de fora: quase sempre são cores/tamanhos diferentes do mesmo item.
+    const chaveNome = (s) => norm(s).replace(/eau de parfum|\bedp\b/g, " edp ").replace(/eau de toilette|\bedt\b/g, " edt ")
+      .replace(/(\d+)\s*(ml|g|gr|oz)\b/g, " $1$2 ").replace(/[^a-z0-9]+/g, " ").replace(/\b(perfume|de|da|do|the|for|e|com|para)\b/g, " ").replace(/\s+/g, " ").trim();
+    let cacheDup = null;
+    function duplicados() {
+      if (cacheDup && cacheDup.prod === PROD && cacheDup.ign === D.naoDuplicados) return cacheDup;
+      const pai = PROD.map((_, i) => i);
+      const raiz = (i) => (pai[i] === i ? i : (pai[i] = raiz(pai[i])));
+      const visto = {};
+      PROD.forEach((p, i) => {
+        for (const k of ["n:" + chaveNome(p.name), "c:" + String(p.sku).replace(/^0+/, "")]) {
+          if (k.length < 4) continue;
+          if (k in visto) pai[raiz(i)] = raiz(visto[k]); else visto[k] = i;
+        }
+      });
+      const porRaiz = {};
+      PROD.forEach((p, i) => (porRaiz[raiz(i)] = porRaiz[raiz(i)] || []).push(p));
+      const ign = new Set(D.naoDuplicados || []);
+      const grupos = Object.values(porRaiz).filter((g) => g.length > 1).map((itens) => {
+        const chave = itens.map((p) => p.sku).sort().join("|");
+        const mesmoNome = new Set(itens.map((p) => chaveNome(p.name))).size === 1;
+        return { chave, itens, motivo: mesmoNome ? `Mesmo nome: “${itens[0].name}”` : "Mesmo código (com e sem zeros à esquerda)" };
+      }).filter((g) => !ign.has(g.chave)).sort((a, b) => a.itens[0].name.localeCompare(b.itens[0].name));
+      return (cacheDup = { prod: PROD, ign: D.naoDuplicados, grupos, skus: new Set(grupos.flatMap((g) => g.itens.map((p) => p.sku))) });
+    }
+    function linhaPd(p, extra) {
+      const sd = semDesc(p), sf = semFoto(p);
+      return `<div class="row row--pd" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
+        <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)}"${pdSel.has(p.sku) ? " checked" : ""} />
+        <img src="${sf ? SEMFOTO : fotoURL(p._fotos[0])}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
+        <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}${extra || ""}</div></div>
+        <div class="c-vis">${p.active === false ? '<span class="badge b-off">🚫 Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição">Fora do site: ${motivoFora(p)}</span>` : '<span class="badge b-new">No site</span>'}${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
+      </div>`;
+    }
+    let pdTipo = "desc", pdPag = 0, paginaPd = [];
     const pdSel = new Set();
     const rev = new Map(); // sku -> { estado: gerando | pronto | erro | salvo, texto, erro }
 
@@ -1482,27 +1522,35 @@
       const atual = $("#pdSetor").value;
       $("#pdSetor").innerHTML = `<option value="">Todos os departamentos</option>` + [...new Set(vis.map((p) => p.sector || "Outros"))].sort((a, b) => a.localeCompare(b)).map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
 
-      const lista = pdFiltrados();
-      const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
-      pdPag = Math.min(pdPag, total - 1);
-      const pagina = lista.slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
-      $("#pdLista").innerHTML = pagina.length
-        ? pagina.map((p) => {
-            const sd = semDesc(p), sf = semFoto(p);
-            return `<div class="row row--pd" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
-              <input type="checkbox" data-pdsel aria-label="Selecionar ${esc(p.name)}"${pdSel.has(p.sku) ? " checked" : ""} />
-              <img src="${sf ? SEMFOTO : fotoURL(p._fotos[0])}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
-              <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
-              <div class="c-vis">${p.active === false ? '<span class="badge b-off">🚫 Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição">Fora do site: ${motivoFora(p)}</span>` : '<span class="badge b-new">No site</span>'}${sf ? '<span class="badge b-out">Sem foto</span>' : ""}${sd ? `<span class="badge b-off">Sem descrição</span>` : ""}${rev.has(p.sku) && rev.get(p.sku).estado === "pronto" ? '<span class="badge b-edit">Texto gerado</span>' : ""}</div>
-            </div>`;
-          }).join("")
-        : `<div class="empty">${PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
-      $("#pdInfo").textContent = lista.length ? `${(pdPag * POR_PAG + 1).toLocaleString("pt-BR")}–${Math.min(lista.length, (pdPag + 1) * POR_PAG).toLocaleString("pt-BR")} de ${lista.length.toLocaleString("pt-BR")} produtos` : "";
-      $("#pdPrev").disabled = pdPag === 0;
-      $("#pdNext").disabled = pdPag >= total - 1;
+      let pagina;
+      if (pdTipo === "dup") {
+        // Duplicados: grupos lado a lado (20 grupos por página), com preço e estoque para comparar
+        const q = norm($("#pdBusca").value).trim().split(/\s+/).filter(Boolean), setor = $("#pdSetor").value;
+        const grupos = duplicados().grupos.filter((g) => g.itens.some((p) => (!setor || (p.sector || "Outros") === setor) && q.every((t) => p._busca.includes(t))));
+        const POR_G = 20, total = Math.max(1, Math.ceil(grupos.length / POR_G));
+        pdPag = Math.min(pdPag, total - 1);
+        const pg = grupos.slice(pdPag * POR_G, (pdPag + 1) * POR_G);
+        pagina = pg.flatMap((g) => g.itens);
+        const extra = (p) => ` · ${p.price > 0 ? usd(p.price) : "sem preço"} · estoque ${p.stock == null ? "—" : p.stock}${p._novo ? " · criado no painel" : ""}`;
+        $("#pdLista").innerHTML = pg.length
+          ? pg.map((g) => `<div class="dup"><div class="dup__head"><div style="min-width:0"><b>${esc(g.motivo)}</b> <span class="muted small">${g.itens.length} produtos</span></div><button class="btn btn--sm" data-naodup="${esc(g.chave)}">Não são duplicados</button></div>${g.itens.map((p) => linhaPd(p, extra(p))).join("")}</div>`).join("")
+          : `<div class="empty">Nenhum possível duplicado encontrado. 🎉</div>`;
+        $("#pdInfo").textContent = grupos.length ? `Grupos ${pdPag * POR_G + 1}–${Math.min(grupos.length, (pdPag + 1) * POR_G)} de ${grupos.length} · selecione os que sobram e use “Ocultar do site”` : "";
+        $("#pdPrev").disabled = pdPag === 0;
+        $("#pdNext").disabled = pdPag >= total - 1;
+      } else {
+        const lista = pdFiltrados();
+        const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
+        pdPag = Math.min(pdPag, total - 1);
+        pagina = lista.slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
+        $("#pdLista").innerHTML = pagina.length ? pagina.map((p) => linhaPd(p)).join("") : `<div class="empty">${PROD.length ? "Nenhuma pendência aqui. 🎉" : "Nenhum produto ainda."}</div>`;
+        $("#pdInfo").textContent = lista.length ? `${(pdPag * POR_PAG + 1).toLocaleString("pt-BR")}–${Math.min(lista.length, (pdPag + 1) * POR_PAG).toLocaleString("pt-BR")} de ${lista.length.toLocaleString("pt-BR")} produtos` : "";
+        $("#pdPrev").disabled = pdPag === 0;
+        $("#pdNext").disabled = pdPag >= total - 1;
+      }
 
       // Seleção: ocultar/mostrar no site e IA
-      const naPagina = pagina.map((p) => p.sku);
+      const naPagina = (paginaPd = pagina.map((p) => p.sku));
       $("#pdTodos").checked = naPagina.length > 0 && naPagina.every((s) => pdSel.has(s));
       $("#pdTodos").disabled = !naPagina.length;
       $("#pdSelN").textContent = pdSel.size ? `${pdSel.size} selecionado(s)` : "Nenhum selecionado";
@@ -1597,7 +1645,14 @@
     $("#pdSetor").addEventListener("change", () => { pdPag = 0; renderPendencias(); });
     $("#pdPrev").addEventListener("click", () => { pdPag--; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
     $("#pdNext").addEventListener("click", () => { pdPag++; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
-    $("#pdLista").addEventListener("click", (e) => {
+    $("#pdLista").addEventListener("click", async (e) => {
+      const nd = e.target.closest("[data-naodup]");
+      if (nd) {
+        nd.disabled = true;
+        try { const r = await api("PUT", "nao-duplicados", { chave: nd.dataset.naodup }); D.naoDuplicados = r.naoDuplicados; renderPendencias(); toast("Grupo marcado como não duplicado"); }
+        catch (err) { toast(err.message, true); nd.disabled = false; }
+        return;
+      }
       const row = e.target.closest("[data-sku]");
       if (!row) return;
       if (e.target.matches("[data-pdsel]")) { e.target.checked ? pdSel.add(row.dataset.sku) : pdSel.delete(row.dataset.sku); return renderPendencias(); }
@@ -1610,8 +1665,7 @@
     function selecionadosSemDesc() { return [...pdSel].filter((s) => { const p = PROD.find((x) => x.sku === s); return p && semDesc(p); }); }
     $("#pdGerarSel").addEventListener("click", () => gerarIA(selecionadosSemDesc()));
     $("#pdTodos").addEventListener("change", (e) => {
-      const lista = pdFiltrados().slice(pdPag * POR_PAG, (pdPag + 1) * POR_PAG);
-      lista.forEach((p) => (e.target.checked ? pdSel.add(p.sku) : pdSel.delete(p.sku)));
+      paginaPd.forEach((sku) => (e.target.checked ? pdSel.add(sku) : pdSel.delete(sku)));
       renderPendencias();
     });
     $("#pdLimpar").addEventListener("click", () => { pdSel.clear(); renderPendencias(); });
