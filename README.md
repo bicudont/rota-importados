@@ -1,4 +1,4 @@
-﻿# Rota Importados — Catálogo
+# Rota Importados — Catálogo
 
 Loja-catálogo da Rota Importados: o cliente navega pelos produtos, monta o carrinho e **finaliza o pedido pelo WhatsApp**. Os produtos vêm do **Catálogo Pro** (arquivo `loja.json` + fotos). Roda como app Node.js na Hostinger, sem dependências.
 
@@ -20,7 +20,7 @@ Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina 
 | Seção | O que faz |
 |---|---|
 | **Visão geral** | Pedidos novos, produtos no site, esgotados, sem foto, sem preço, ocultos, editados; data da última importação e cotações |
-| **Pedidos** | Pedidos feitos pelo carrinho do site e lançados no painel (**+ Novo pedido**), com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna |
+| **Pedidos** | Pedidos feitos pelo carrinho do site e lançados no painel (**+ Novo pedido**), com situação (Novo, Em atendimento, Confirmado, Entregue, Cancelado) e anotação interna. Cada pedido pode ser **editado** (cliente, WhatsApp do cliente, itens, quantidades, preços, frete e desconto; total recalculado), baixado em **PDF** e enviado como **texto para o WhatsApp** (copiar ou abrir a conversa do cliente) para confirmar com ele |
 | **Produtos** | Busca e filtros; editar nome, marca, departamento, preço (US$), estoque, etiquetas, descrição, fotos e visibilidade; criar produtos; ocultar/mostrar vários de uma vez |
 | **Banner** | Banners do topo da página inicial (até 8, em carrossel): formato "texto ao lado da imagem", "texto sobre a imagem" ou "só imagem" (arte pronta), com etiqueta, título, subtítulo, 2 botões, imagem e versão para celular; links por lista (catálogo, departamento, marca, produto, WhatsApp ou endereço externo); ativar/desativar e reordenar; tempo de troca. Também o aviso da faixa superior. Sem banner ativo, o site mostra o destaque automático |
 | **Pendências** | **Possíveis duplicados**: grupos de produtos com o mesmo nome (sem acentos/pontuação) ou o mesmo código com e sem zeros à esquerda, lado a lado com preço e estoque; ocultar ou **excluir** (🗑️) os que sobram, ou marcar "Não são duplicados". **Excluir**: produto criado no painel ou extra é apagado de vez; produto do Catálogo Pro sai do site e do painel e vai para "🗑️ Excluídos" (continua excluído mesmo se reenviado, e pode ser restaurado). **Exibição no site**: marcar/desmarcar se produtos sem foto, sem descrição ou sem estoque aparecem no site (nada é apagado; o backup continua completo). Lista de produtos sem foto e/ou sem descrição, com busca e filtro por departamento. **IA de descrições**: gera textos para os produtos sem descrição (selecionados ou a página inteira); cada texto aparece para revisar e editar, e só vai para o site quando você clica em Salvar |

@@ -776,8 +776,9 @@ function cpfValido(v) {
   return true;
 }
 
-// Nome completo, documento (CPF no Brasil, DNI na Argentina, CI no Paraguai) e endereço completo
-function limparCliente(c) {
+// Nome completo, documento (CPF no Brasil, DNI na Argentina, CI no Paraguai), endereço e telefone.
+// livre = edição de pedido: nada é obrigatório, mas o que for preenchido é conferido (CPF, CEP, estado).
+function limparCliente(c, livre) {
   c = c && typeof c === "object" ? c : {};
   const t = (k, n) => texto(c[k], n);
   const pais = PAISES[c.pais] ? c.pais : "Brasil";
@@ -785,33 +786,47 @@ function limparCliente(c) {
     nome: t("nome", 120), pais, docTipo: PAISES[pais], doc: t("doc", 20),
     cep: t("cep", 10), estado: t("estado", 60), rua: t("rua", 160), numero: t("numero", 20),
     complemento: t("complemento", 80), bairro: t("bairro", 100), cidade: t("cidade", 100), obs: t("obs", 1000),
+    telefone: t("telefone", 30).replace(/\D/g, ""),
   };
+  if (cli.telefone && (cli.telefone.length < 8 || cli.telefone.length > 15)) throw new Error("Telefone inválido: use DDI + DDD + número (ex.: 5511999998888).");
   const regiao = pais === "Brasil" ? "o estado" : pais === "Argentina" ? "a província" : "o departamento";
   const falta = [["nome", "o nome completo"], ["doc", "o " + cli.docTipo], ["rua", "a rua"], ["numero", "o número"], ["bairro", "o bairro"], ["cidade", "a cidade"], ["estado", regiao]].find(([k]) => !cli[k]);
-  if (falta) throw new Error(`Informe ${falta[1]} do cliente.`);
+  if (falta && !livre) throw new Error(`Informe ${falta[1]} do cliente.`);
   if (pais === "Brasil") {
-    if (!cpfValido(cli.doc)) throw new Error("CPF inválido.");
-    if (!UFS.includes(cli.estado)) throw new Error("Estado inválido.");
+    if ((cli.doc || !livre) && !cpfValido(cli.doc)) throw new Error("CPF inválido.");
+    if ((cli.estado || !livre) && !UFS.includes(cli.estado)) throw new Error("Estado inválido.");
     const cep = cli.cep.replace(/\D/g, "");
-    if (cep.length !== 8) throw new Error("CEP inválido.");
+    if ((cep || !livre) && cep.length !== 8) throw new Error("CEP inválido.");
     const d = cli.doc.replace(/\D/g, "");
-    cli.doc = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-    cli.cep = cep.slice(0, 5) + "-" + cep.slice(5);
+    if (d) cli.doc = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    if (cep) cli.cep = cep.slice(0, 5) + "-" + cep.slice(5);
   }
   return cli;
 }
 
-function gravarPedido(d, origem) {
-  if (!Array.isArray(d.itens) || !d.itens.length) throw new Error("Pedido vazio.");
+const valorPedido = (v) => { const n = Number(v); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; };
+function itensPedido(lista) {
+  if (!Array.isArray(lista) || !lista.length) throw new Error("Pedido vazio.");
   const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
-  const itens = d.itens.slice(0, 100).map((i) => ({
+  const itens = lista.slice(0, 100).map((i) => ({
     sku: texto(i.sku, 120),
     nome: texto(i.nome, 200),
-    variacao: texto(i.v, 120),
+    variacao: texto(i.v != null ? i.v : i.variacao, 120),
     q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
     preco: num(i.preco),
   }));
   if (itens.some((i) => !i.nome)) throw new Error("Há um item sem nome.");
+  return itens;
+}
+// Total = itens + frete − desconto (nunca negativo)
+function totalPedido(p) {
+  const sub = p.itens.reduce((s, i) => s + (i.preco || 0) * i.q, 0);
+  return Math.max(0, Math.round((sub + (p.frete || 0) - (p.desconto || 0)) * 100) / 100);
+}
+
+function gravarPedido(d, origem) {
+  const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
+  const itens = itensPedido(d.itens);
   // Carrinho do site: só nome e cidade, opcionais. Pedido lançado no painel: dados completos.
   const c = d.cliente && typeof d.cliente === "object" ? d.cliente : {};
   const cliente = origem === "painel" ? limparCliente(c) : { nome: texto(c.nome, 120), cidade: texto(c.cidade, 100) };
@@ -823,11 +838,14 @@ function gravarPedido(d, origem) {
     status: origem === "painel" && STATUS.includes(d.status) ? d.status : "novo",
     cliente,
     itens,
-    // No painel o total é sempre recalculado a partir dos itens
-    total: origem === "painel" ? Math.round(itens.reduce((s, i) => s + (i.preco || 0) * i.q, 0) * 100) / 100 : num(d.total),
+    frete: origem === "painel" ? valorPedido(d.frete) : 0,
+    desconto: origem === "painel" ? valorPedido(d.desconto) : 0,
+    total: 0,
     moeda: d.moeda === "USD" ? "USD" : "BRL",
     nota: origem === "painel" ? texto(d.nota, 2000) : "",
   };
+  // No painel o total é sempre recalculado a partir dos itens (com frete e desconto)
+  pedido.total = origem === "painel" ? totalPedido(pedido) : num(d.total);
   pedidos.unshift(pedido);
   gravarJSON(F.pedidos, pedidos.slice(0, 5000));
   return pedido;
@@ -842,6 +860,12 @@ function alterarPedido(d) {
     p.status = d.status;
   }
   if ("nota" in d) p.nota = texto(d.nota, 2000);
+  // Edição completa (aba Pedidos → Editar): cliente, itens, frete e desconto; o total é recalculado
+  if ("cliente" in d) p.cliente = limparCliente(d.cliente, true);
+  if ("itens" in d) p.itens = itensPedido(d.itens);
+  if ("frete" in d) p.frete = valorPedido(d.frete);
+  if ("desconto" in d) p.desconto = valorPedido(d.desconto);
+  if (["itens", "frete", "desconto"].some((k) => k in d)) p.total = totalPedido(p);
   p.alterado = new Date().toISOString();
   gravarJSON(F.pedidos, pedidos);
   return { ok: true, pedido: p };

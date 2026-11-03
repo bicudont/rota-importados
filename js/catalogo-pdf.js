@@ -273,5 +273,83 @@
     return { blob, paginas: paginas.length };
   }
 
-  window.CatalogoPDF = { gerar };
+  /* ---------- PDF de um pedido (aba Pedidos do painel) ---------- */
+  // opts: { loja: { nome, whatsapp, site }, logo, numero, data, cliente: [linhas], itens: [{ q, nome, unit, total }],
+  //         totais: [[rótulo, valor, destaque?]], notas: [linhas] } — valores já formatados pelo painel
+  async function pedido(opts) {
+    const imagens = new Map();
+    const lg = opts.logo ? await logo(opts.logo) : null;
+    if (lg) imagens.set("Logo", lg);
+    const L = opts.loja || {};
+    const paginas = [];
+    let pg, y;
+    const X = { q: M, nome: M + 40, unit: W - M - 95, total: W - M };
+    const larguraNome = X.unit - 70 - X.nome;
+    function cabecalhoTabela() {
+      pg.ret(M, y - 13, W - 2 * M, 20, "#EEF4FF");
+      pg.txt(X.q + 4, y, 8.5, true, COR.navy, "QTD");
+      pg.txt(X.nome, y, 8.5, true, COR.navy, "PRODUTO");
+      pg.direita(X.unit, y, 8.5, true, COR.navy, "UNITÁRIO");
+      pg.direita(X.total - 4, y, 8.5, true, COR.navy, "TOTAL");
+      y += 22;
+    }
+    function novaPagina(continuacao) {
+      pg = new Pagina();
+      paginas.push(pg);
+      pg.ret(0, 0, W, 78, COR.navy);
+      if (lg) { const lh = 46, lw = (lg.w / lg.h) * lh; pg.ret(M - 6, 16, lw + 12, lh + 0, COR.white); pg.img("Logo", M, 16, lw, lh); }
+      pg.txt(M + 100, 38, 15, true, COR.white, L.nome || "Pedido");
+      if (L.whatsapp) pg.txt(M + 100, 54, 8.5, false, "#CFD9EC", "WhatsApp " + L.whatsapp + (L.site ? " · " + L.site : ""));
+      pg.direita(W - M, 38, 15, true, COR.white, `Pedido #${opts.numero}`);
+      pg.direita(W - M, 54, 8.5, false, "#CFD9EC", opts.data || "");
+      pg.ret(0, 78, W, 3, COR.orange);
+      y = 110;
+      if (continuacao) { pg.txt(M, y, 9, false, COR.muted, "(continuação)"); y += 22; cabecalhoTabela(); }
+    }
+    novaPagina(false);
+
+    // Cliente
+    pg.txt(M, y, 8.5, true, COR.orange, "CLIENTE");
+    y += 15;
+    (opts.cliente || []).forEach((linha, i) => {
+      quebrar(linha, i ? 9.5 : 11, !i, W - 2 * M, 3).forEach((l) => { pg.txt(M, y, i ? 9.5 : 11, !i, COR.text, l); y += i ? 13 : 15; });
+    });
+    y += 14;
+
+    // Itens
+    cabecalhoTabela();
+    for (const it of opts.itens || []) {
+      const linhas = quebrar(it.nome, 9.5, false, larguraNome, 4);
+      if (y + linhas.length * 12 > H - 150) novaPagina(true);
+      pg.txt(X.q + 4, y, 9.5, true, COR.text, String(it.q));
+      linhas.forEach((l, k) => pg.txt(X.nome, y + k * 12, 9.5, false, COR.text, l));
+      pg.direita(X.unit, y, 9.5, false, COR.muted, it.unit);
+      pg.direita(X.total - 4, y, 9.5, true, COR.text, it.total);
+      y += linhas.length * 12 + 6;
+      pg.ret(M, y - 4, W - 2 * M, 0.5, COR.line);
+      y += 6;
+    }
+
+    // Totais
+    if (y > H - 170) novaPagina(true);
+    y += 8;
+    for (const [rot, val, forte] of opts.totais || []) {
+      pg.direita(X.unit, y, forte ? 11 : 9.5, !!forte, forte ? COR.navy : COR.muted, rot);
+      pg.direita(X.total - 4, y, forte ? 13 : 9.5, !!forte, forte ? COR.royal : COR.text, val);
+      y += forte ? 20 : 15;
+    }
+    y += 6;
+    for (const n of opts.notas || []) {
+      quebrar(n, 9, false, W - 2 * M, 3).forEach((l) => { if (y > H - 50) novaPagina(true); pg.txt(M, y, 9, false, COR.muted, l); y += 12; });
+    }
+    // Rodapé com número de página
+    paginas.forEach((p, i) => {
+      p.ret(M, H - 34, W - 2 * M, 0.75, COR.line);
+      p.txt(M, H - 20, 7.5, false, COR.muted, `${L.nome || ""} · Pedido #${opts.numero}`);
+      p.direita(W - M, H - 20, 7.5, true, COR.muted, `${i + 1} / ${paginas.length}`);
+    });
+    return escrever(paginas, imagens, `${L.nome || "Pedido"} · Pedido #${opts.numero}`);
+  }
+
+  window.CatalogoPDF = { gerar, pedido };
 })();

@@ -128,6 +128,7 @@
     .order__top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
     .order__items { font-size: .9rem; display: grid; gap: 3px; }
     .order__items div { display: flex; justify-content: space-between; gap: 12px; }
+    .order__acts { display: flex; gap: 8px; flex-wrap: wrap; }
     .order__foot { display: grid; grid-template-columns: 180px minmax(0,1fr) auto; gap: 10px; align-items: start; }
     .st { font-size: .75rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; }
     .st-novo { background: var(--warnbg); color: var(--warn); } .st-atendimento { background: #e8f0fe; color: var(--royal); }
@@ -550,7 +551,10 @@
       <div class="dlg__head"><h2 id="pedTitle">Novo pedido</h2><button type="button" class="x" data-fechar aria-label="Fechar">×</button></div>
       <div class="dlg__body">
         <h3>Cliente</h3>
-        <div><label class="lbl" for="nNome">Nome completo *</label><input class="field" id="nNome" name="nome" maxlength="120" autocomplete="off" required /></div>
+        <div class="grid2">
+          <div><label class="lbl" for="nNome">Nome completo *</label><input class="field" id="nNome" name="nome" maxlength="120" autocomplete="off" required /></div>
+          <div><label class="lbl" for="nTel">WhatsApp do cliente</label><input class="field" id="nTel" name="telefone" inputmode="tel" maxlength="30" placeholder="Ex.: 5511999998888" autocomplete="off" /></div>
+        </div>
         <div class="grid2">
           <div><label class="lbl" for="nPais">País *</label><select class="field" id="nPais" name="pais"><option selected>Brasil</option><option>Argentina</option><option>Paraguai</option></select></div>
           <div><label class="lbl" for="nDoc" id="nDocLbl">CPF *</label><input class="field" id="nDoc" name="doc" maxlength="20" autocomplete="off" required /></div>
@@ -578,6 +582,11 @@
           <div class="pick__res" id="nRes"></div>
         </div>
         <div id="nItens"></div>
+        <div class="grid2">
+          <div><label class="lbl" for="nFrete" id="nFreteLbl">Frete / entrega</label><input class="field" id="nFrete" name="frete" inputmode="decimal" placeholder="0,00" autocomplete="off" /></div>
+          <div><label class="lbl" for="nDesc" id="nDescLbl">Desconto</label><input class="field" id="nDesc" name="desconto" inputmode="decimal" placeholder="0,00" autocomplete="off" /></div>
+        </div>
+        <div class="muted small" id="nSub"></div>
         <div class="ped-total"><span>Total</span><b id="nTotal">—</b></div>
 
         <div class="grid2">
@@ -592,13 +601,28 @@
       </div>
     </form>
   </dialog>
+  <!-- Texto do pedido para o WhatsApp -->
+  <dialog id="dlgTxt" aria-labelledby="txtTitle">
+    <div class="dlg">
+      <div class="dlg__head"><h2 id="txtTitle">Texto para o WhatsApp</h2><button type="button" class="x" data-fechar-txt aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p class="muted small">Confira e ajuste o texto se quiser; depois copie ou abra direto no WhatsApp.</p>
+        <textarea class="field" id="txtPedido" rows="16" style="min-height:300px;font-family:inherit"></textarea>
+        <p class="muted small" id="txtDestino"></p>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" id="txtCopiar">📋 Copiar</button><button type="button" class="btn btn--primary" id="txtAbrir">💬 Abrir no WhatsApp</button></div>
+      </div>
+    </div>
+  </dialog>
   <datalist id="dlMarcas"></datalist>
   <datalist id="dlSkus"></datalist>
   <datalist id="dlSetores"></datalist>
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/js/config.js?v=23"></script>
-  <script src="/js/catalogo-pdf.js?v=4"></script>
+  <script src="/js/catalogo-pdf.js?v=5"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -835,7 +859,12 @@
               <b>${moeda(p.total, p.moeda)}</b>
             </div>
             ${clienteHTML(p.cliente)}
-            <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moeda(i.preco * i.q, p.moeda)}</span></div>`).join("")}</div>
+            <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moeda(i.preco * i.q, p.moeda)}</span></div>`).join("")}${p.frete ? `<div class="muted"><span>Frete / entrega</span><span>${moeda(p.frete, p.moeda)}</span></div>` : ""}${p.desconto ? `<div class="muted"><span>Desconto</span><span>− ${moeda(p.desconto, p.moeda)}</span></div>` : ""}</div>
+            <div class="order__acts">
+              <button class="btn btn--sm" data-acao="editar">✏️ Editar</button>
+              <button class="btn btn--sm" data-acao="pdf">📄 PDF</button>
+              <button class="btn btn--sm" data-acao="whats">💬 WhatsApp</button>
+            </div>
             <div class="order__foot">
               <select class="field" data-st aria-label="Situação do pedido #${p.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}"${k === p.status ? " selected" : ""}>${v}</option>`).join("")}</select>
               <input class="field" data-nota placeholder="Anotação interna (ex.: pago no Pix, entrega sábado)" value="${esc(p.nota)}" aria-label="Anotação do pedido #${p.id}" maxlength="2000" />
@@ -849,7 +878,95 @@
       const end = c.rua
         ? `${c.rua}, ${c.numero}${c.complemento ? " – " + c.complemento : ""} – ${c.bairro} – ${c.cidade}/${c.estado}${c.cep ? ` – ${c.pais === "Brasil" ? "CEP" : "CP"} ${c.cep}` : ""} – ${c.pais}`
         : c.cidade;
-      return `<div class="cli"><b>${esc(c.nome || "Sem nome")}</b>${c.doc ? `<span>${esc(c.docTipo || "Doc.")}: ${esc(c.doc)}</span>` : ""}${end ? `<span>${esc(end)}</span>` : ""}${c.obs ? `<span class="muted">Obs.: ${esc(c.obs)}</span>` : ""}</div>`;
+      return `<div class="cli"><b>${esc(c.nome || "Sem nome")}</b>${c.telefone ? `<span>WhatsApp: ${esc(fmtTel(c.telefone))}</span>` : ""}${c.doc ? `<span>${esc(c.docTipo || "Doc.")}: ${esc(c.doc)}</span>` : ""}${end ? `<span>${esc(end)}</span>` : ""}${c.obs ? `<span class="muted">Obs.: ${esc(c.obs)}</span>` : ""}</div>`;
+    }
+    const fmtTel = (t) => { const d = String(t || "").replace(/\D/g, ""); return d.length === 13 && d.startsWith("55") ? `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}` : d ? "+" + d : ""; };
+    const enderecoTxt = (c) => (c.rua ? `${c.rua}, ${c.numero}${c.complemento ? " – " + c.complemento : ""} – ${c.bairro} – ${c.cidade}/${c.estado}${c.cep ? ` – ${c.pais === "Brasil" ? "CEP" : "CP"} ${c.cep}` : ""}${c.pais && c.pais !== "Brasil" ? " – " + c.pais : ""}` : c.cidade || "");
+
+    /* Exportar pedido: texto para WhatsApp e PDF, para confirmar com o cliente */
+    function valoresPedido(p) {
+      const m = (v) => (p.moeda === "USD" ? usd(v) : brl(v));
+      const sub = p.itens.reduce((s, i) => s + (i.preco || 0) * i.q, 0);
+      const total = p.total != null ? p.total : sub;
+      const consulta = p.itens.some((i) => i.preco == null);
+      const cc = cartaoCfg();
+      const cartao = p.moeda !== "USD" && total > 0 ? Math.round(total * (1 + cc.pct / 100) * 100) / 100 : null;
+      return { m, sub, total, consulta, cartao, n: cc.n };
+    }
+    function textoPedido(p) {
+      const { m, sub, total, consulta, cartao, n } = valoresPedido(p);
+      const c = p.cliente || {};
+      const loja = D.site.nome || (window.STORE && window.STORE.nome) || "Rota Importados";
+      const linhas = [
+        `🛒 *Pedido #${p.id} — ${loja}*`,
+        dataBR(p.data),
+        "",
+        // null = linha que não se aplica (some); "" = linha em branco entre blocos
+        c.nome ? `*Cliente:* ${c.nome}` : null,
+        c.doc ? `*${c.docTipo || "Documento"}:* ${c.doc}` : null,
+        enderecoTxt(c) ? `*${c.rua ? "Endereço" : "Cidade"}:* ${enderecoTxt(c)}` : null,
+        "",
+        "*Itens:*",
+        ...p.itens.map((i) => `• ${i.q}x ${i.nome}${i.variacao ? ` (${i.variacao})` : ""} — ${i.preco == null ? "sob consulta" : m(i.preco * i.q)}`),
+        "",
+        p.frete || p.desconto ? `Subtotal: ${m(sub)}` : null,
+        p.frete ? `Frete / entrega: ${m(p.frete)}` : null,
+        p.desconto ? `Desconto: − ${m(p.desconto)}` : null,
+        `*Total${p.moeda === "USD" ? "" : " no Pix"}: ${m(total)}*${consulta ? " + itens sob consulta" : ""}`,
+        cartao ? `No cartão: ${brl(cartao)}${n > 1 ? ` em até ${n}x de ${brl(Math.round((cartao / n) * 100) / 100)}` : ""}` : null,
+        "",
+        "Pode confirmar se está tudo certo? 😊",
+      ].filter((l) => l !== null);
+      return linhas.filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n").trim();
+    }
+    let txtPed = null;
+    function abrirTextoPedido(p) {
+      txtPed = p;
+      $("#txtTitle").textContent = `Pedido #${p.id} — texto para o WhatsApp`;
+      $("#txtPedido").value = textoPedido(p);
+      const tel = String((p.cliente && p.cliente.telefone) || "").replace(/\D/g, "");
+      $("#txtDestino").textContent = tel ? `Vai abrir a conversa com ${fmtTel(tel)}.` : "Sem WhatsApp do cliente no pedido: o WhatsApp vai pedir para você escolher a conversa. Para abrir direto, edite o pedido e preencha o WhatsApp do cliente.";
+      $("#dlgTxt").showModal();
+    }
+    $("[data-fechar-txt]").addEventListener("click", () => $("#dlgTxt").close());
+    $("#txtCopiar").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("#txtPedido").value); toast("Texto copiado"); }
+      catch { $("#txtPedido").select(); document.execCommand("copy"); toast("Texto copiado"); }
+    });
+    $("#txtAbrir").addEventListener("click", () => {
+      const tel = String((txtPed && txtPed.cliente && txtPed.cliente.telefone) || "").replace(/\D/g, "");
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent($("#txtPedido").value)}`, "_blank", "noopener");
+    });
+    async function pdfPedido(p, btn) {
+      if (!window.CatalogoPDF || !CatalogoPDF.pedido) return toast("Recarregue a página (Ctrl+F5) para usar o PDF.", true);
+      const { m, sub, total, consulta, cartao, n } = valoresPedido(p);
+      const c = p.cliente || {};
+      const S = window.STORE || {};
+      const wa = soDig(D.site.whatsapp || S.whatsapp || "");
+      btn.disabled = true;
+      try {
+        const blob = await CatalogoPDF.pedido({
+          loja: { nome: D.site.nome || S.nome || "Rota Importados", whatsapp: wa ? fmtTel(wa) : "", site: location.host },
+          logo: "/img/logo.png", numero: p.id, data: dataBR(p.data, true),
+          cliente: [c.nome || "Cliente", c.telefone && "WhatsApp: " + fmtTel(c.telefone), c.doc && `${c.docTipo || "Documento"}: ${c.doc}`, enderecoTxt(c), c.obs && "Obs.: " + c.obs].filter(Boolean),
+          itens: p.itens.map((i) => ({ q: i.q, nome: i.nome + (i.variacao ? ` (${i.variacao})` : "") + (i.sku ? ` · ${i.sku}` : ""), unit: i.preco == null ? "consulta" : m(i.preco), total: i.preco == null ? "—" : m(i.preco * i.q) })),
+          totais: [
+            ...(p.frete || p.desconto ? [["Subtotal", m(sub)]] : []),
+            ...(p.frete ? [["Frete / entrega", m(p.frete)]] : []),
+            ...(p.desconto ? [["Desconto", "- " + m(p.desconto)]] : []), // hífen: a fonte do PDF não tem o sinal "−"
+            [p.moeda === "USD" ? "Total" : "Total no Pix", m(total) + (consulta ? " +" : ""), true],
+            ...(cartao ? [[`No cartão${n > 1 ? ` (até ${n}x de ${brl(Math.round((cartao / n) * 100) / 100)})` : ""}`, brl(cartao)]] : []),
+          ],
+          notas: [consulta ? "Itens sem preço: valor a combinar." : "", "Disponibilidade, pagamento e entrega confirmados pelo WhatsApp."].filter(Boolean),
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `pedido-${p.id}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        toast(`PDF do pedido #${p.id} baixado`);
+      } catch (err) { toast("Não foi possível gerar o PDF: " + err.message, true); }
+      btn.disabled = false;
     }
     $("#pedFiltro").addEventListener("click", (e) => { const b = e.target.closest("[data-pf]"); if (b) { pedFiltro = b.dataset.pf; renderPedidos(); } });
     async function salvarPedido(id, campos) {
@@ -869,6 +986,14 @@
       if (e.target.matches("[data-nota]")) salvarPedido(id, { nota: e.target.value });
     });
     $("#pedLista").addEventListener("click", async (e) => {
+      const ac = e.target.closest("[data-acao]");
+      if (ac) {
+        const p = D.pedidos.find((x) => x.id === Number(ac.closest("[data-pid]").dataset.pid));
+        if (ac.dataset.acao === "editar") abrirEdicaoPedido(p);
+        if (ac.dataset.acao === "whats") abrirTextoPedido(p);
+        if (ac.dataset.acao === "pdf") pdfPedido(p, ac);
+        return;
+      }
       if (!e.target.matches("[data-del]")) return;
       const id = Number(e.target.closest("[data-pid]").dataset.pid);
       if (!confirm(`Excluir o pedido #${id}? Isso não pode ser desfeito.`)) return;
@@ -899,7 +1024,8 @@
     $("#nUf").innerHTML += UFS.map((u) => `<option>${u}</option>`).join("");
     $("#nStatus").innerHTML = Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
     let nItens = [];
-    const pedMoeda = () => (cot("pix") || cot("efetivo") ? "BRL" : "USD");
+    let edPedId = null, moedaEd = null; // edição de um pedido existente (null = pedido novo)
+    const pedMoeda = () => moedaEd || (cot("pix") || cot("efetivo") ? "BRL" : "USD");
     const pedFmt = (v) => (pedMoeda() === "USD" ? usd(v) : brl(v));
 
     function ajustarPaisPed() {
@@ -920,12 +1046,35 @@
     function abrirNovoPedido() {
       $("#pedForm").reset();
       nItens = [];
+      edPedId = null; moedaEd = null;
+      $("#pedTitle").textContent = "Novo pedido";
+      $("#nSalvar").textContent = "Salvar pedido";
       $("#nErro").hidden = true;
       $("#nRes").innerHTML = "";
       ajustarPaisPed();
       renderItensPed();
       dlgPed.showModal();
       nf.nome.focus();
+    }
+    // Editar: mesma janela, preenchida com o pedido; na edição nenhum dado do cliente é obrigatório
+    function abrirEdicaoPedido(p) {
+      abrirNovoPedido();
+      edPedId = p.id; moedaEd = p.moeda === "USD" ? "USD" : "BRL";
+      $("#pedTitle").textContent = `Editar pedido #${p.id}`;
+      $("#nSalvar").textContent = "Salvar alterações";
+      const c = p.cliente || {};
+      nf.pais.value = DOC[c.pais] ? c.pais : "Brasil";
+      ajustarPaisPed();
+      const v = (k) => c[k] || "";
+      nf.nome.value = v("nome"); nf.telefone.value = v("telefone"); nf.doc.value = v("doc"); nf.cep.value = v("cep");
+      if (nf.pais.value === "Brasil") nf.uf.value = v("estado"); else nf.estado.value = v("estado");
+      nf.rua.value = v("rua"); nf.numero.value = v("numero"); nf.complemento.value = v("complemento");
+      nf.bairro.value = v("bairro"); nf.cidade.value = v("cidade"); nf.obs.value = v("obs");
+      nf.frete.value = p.frete ? String(p.frete).replace(".", ",") : "";
+      nf.desconto.value = p.desconto ? String(p.desconto).replace(".", ",") : "";
+      nf.status.value = p.status; nf.nota.value = p.nota || "";
+      nItens = p.itens.map((i) => ({ sku: i.sku, nome: i.nome, v: i.variacao || "", q: i.q, preco: i.preco }));
+      renderItensPed();
     }
     // Preço sugerido = o mesmo que o site mostra (US$ convertido pela cotação Pix, ou US$ sem cotação)
     const precoSugerido = (p) => { if (!(p.price > 0)) return null; const c = cot("pix") || cot("efetivo"); return c ? Math.round(p.price * c.rate * 100) / 100 : p.price; };
@@ -942,9 +1091,17 @@
       totalPed();
     }
     function totalPed() {
-      const t = nItens.reduce((s, i) => s + (i.preco || 0) * i.q, 0);
+      const sub = nItens.reduce((s, i) => s + (i.preco || 0) * i.q, 0);
+      const frete = numOuNull(nf.frete.value) || 0, desc = numOuNull(nf.desconto.value) || 0;
+      const t = Math.max(0, sub + frete - desc);
+      const simb = pedMoeda() === "USD" ? "US$" : "R$";
+      $("#nFreteLbl").textContent = `Frete / entrega (${simb})`;
+      $("#nDescLbl").textContent = `Desconto (${simb})`;
+      $("#nSub").textContent = nItens.length && (frete || desc) ? `Itens ${pedFmt(sub)}${frete ? ` + frete ${pedFmt(frete)}` : ""}${desc ? ` − desconto ${pedFmt(desc)}` : ""}` : "";
       $("#nTotal").textContent = nItens.length ? pedFmt(t) + (nItens.some((i) => i.preco == null) ? " + itens sem preço" : "") : "—";
     }
+    nf.frete.addEventListener("input", totalPed);
+    nf.desconto.addEventListener("input", totalPed);
     $("#nBusca").addEventListener("input", () => {
       const q = norm($("#nBusca").value).trim().split(/\s+/).filter(Boolean);
       const res = q.length ? PROD.filter((p) => q.every((t) => p._busca.includes(t))).slice(0, 8) : [];
@@ -990,26 +1147,43 @@
       const g = (k) => nf[k].value.trim();
       const pais = g("pais"), br = pais === "Brasil";
       const cliente = {
-        nome: g("nome"), pais, doc: g("doc"), cep: g("cep"), estado: br ? g("uf") : g("estado"),
+        nome: g("nome"), telefone: g("telefone"), pais, doc: g("doc"), cep: g("cep"), estado: br ? g("uf") : g("estado"),
         rua: g("rua"), numero: g("numero"), complemento: g("complemento"), bairro: g("bairro"), cidade: g("cidade"), obs: g("obs"),
       };
-      const regiao = br ? "o estado" : pais === "Argentina" ? "a província" : "o departamento";
-      const faltas = [["nome", "o nome completo"], ["doc", "o " + DOC[pais]], ["cep", br && "o CEP"], ["estado", regiao], ["rua", "a rua"], ["numero", "o número"], ["bairro", "o bairro"], ["cidade", "a cidade"]];
-      const falta = faltas.find(([k, txt]) => txt && !cliente[k]);
       const erro = (t, campo) => { $("#nErro").textContent = t; $("#nErro").hidden = false; if (campo) campo.focus(); };
-      if (falta) return erro(`Informe ${falta[1]}.`, nf[falta[0] === "estado" ? (br ? "uf" : "estado") : falta[0]]);
-      if (br && !cpfValido(cliente.doc)) return erro("CPF inválido. Confira os números.", nf.doc);
-      if (br && soDig(cliente.cep).length !== 8) return erro("O CEP tem 8 números.", nf.cep);
+      const editando = edPedId != null;
+      // Pedido novo: dados completos obrigatórios. Edição: só confere o que estiver preenchido.
+      if (!editando) {
+        const regiao = br ? "o estado" : pais === "Argentina" ? "a província" : "o departamento";
+        const faltas = [["nome", "o nome completo"], ["doc", "o " + DOC[pais]], ["cep", br && "o CEP"], ["estado", regiao], ["rua", "a rua"], ["numero", "o número"], ["bairro", "o bairro"], ["cidade", "a cidade"]];
+        const falta = faltas.find(([k, txt]) => txt && !cliente[k]);
+        if (falta) return erro(`Informe ${falta[1]}.`, nf[falta[0] === "estado" ? (br ? "uf" : "estado") : falta[0]]);
+      }
+      if (br && (cliente.doc || !editando) && !cpfValido(cliente.doc)) return erro("CPF inválido. Confira os números.", nf.doc);
+      if (br && (cliente.cep || !editando) && soDig(cliente.cep).length !== 8) return erro("O CEP tem 8 números.", nf.cep);
+      const tel = soDig(cliente.telefone);
+      if (tel && (tel.length < 8 || tel.length > 15)) return erro("WhatsApp do cliente inválido: use DDI + DDD + número (ex.: 5511999998888).", nf.telefone);
       if (!nItens.length) return erro("Adicione pelo menos um item.", $("#nBusca"));
+      const frete = numOuNull(g("frete")), desconto = numOuNull(g("desconto"));
+      if ((frete != null && !(frete >= 0)) || (desconto != null && !(desconto >= 0))) return erro("Frete e desconto: use só números, ex.: 15,00.", nf.frete);
       $("#nErro").hidden = true;
       $("#nSalvar").disabled = true;
+      const corpo = { cliente, itens: nItens, frete: frete || 0, desconto: desconto || 0, status: g("status"), nota: g("nota") };
       try {
-        const r = await api("POST", "pedido", { cliente, itens: nItens, moeda: pedMoeda(), status: g("status"), nota: g("nota") });
-        D.pedidos.unshift(r.pedido);
-        pedFiltro = "";
-        renderPedidos(); renderGeral();
-        dlgPed.close();
-        toast(`Pedido #${r.pedido.id} salvo`);
+        if (editando) {
+          const r = await api("PUT", "pedido", { id: edPedId, ...corpo });
+          D.pedidos[D.pedidos.findIndex((p) => p.id === edPedId)] = r.pedido;
+          renderPedidos(); renderGeral();
+          dlgPed.close();
+          toast(`Pedido #${edPedId} atualizado`);
+        } else {
+          const r = await api("POST", "pedido", { ...corpo, moeda: pedMoeda() });
+          D.pedidos.unshift(r.pedido);
+          pedFiltro = "";
+          renderPedidos(); renderGeral();
+          dlgPed.close();
+          toast(`Pedido #${r.pedido.id} salvo`);
+        }
       } catch (err) { erro(err.message); }
       $("#nSalvar").disabled = false;
     });
