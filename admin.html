@@ -315,6 +315,8 @@
             <option value="editado">Editados no painel</option>
             <option value="novo">Criados no painel</option>
           </select>
+          <button class="btn" id="pSelPag">Selecionar esta página</button>
+          <button class="btn" id="pSelTodos">Selecionar todos</button>
         </div>
         <div class="bulk" id="bulk" hidden>
           <b id="bulkN"></b>
@@ -1250,8 +1252,15 @@
     }
     function renderBulk() {
       $("#bulk").hidden = !sel.size;
-      $("#bulkN").textContent = `${sel.size} selecionado(s)`;
+      $("#bulkN").textContent = `${sel.size.toLocaleString("pt-BR")} selecionado(s)`;
+      // "Selecionar todos" pega todos os produtos do filtro atual, de todas as páginas
+      const n = filtrados.length.toLocaleString("pt-BR");
+      $("#pSelTodos").textContent = filtrados.length > POR_PAG ? `Selecionar todos (${n})` : "Selecionar todos";
+      $("#pSelTodos").disabled = !filtrados.length || filtrados.every((p) => sel.has(p.sku));
+      $("#pSelPag").hidden = filtrados.length <= POR_PAG;
     }
+    $("#pSelTodos").addEventListener("click", () => { filtrados.forEach((p) => sel.add(p.sku)); renderProdutos(); });
+    $("#pSelPag").addEventListener("click", () => { filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG).forEach((p) => sel.add(p.sku)); renderProdutos(); });
     let tBusca;
     $("#pBusca").addEventListener("input", () => { clearTimeout(tBusca); tBusca = setTimeout(() => { pag = 0; renderProdutos(); }, 200); });
     $("#pSetor").addEventListener("change", () => { pag = 0; renderProdutos(); });

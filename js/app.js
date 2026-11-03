@@ -134,6 +134,8 @@
       ? curto ? `ou ${CARTAO.n}x de ${fmt(parcela(v))} no cartão` : `ou ${fmt(noCartao(v))} no cartão em até ${CARTAO.n}x de ${fmt(parcela(v))}`
       : `ou ${fmt(noCartao(v))} no cartão`;
   const catName = (id) => (CATS.find((c) => c.id === id) || {}).nome || "";
+  const POS_CAT = new Map(CATS.map((c, i) => [c.id, i]));
+  const posCat = (id) => (POS_CAT.has(id) ? POS_CAT.get(id) : CATS.length);
   // Códigos "EPIC-" passaram a ser "ADM1-": links e carrinhos antigos continuam encontrando o produto
   const byId = (id) => PRODUTOS.find((p) => p.id === id) || (/^EPIC-/i.test(id) ? PRODUTOS.find((p) => p.id === id.replace(/^EPIC-/i, "ADM1-")) : undefined);
   const foto = (p) => p.imagens[0] || fallback(p.nome);
@@ -196,7 +198,8 @@
   // Atalhos para os departamentos com mais produtos
   const qtd = PRODUTOS.reduce((m, p) => ((m[p.categoria] = (m[p.categoria] || 0) + 1), m), {});
   {
-    const top = [...CATS].sort((a, b) => (qtd[b.id] || 0) - (qtd[a.id] || 0)).slice(0, 4);
+    // os 4 primeiros na ordem do painel (antes: os 4 com mais produtos)
+    const top = CATS.filter((c) => qtd[c.id]).slice(0, 4);
     if (top.length > 1) {
       $("#heroCats").innerHTML = `<span>Explore:</span>` + top.map((c) => `<a href="${catalogHref({ cat: c.id })}">${esc(c.nome)}</a>`).join("");
       $("#heroCats").hidden = false;
@@ -441,6 +444,8 @@
     if (state.sort === "maior") list = [...list].sort((a, b) => (b.preco ?? -1) - (a.preco ?? -1));
     if (state.sort === "nome") list = [...list].sort((a, b) => a.nome.localeCompare(b.nome));
     if (state.sort === "recentes") list = [...list].sort((a, b) => (b.adicionado || 0) - (a.adicionado || 0));
+    // "Destaques" em todos os departamentos: segue a ordem dos departamentos definida no painel
+    if (state.sort === "destaque" && state.cat === "todos") list = [...list].sort((a, b) => posCat(a.categoria) - posCat(b.categoria));
     // esgotados sempre por último
     return [...list].sort((a, b) => esgotado(a) - esgotado(b));
   }
@@ -679,12 +684,20 @@
     const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
     if (ofertas.length >= 2) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
 
-    // Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações
+    // Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações.
+    // Ordenadas pela ordem dos departamentos do painel (o departamento da maioria dos produtos da tag).
     const porTag = {};
     PRODUTOS.forEach((p) => (p.tags || []).slice(0, 1).forEach((t) => (porTag[t] = porTag[t] || []).push(p)));
+    const depDaTag = (ps) => {
+      const n = {};
+      ps.forEach((p) => (n[p.categoria] = (n[p.categoria] || 0) + 1));
+      return posCat(Object.keys(n).sort((a, b) => n[b] - n[a] || posCat(a) - posCat(b))[0]);
+    };
     Object.entries(porTag)
       .filter(([, ps]) => ps.length >= 2)
-      .forEach(([t, ps]) => html.push(shelfHTML(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
+      .map(([t, ps], i) => ({ t, ps, i, pos: depDaTag(ps) }))
+      .sort((a, b) => a.pos - b.pos || a.i - b.i)
+      .forEach(({ t, ps }) => html.push(shelfHTML(t, ps.sort(disponiveisPrimeiro), "", "destaque")));
 
     // Marcas: as com mais produtos disponíveis primeiro; o restante aparece em "Ver todas"
     if (marcas.length > 1) {

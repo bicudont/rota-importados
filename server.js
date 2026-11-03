@@ -606,15 +606,20 @@ function limparCampos(c) {
 const ehNovo = (aj, sku) => aj.novos.some((p) => p.sku === sku);
 
 function salvarProduto(d) {
-  const sku = texto(d.sku, 120);
-  const campos = limparCampos(d.campos || {});
   const aj = lerAjustes();
+  aplicarCampos(aj, null, texto(d.sku, 120), limparCampos(d.campos || {}));
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj };
+}
+
+// Aplica campos a um produto dentro de "aj" (sem gravar). "loja" pode vir já lida, para lotes.
+function aplicarCampos(aj, loja, sku, campos) {
   if (ehNovo(aj, sku)) {
     const i = aj.novos.findIndex((p) => p.sku === sku);
     if (i < 0) throw new Error("Produto não encontrado.");
     aj.novos[i] = { ...aj.novos[i], ...campos, updated: new Date().toISOString() };
   } else {
-    const loja = lerJSON(F.loja, null);
+    if (loja === null) loja = lerJSON(F.loja, null);
     const orig = loja && Array.isArray(loja.products) && loja.products.find((p) => p.sku === sku);
     if (!orig) throw new Error("Produto não encontrado no Catálogo Pro.");
     const atual = aj.produtos[sku] || { campos: {}, base: {} };
@@ -626,8 +631,6 @@ function salvarProduto(d) {
     if (Object.keys(atual.campos).length) aj.produtos[sku] = atual;
     else delete aj.produtos[sku];
   }
-  gravarJSON(F.ajustes, aj);
-  return { ok: true, ajustes: aj };
 }
 
 function criarProduto(d) {
@@ -686,11 +689,17 @@ function restaurarProdutos(d) {
 function alterarVarios(d) {
   if (!Array.isArray(d.skus) || !d.skus.length) throw new Error("Nenhum produto selecionado.");
   if (typeof d.active !== "boolean") throw new Error("Ação inválida.");
-  let aj;
-  for (const sku of d.skus.slice(0, 5000)) {
-    try { aj = salvarProduto({ sku, campos: { active: d.active } }).ajustes; } catch {}
+  // Lê e grava uma vez só (com "Selecionar todos" podem vir milhares de produtos)
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const doCatalogo = new Map(loja && Array.isArray(loja.products) ? loja.products.map((p) => [p.sku, p]) : []);
+  const campos = limparCampos({ active: d.active });
+  for (const s of d.skus.slice(0, 20000)) {
+    const sku = texto(s, 120);
+    try { aplicarCampos(aj, { products: doCatalogo.has(sku) ? [doCatalogo.get(sku)] : [] }, sku, campos); } catch {}
   }
-  return { ok: true, ajustes: aj || lerAjustes() };
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, ajustes: aj };
 }
 
 function enviarFoto(req, res) {
