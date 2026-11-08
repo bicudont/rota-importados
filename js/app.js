@@ -78,6 +78,7 @@
           nome: p.name,
           categoria: slug(p.sector || "Outros"),
           setor: p.sector || "Outros",
+          sub: p.subsector || "",
           marca: p.brand || "",
           tipo: p.tipo || "",
           notas: p.notes || "",
@@ -134,6 +135,14 @@
       ? curto ? `ou ${CARTAO.n}x de ${fmt(parcela(v))} no cartão` : `ou ${fmt(noCartao(v))} no cartão em até ${CARTAO.n}x de ${fmt(parcela(v))}`
       : `ou ${fmt(noCartao(v))} no cartão`;
   const catName = (id) => (CATS.find((c) => c.id === id) || {}).nome || "";
+  // Subcategorias de um departamento: as que têm produtos, na ordem criada no painel
+  const SUBS_SITE = (site && site.subcategorias) || {};
+  const subsDoDepto = (catId) => {
+    if (catId === "todos") return [];
+    const usadas = new Set(PRODUTOS.filter((p) => p.categoria === catId && p.sub).map((p) => p.sub));
+    const ordem = SUBS_SITE[catName(catId)] || [];
+    return [...usadas].sort((a, b) => ((ordem.indexOf(a) + 1) || 1e4) - ((ordem.indexOf(b) + 1) || 1e4) || a.localeCompare(b));
+  };
   const POS_CAT = new Map(CATS.map((c, i) => [c.id, i]));
   const posCat = (id) => (POS_CAT.has(id) ? POS_CAT.get(id) : CATS.length);
   // Códigos "EPIC-" passaram a ser "ADM1-": links e carrinhos antigos continuam encontrando o produto
@@ -148,15 +157,16 @@
   /* ---------- Endereços (rotas com #, sem mudar o servidor) ---------- */
   const PAGE = 24;
   const ORDENS = ["destaque", "recentes", "menor", "maior", "nome"];
-  let state = { cat: "todos", marca: "", q: "", sort: "destaque", disp: false, limite: PAGE };
+  let state = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, limite: PAGE };
   let VIEW = "home";
   const TITULO = document.title;
 
   const prodHref = (p) => "#/produto/" + encodeURIComponent(p.id);
   function catalogHref(o = {}) {
-    const st = { cat: "todos", marca: "", q: "", sort: "destaque", disp: false, ...o };
+    const st = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, ...o };
     const prm = new URLSearchParams();
     if (st.cat !== "todos") prm.set("cat", st.cat);
+    if (st.cat !== "todos" && st.sub) prm.set("sub", st.sub);
     if (st.marca) prm.set("marca", st.marca);
     if (st.q) prm.set("q", st.q);
     if (st.sort !== "destaque") prm.set("ordem", st.sort);
@@ -359,7 +369,7 @@
   /* ---------- Busca: mesmo filtro do catálogo + sugestões ---------- */
   const input = $("#search"), suggest = $("#suggest");
   let sugIdx = -1, sugList = [];
-  const textoBusca = (p) => norm(`${p.nome} ${p.marca} ${p.sku} ${p.tipo} ${p.descricao} ${catName(p.categoria)}`);
+  const textoBusca = (p) => norm(`${p.nome} ${p.marca} ${p.sku} ${p.tipo} ${p.sub} ${p.descricao} ${catName(p.categoria)}`);
 
   function fecharSugestoes() {
     suggest.hidden = true;
@@ -431,6 +441,7 @@
     const q = norm(o.q);
     return (
       (ignorar === "cat" || o.cat === "todos" || p.categoria === o.cat) &&
+      (ignorar === "cat" || ignorar === "sub" || !o.sub || p.sub === o.sub) &&
       (ignorar === "marca" || !o.marca || p.marca === o.marca) &&
       (ignorar === "disp" || !o.disp || !esgotado(p)) &&
       (!q || textoBusca(p).includes(q))
@@ -462,6 +473,12 @@
       `<label class="fopt${n ? "" : " fopt--zero"}"><input type="radio" name="${name}" value="${esc(value)}"${on ? " checked" : ""} /><span>${esc(label)}</span><small>${n}</small></label>`;
 
     $("#fCats").innerHTML = deptos.map((c) => opcao("fcat", c.id, c.nome, conta("cat", (p) => c.id === "todos" || p.categoria === c.id), state.cat === c.id)).join("");
+    // Subcategorias: só dentro de um departamento que tenha produtos com subcategoria
+    const subs = subsDoDepto(state.cat);
+    $("#fSubsBox").hidden = !subs.length;
+    $("#fSubs").innerHTML = subs.length
+      ? opcao("fsub", "", "Todas", conta("sub", () => true), !state.sub) + subs.map((s) => opcao("fsub", s, s, conta("sub", (p) => p.sub === s), state.sub === s)).join("")
+      : "";
     $("#fMarcasBox").hidden = marcas.length < 2;
     $("#fMarcas").innerHTML =
       opcao("fmarca", "", "Todas as marcas", conta("marca", () => true), !state.marca) +
@@ -474,6 +491,7 @@
     // Filtros ativos (com botão para remover cada um)
     const ativos = [];
     if (state.cat !== "todos") ativos.push(["cat", catName(state.cat)]);
+    if (state.sub) ativos.push(["sub", state.sub]);
     if (state.marca) ativos.push(["marca", state.marca]);
     if (state.q) ativos.push(["q", `“${state.q}”`]);
     if (state.disp) ativos.push(["disp", "Somente disponíveis"]);
@@ -504,7 +522,8 @@
 
   $("#filters").addEventListener("change", (e) => {
     const t = e.target;
-    if (t.name === "fcat") setFiltro({ cat: t.value });
+    if (t.name === "fcat") setFiltro({ cat: t.value, sub: "" });
+    else if (t.name === "fsub") setFiltro({ sub: t.value });
     else if (t.name === "fmarca") setFiltro({ marca: t.value });
     else if (t.id === "fDisp") setFiltro({ disp: t.checked });
     else return; // digitar na busca de marca não refaz a listagem
@@ -512,7 +531,7 @@
   const limparFiltros = () => {
     input.value = "";
     $("#fMarcaBusca").value = "";
-    setFiltro({ cat: "todos", marca: "", q: "", disp: false });
+    setFiltro({ cat: "todos", sub: "", marca: "", q: "", disp: false });
   };
   $("#activeFilters").addEventListener("click", (e) => {
     const b = e.target.closest("[data-rm-filter]");
@@ -520,7 +539,7 @@
     const k = b.dataset.rmFilter;
     if (k === "all") return limparFiltros();
     if (k === "q") input.value = "";
-    setFiltro(k === "cat" ? { cat: "todos" } : k === "disp" ? { disp: false } : { [k]: "" });
+    setFiltro(k === "cat" ? { cat: "todos", sub: "" } : k === "disp" ? { disp: false } : { [k]: "" });
   });
   $("#clearFilters").addEventListener("click", limparFiltros);
   $("#emptyClear").addEventListener("click", limparFiltros);
@@ -551,6 +570,7 @@
 
   function tituloListagem() {
     if (state.q) return `Resultados para “${state.q}”`;
+    if (state.cat !== "todos" && state.sub) return `${catName(state.cat)} › ${state.sub}`;
     if (state.cat !== "todos") return catName(state.cat);
     if (state.marca) return state.marca;
     if (state.sort === "recentes") return "Lançamentos";
@@ -570,7 +590,8 @@
     $("#catTitle").textContent = titulo;
     const migalhas = [["Início", "#/"], ["Produtos", catalogHref()]];
     if (state.cat !== "todos") migalhas.push([catName(state.cat), catalogHref({ cat: state.cat })]);
-    if (state.marca) migalhas.push([state.marca, catalogHref({ cat: state.cat, marca: state.marca })]);
+    if (state.cat !== "todos" && state.sub) migalhas.push([state.sub, catalogHref({ cat: state.cat, sub: state.sub })]);
+    if (state.marca) migalhas.push([state.marca, catalogHref({ cat: state.cat, sub: state.sub, marca: state.marca })]);
     if (state.q) migalhas.push([`Busca: ${state.q}`, ""]);
     $("#crumbs").innerHTML = crumbs(migalhas);
     $("#resultInfo").textContent = `${all.length.toLocaleString("pt-BR")} produto${all.length === 1 ? "" : "s"} encontrado${all.length === 1 ? "" : "s"}`;
@@ -747,6 +768,7 @@
       ["Marca", p.marca],
       ["Código", p.sku],
       ["Departamento", catName(p.categoria)],
+      ["Subcategoria", p.sub],
       ["Tipo", p.tipo],
       ["Volume", p.volume ? `${p.volume} ml` : ""],
       ["Notas", p.notas],
@@ -755,7 +777,8 @@
     const rel = PRODUTOS.filter((x) => x.categoria === p.categoria && x.id !== p.id).sort(
       (a, b) => (b.marca === p.marca) - (a.marca === p.marca) || esgotado(a) - esgotado(b)
     );
-    const migalhas = [["Início", "#/"], ["Produtos", catalogHref()], [catName(p.categoria), catalogHref({ cat: p.categoria })], [p.nome, ""]];
+    const migalhas = [["Início", "#/"], ["Produtos", catalogHref()], [catName(p.categoria), catalogHref({ cat: p.categoria })]]
+      .concat(p.sub ? [[p.sub, catalogHref({ cat: p.categoria, sub: p.sub })]] : [], [[p.nome, ""]]);
 
     $("#produto").innerHTML = `
       <nav class="crumbs" aria-label="Você está aqui">${crumbs(migalhas)}</nav>
@@ -881,9 +904,10 @@
     }
     if (view === "catalogo") {
       const prm = new URLSearchParams(qs);
-      const cat = prm.get("cat");
+      const cat = CATS.some((c) => c.id === prm.get("cat")) ? prm.get("cat") : "todos";
       state = {
-        cat: CATS.some((c) => c.id === cat) ? cat : "todos",
+        cat,
+        sub: subsDoDepto(cat).includes(prm.get("sub")) ? prm.get("sub") : "",
         marca: marcas.includes(prm.get("marca")) ? prm.get("marca") : "",
         q: (prm.get("q") || "").trim(),
         sort: ORDENS.includes(prm.get("ordem")) ? prm.get("ordem") : "destaque",

@@ -171,6 +171,12 @@
     .ordem li.mexeu { background: #fff8e8; }
     .ordem .pos { font-weight: 700; color: var(--muted); text-align: right; }
     .ordem .acts { display: flex; gap: 4px; }
+    .ordem .subs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+    .subchip { display: inline-flex; align-items: center; gap: 4px; background: #eef4ff; border: 1px solid #cfe0fb; border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 13px; }
+    .subchip small { color: var(--muted); }
+    .subchip button { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); }
+    .subchip button:hover { background: #fde2e2; color: var(--err); }
+    .subnova { border: 1px dashed var(--line); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 13px; min-width: 170px; background: transparent; }
     .ordem .acts button { width: 34px; min-height: 32px; padding: 0; }
     .cot-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
@@ -324,6 +330,7 @@
           <button class="btn btn--sm" data-seltodos>Selecionar todos</button>
           <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
           <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
+          <button class="btn btn--sm" id="bulkCat">Mudar categoria…</button>
           <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
         </div>
         <div class="list" id="pLista"></div>
@@ -523,8 +530,12 @@
         </form>
 
         <div class="card" style="margin-top:16px">
-          <h2>Ordem dos departamentos</h2>
-          <p class="muted small" style="margin:4px 0 12px">Vale para o site (menu de departamentos, barra de navegação, seção “Departamentos” e vitrines da página inicial, filtros do catálogo) e para o catálogo em PDF. Use as setas e clique em <b>Salvar ordem</b>.</p>
+          <h2>Departamentos (categorias)</h2>
+          <p class="muted small" style="margin:4px 0 12px">Crie e exclua categorias, e defina a ordem. A ordem vale para o site (menu de departamentos, barra de navegação, seção “Departamentos” e vitrines da página inicial, filtros do catálogo) e para o catálogo em PDF. Use as setas e clique em <b>Salvar ordem</b>.</p>
+          <form id="catNovaForm" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <input class="field" id="catNova" maxlength="120" placeholder="Nome da nova categoria" aria-label="Nome da nova categoria" style="flex:1;min-width:200px" />
+            <button class="btn btn--primary" id="catCriar">+ Criar categoria</button>
+          </form>
           <ol class="ordem" id="ordemLista"></ol>
           <div class="exib-acts">
             <b class="small" id="ordemSujo" style="color:var(--warn)" hidden>• Alterações não salvas</b>
@@ -549,6 +560,7 @@
           <div><label class="lbl" for="dMarca">Marca</label><input class="field" id="dMarca" list="dlMarcas" maxlength="120" /></div>
           <div><label class="lbl" for="dSetor">Departamento</label><input class="field" id="dSetor" list="dlSetores" maxlength="120" /></div>
         </div>
+        <div><label class="lbl" for="dSub">Subcategoria</label><select class="field" id="dSub"></select><div class="hint">Crie subcategorias na aba Loja, em “Departamentos (categorias)”.</div></div>
         <div class="grid2">
           <div><label class="lbl" for="dPreco">Preço (US$)</label><input class="field" id="dPreco" inputmode="decimal" placeholder="Vazio = sob consulta" /><div class="preview" id="dPrecoBR"></div></div>
           <div><label class="lbl" for="dEstoque">Estoque</label><input class="field" id="dEstoque" inputmode="numeric" placeholder="Vazio = não informado" /><div class="hint">0 = Esgotado · até 3 = “Últimas unidades”</div></div>
@@ -637,6 +649,35 @@
       <div class="dlg__foot">
         <div></div>
         <div><button type="button" class="btn" id="txtCopiar">📋 Copiar</button><button type="button" class="btn btn--primary" id="txtAbrir">💬 Abrir no WhatsApp</button></div>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="dlgMover" aria-labelledby="movTitle">
+    <div class="dlg">
+      <div class="dlg__head"><h2 id="movTitle">Mudar categoria</h2><button type="button" class="x" data-fechar-mov aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p id="movMsg"></p>
+        <div class="grid2" style="margin-top:12px">
+          <div><label class="lbl" for="movCat">Categoria</label><select class="field" id="movCat"></select></div>
+          <div><label class="lbl" for="movSub">Subcategoria</label><select class="field" id="movSub"></select></div>
+        </div>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" data-fechar-mov>Cancelar</button><button type="button" class="btn btn--primary" id="movAplicar">Aplicar</button></div>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="dlgCat" aria-labelledby="catTitle">
+    <div class="dlg">
+      <div class="dlg__head"><h2 id="catTitle">Excluir categoria</h2><button type="button" class="x" data-fechar-cat aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p id="catMsg"></p>
+        <div id="catDestinoBox" style="margin-top:12px"><label class="lbl" for="catDestino">Mover os produtos para</label><select class="field" id="catDestino"></select></div>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" data-fechar-cat>Cancelar</button><button type="button" class="btn btn--danger" id="catConfirmar">Excluir categoria</button></div>
       </div>
     </div>
   </dialog>
@@ -729,10 +770,10 @@
       const excluidos = new Set(aj.excluidos || []); // excluídos no painel: ficam fora de tudo, só na lista "Excluídos"
       const todos = (D.loja ? D.loja.products : []).filter((p) => !novos.has(p.sku)).map((p) => aplicar(p, p.sku && aj.produtos[p.sku]))
         .concat(aj.novos.map((p) => ({ ...p, _novo: true, _editados: [] })));
-      todos.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand].join(" ")); });
+      todos.forEach((p) => { p._fotos = listaFotos(p.photos); p._busca = norm([p.name, p.sku, p.brand, p.subsector].join(" ")); });
       PROD = todos.filter((p) => !excluidos.has(p.sku));
       EXCLUIDOS = todos.filter((p) => excluidos.has(p.sku));
-      const setores = [...new Set(PROD.map((p) => p.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const setores = [...new Set(PROD.map((p) => p.sector).filter(Boolean).concat((D.site && D.site.categorias) || []))].sort((a, b) => a.localeCompare(b));
       const marcas = [...new Set(PROD.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       const atual = $("#pSetor").value;
       $("#pSetor").innerHTML = `<option value="">Todos os departamentos</option>` + setores.map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
@@ -1240,7 +1281,7 @@
             return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
               <input type="checkbox" data-sel aria-label="Selecionar ${esc(p.name)}"${sel.has(p.sku) ? " checked" : ""} />
               <img src="${p._fotos.length ? fotoURL(p._fotos[0]) : SEMFOTO}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
-              <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}</div></div>
+              <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}${p.subsector ? " › " + esc(p.subsector) : ""}</div></div>
               <div class="num c-price">${preco}</div>
               <div class="num c-stock">${p.stock == null ? "—" : p.stock === 0 ? '<span class="badge b-out">0</span>' : p.stock}</div>
               <div class="c-vis">${p.active === false ? '<span class="badge b-off">Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição (aba Pendências)">Fora do site: ${motivoFora(p)}</span>` : p.stock === 0 ? '<span class="badge b-out">Esgotado</span>' : '<span class="badge b-new">Visível</span>'}</div>
@@ -1289,6 +1330,32 @@
       if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirEditor(row.dataset.sku); }
     });
     $("#bulkClear").addEventListener("click", () => { sel.clear(); renderProdutos(); });
+    // Mudar categoria/subcategoria dos selecionados
+    const dlgMover = $("#dlgMover");
+    $$("[data-fechar-mov]").forEach((b) => b.addEventListener("click", () => dlgMover.close()));
+    const movSubs = () => {
+      const lista = ((D.site.subcategorias || {})[$("#movCat").value] || []);
+      $("#movSub").innerHTML = `<option value="">${lista.length ? "(nenhuma)" : "(sem subcategorias)"}</option>` + lista.map((s) => `<option>${esc(s)}</option>`).join("");
+    };
+    $("#movCat").addEventListener("change", movSubs);
+    $("#bulkCat").addEventListener("click", () => {
+      const cats = [...sel].map((s) => (PROD.find((p) => p.sku === s) || {}).sector || "Outros");
+      const comum = cats.every((c) => c === cats[0]) ? cats[0] : "";
+      $("#movMsg").textContent = `${sel.size.toLocaleString("pt-BR")} produto(s) selecionado(s) vão para a categoria e subcategoria escolhidas.`;
+      $("#movCat").innerHTML = setoresUsados().sort((a, b) => a.localeCompare(b)).map((s) => `<option${s === comum ? " selected" : ""}>${esc(s)}</option>`).join("");
+      movSubs();
+      dlgMover.showModal();
+    });
+    $("#movAplicar").addEventListener("click", async () => {
+      $("#movAplicar").disabled = true;
+      try {
+        const r = await api("PUT", "produtos", { skus: [...sel], campos: { sector: $("#movCat").value, subsector: $("#movSub").value } });
+        D.ajustes = r.ajustes; sel.clear(); montar(); renderProdutos(); renderGeral(); renderOrdem();
+        dlgMover.close();
+        toast("Categoria alterada");
+      } catch (err) { toast(err.message, true); }
+      $("#movAplicar").disabled = false;
+    });
     $$("[data-bulk]").forEach((b) => b.addEventListener("click", async () => {
       const ativo = b.dataset.bulk === "true";
       b.disabled = true;
@@ -1304,7 +1371,7 @@
     let ed = null; // { sku, fotos, novo }
     const dlg = $("#dlg");
     const numOuNull = (v) => { v = String(v).trim().replace(/\s/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); return Number(v); };
-    const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos" };
+    const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", subsector: "subcategoria", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos" };
 
     function abrirEditor(sku) {
       const p = sku ? PROD.find((x) => x.sku === sku) : null;
@@ -1313,6 +1380,7 @@
       $("#dNome").value = p ? p.name : "";
       $("#dMarca").value = p ? p.brand || "" : "";
       $("#dSetor").value = p ? p.sector || "" : "";
+      opcoesSub(p ? p.subsector || "" : "");
       $("#dPreco").value = p && p.price != null ? String(p.price).replace(".", ",") : "";
       $("#dEstoque").value = p && p.stock != null ? p.stock : "";
       $("#dTags").value = p ? p.tags || "" : "";
@@ -1376,13 +1444,23 @@
       if (arqs.length) toast("Foto(s) adicionada(s). Clique em Salvar.");
     });
 
+    // Subcategorias da categoria digitada no editor (mantém a atual mesmo se não estiver na lista)
+    const subsDe = (cat) => ((D.site.subcategorias || {})[cat || "Outros"] || []);
+    function opcoesSub(atual) {
+      const lista = subsDe($("#dSetor").value.trim());
+      const ops = atual && !lista.includes(atual) ? [...lista, atual] : lista;
+      $("#dSub").innerHTML = `<option value="">${lista.length ? "(nenhuma)" : "(esta categoria não tem subcategorias)"}</option>` +
+        ops.map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
+    }
+    $("#dSetor").addEventListener("input", () => opcoesSub($("#dSub").value));
+
     $("#pForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const preco = numOuNull($("#dPreco").value), estoque = numOuNull($("#dEstoque").value);
       if (preco != null && !(preco >= 0)) return toast("Preço inválido. Use apenas números, ex.: 49,90", true);
       if (estoque != null && !(Number.isInteger(estoque) && estoque >= 0)) return toast("Estoque inválido. Use um número inteiro.", true);
       const campos = {
-        name: $("#dNome").value.trim(), brand: $("#dMarca").value.trim(), sector: $("#dSetor").value.trim(),
+        name: $("#dNome").value.trim(), brand: $("#dMarca").value.trim(), sector: $("#dSetor").value.trim(), subsector: $("#dSub").value,
         price: preco, stock: estoque, tags: $("#dTags").value.trim(), description: $("#dDesc").value.trim(),
         active: $("#dAtivo").checked, photos: ed.fotos,
       };
@@ -1390,7 +1468,7 @@
       const p = ed.sku && PROD.find((x) => x.sku === ed.sku);
       if (p && !p._novo) for (const k in campos) {
         const atual = k === "photos" ? p._fotos : k === "active" ? p.active !== false : p[k] === undefined ? (k === "price" || k === "stock" ? null : "") : p[k];
-        if (igual(atual, campos[k]) || (k === "description" || k === "tags" || k === "brand" || k === "sector") && String(atual || "") === campos[k]) delete campos[k];
+        if (igual(atual, campos[k]) || (k === "description" || k === "tags" || k === "brand" || k === "sector" || k === "subsector") && String(atual || "") === campos[k]) delete campos[k];
       }
       $("#dSalvar").disabled = true;
       try {
@@ -2186,24 +2264,108 @@
 
     /* ---------- Ordem dos departamentos (site e catálogo PDF) ---------- */
     let ordemEd = null; // cópia em edição (null = mostra a salva)
-    const setoresUsados = () => [...new Set(PROD.map((p) => p.sector || "Outros"))];
+    const setoresUsados = () => [...new Set(PROD.map((p) => p.sector || "Outros").concat(D.site.categorias || []))];
     function renderOrdem() {
       if (!ordemEd) ordemEd = ordemSetores(setoresUsados());
       const salva = ordemSetores(setoresUsados());
       const qtd = (s) => PROD.filter((p) => noSite(p) && (p.sector || "Outros") === s).length;
+      const total = (s) => PROD.filter((p) => (p.sector || "Outros") === s).length;
       $("#ordemLista").innerHTML = ordemEd.map((s, i) => `<li data-i="${i}"${salva[i] !== s ? ' class="mexeu"' : ""}>
           <span class="pos">${i + 1}</span>
-          <span style="min-width:0"><b>${esc(s)}</b> <span class="muted small">${qtd(s).toLocaleString("pt-BR")} no site</span></span>
+          <span style="min-width:0"><b>${esc(s)}</b> <span class="muted small">${qtd(s).toLocaleString("pt-BR")} no site${total(s) !== qtd(s) ? ` · ${total(s).toLocaleString("pt-BR")} no total` : ""}${total(s) ? "" : " · vazia (só aparece no site quando tiver produtos)"}</span>
+            <span class="subs">${subsDe(s).map((sub) => `<span class="subchip">${esc(sub)} <small>${PROD.filter((p) => (p.sector || "Outros") === s && p.subsector === sub).length}</small><button type="button" data-subdel="${esc(sub)}" data-cat="${esc(s)}" title="Excluir subcategoria" aria-label="Excluir a subcategoria ${esc(sub)} de ${esc(s)}">×</button></span>`).join("")}<input class="subnova" data-subnova="${esc(s)}" maxlength="120" placeholder="+ subcategoria (Enter)" aria-label="Nova subcategoria em ${esc(s)}" /></span></span>
           <span class="acts">
             <button class="btn btn--sm" data-ord="topo" aria-label="Levar ${esc(s)} para o topo"${i ? "" : " disabled"}>⤒</button>
             <button class="btn btn--sm" data-ord="-1" aria-label="Subir ${esc(s)}"${i ? "" : " disabled"}>↑</button>
             <button class="btn btn--sm" data-ord="1" aria-label="Descer ${esc(s)}"${i < ordemEd.length - 1 ? "" : " disabled"}>↓</button>
+            <button class="btn btn--sm btn--danger" data-catdel="${esc(s)}" title="Excluir categoria" aria-label="Excluir a categoria ${esc(s)}">🗑️</button>
           </span><span></span>
         </li>`).join("");
       const sujo = ordemEd.some((s, i) => salva[i] !== s);
       $("#ordemSujo").hidden = $("#ordemDesfazer").hidden = !sujo;
       $("#ordemSalvar").disabled = !sujo;
     }
+    // Criar / excluir categorias (a ordem não salva é descartada, depois de confirmar)
+    const descartarOrdem = () => !$("#ordemDesfazer").hidden && !confirm("A ordem alterada ainda não foi salva e será descartada. Continuar?");
+    $("#catNovaForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nome = $("#catNova").value.trim();
+      if (!nome) return $("#catNova").focus();
+      if (setoresUsados().some((s) => s.toLowerCase() === nome.toLowerCase())) return toast("Essa categoria já existe.", true);
+      if (descartarOrdem()) return;
+      $("#catCriar").disabled = true;
+      try {
+        const r = await api("POST", "categoria", { nome });
+        D.site = r.site;
+        $("#catNova").value = "";
+        ordemEd = null; montar(); renderOrdem(); renderExportar();
+        toast(`Categoria “${nome}” criada. Escolha-a no editor do produto, em Departamento.`);
+      } catch (err) { toast(err.message, true); }
+      $("#catCriar").disabled = false;
+    });
+    const dlgCat = $("#dlgCat");
+    let catDel = "";
+    $$("[data-fechar-cat]").forEach((b) => b.addEventListener("click", () => dlgCat.close()));
+    // Subcategorias: criar (Enter no campo da categoria) e excluir (× no chip)
+    $("#ordemLista").addEventListener("keydown", async (e) => {
+      const inp = e.target.closest("[data-subnova]");
+      if (!inp || e.key !== "Enter") return;
+      e.preventDefault();
+      const nome = inp.value.trim(), cat = inp.dataset.subnova;
+      if (!nome) return;
+      if (descartarOrdem()) return;
+      inp.disabled = true;
+      try {
+        const r = await api("POST", "subcategoria", { categoria: cat, nome });
+        D.site = r.site;
+        ordemEd = null; renderOrdem();
+        const novo = $$("[data-subnova]").find((x) => x.dataset.subnova === cat);
+        if (novo) novo.focus();
+        toast(`Subcategoria “${nome}” criada em ${cat}`);
+      } catch (err) { toast(err.message, true); inp.disabled = false; }
+    });
+    $("#ordemLista").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-subdel]");
+      if (!b) return;
+      const sub = b.dataset.subdel, cat = b.dataset.cat;
+      const n = PROD.filter((p) => (p.sector || "Outros") === cat && p.subsector === sub).length;
+      if (!confirm(`Excluir a subcategoria “${sub}” de ${cat}?${n ? `\n\n${n} produto(s) continuam em ${cat}, só ficam sem subcategoria.` : ""}`)) return;
+      if (descartarOrdem()) return;
+      b.disabled = true;
+      try {
+        const r = await api("POST", "subcategoria-excluir", { categoria: cat, nome: sub });
+        D.site = r.site; D.ajustes = r.ajustes;
+        ordemEd = null; montar(); renderOrdem(); renderProdutos();
+        toast("Subcategoria excluída");
+      } catch (err) { toast(err.message, true); b.disabled = false; }
+    });
+    $("#ordemLista").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-catdel]");
+      if (!b) return;
+      catDel = b.dataset.catdel;
+      const n = PROD.filter((p) => (p.sector || "Outros") === catDel).length;
+      $("#catTitle").textContent = `Excluir “${catDel}”`;
+      $("#catMsg").textContent = n
+        ? `Esta categoria tem ${n.toLocaleString("pt-BR")} produto(s), contando os ocultos. Eles não são apagados: passam para a categoria escolhida abaixo.`
+        : "Esta categoria não tem produtos. Ela some da lista e do editor.";
+      $("#catDestinoBox").hidden = !n;
+      $("#catDestino").innerHTML = setoresUsados().filter((s) => s !== catDel).sort((a, c) => a.localeCompare(c))
+        .map((s) => `<option${s === "Outros" ? " selected" : ""}>${esc(s)}</option>`).join("") + (setoresUsados().includes("Outros") ? "" : "<option>Outros</option>");
+      dlgCat.showModal();
+    });
+    $("#catConfirmar").addEventListener("click", async () => {
+      if (descartarOrdem()) return;
+      const n = PROD.filter((p) => (p.sector || "Outros") === catDel).length;
+      $("#catConfirmar").disabled = true;
+      try {
+        const r = await api("POST", "categoria-excluir", { nome: catDel, destino: n ? $("#catDestino").value : "" });
+        D.site = r.site; D.ajustes = r.ajustes;
+        dlgCat.close();
+        ordemEd = null; montar(); renderOrdem(); renderProdutos(); renderGeral(); renderExportar();
+        toast(r.movidos ? `Categoria excluída. ${r.movidos} produto(s) foram para “${$("#catDestino").value}”.` : "Categoria excluída.");
+      } catch (err) { toast(err.message, true); }
+      $("#catConfirmar").disabled = false;
+    });
     $("#ordemLista").addEventListener("click", (e) => {
       const b = e.target.closest("[data-ord]");
       if (!b) return;

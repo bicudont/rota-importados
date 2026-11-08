@@ -209,7 +209,7 @@ const lerAjustes = () => {
 /* ---------- loja.json público = Catálogo Pro + ajustes do painel + cotação manual ---------- */
 // Campos que o painel pode alterar. Se o Catálogo Pro mudar o mesmo campo depois da edição
 // (nova exportação com outro valor), vale o do Catálogo Pro: a alteração mais recente ganha.
-const CAMPOS = ["name", "description", "brand", "sector", "price", "stock", "active", "tags", "photos"];
+const CAMPOS = ["name", "description", "brand", "sector", "subsector", "price", "stock", "active", "tags", "photos"];
 const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 
 function aplicarAjuste(p, aj) {
@@ -387,6 +387,10 @@ function adminApi(req, res, rota) {
   if (r === "PUT banner")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarBanner(d)));
   if (r === "POST banner-imagem") return enviarImagemBanner(req, res);
   if (r === "PUT ordem-setores") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarOrdemSetores(d)));
+  if (r === "POST categoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarCategoria(d)));
+  if (r === "POST categoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirCategoria(d)));
+  if (r === "POST subcategoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarSubcategoria(d)));
+  if (r === "POST subcategoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirSubcategoria(d)));
   if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
   if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
@@ -584,6 +588,7 @@ function limparCampos(c) {
   if ("description" in c) out.description = texto(c.description, 5000);
   if ("brand" in c) out.brand = texto(c.brand, 120);
   if ("sector" in c) out.sector = texto(c.sector, 120);
+  if ("subsector" in c) out.subsector = texto(c.subsector, 120);
   if ("tags" in c) out.tags = texto(c.tags, 300);
   if ("active" in c) out.active = c.active !== false;
   if ("price" in c) {
@@ -689,12 +694,18 @@ function restaurarProdutos(d) {
 // Ação em lote (por enquanto: mostrar/ocultar)
 function alterarVarios(d) {
   if (!Array.isArray(d.skus) || !d.skus.length) throw new Error("Nenhum produto selecionado.");
-  if (typeof d.active !== "boolean") throw new Error("Ação inválida.");
+  // Ação: mostrar/ocultar (active) ou mudar categoria/subcategoria (campos.sector / campos.subsector)
+  const mudarCat = d.campos && typeof d.campos === "object" && ("sector" in d.campos || "subsector" in d.campos);
+  if (typeof d.active !== "boolean" && !mudarCat) throw new Error("Ação inválida.");
   // Lê e grava uma vez só (com "Selecionar todos" podem vir milhares de produtos)
   const aj = lerAjustes();
   const loja = lerJSON(F.loja, null);
   const doCatalogo = new Map(loja && Array.isArray(loja.products) ? loja.products.map((p) => [p.sku, p]) : []);
-  const campos = limparCampos({ active: d.active });
+  const pedido = {};
+  if (mudarCat) for (const k of ["sector", "subsector"]) { if (k in d.campos) pedido[k] = d.campos[k]; }
+  else pedido.active = d.active;
+  const campos = limparCampos(pedido);
+  if ("sector" in campos && !campos.sector) throw new Error("Escolha a categoria.");
   for (const s of d.skus.slice(0, 20000)) {
     const sku = texto(s, 120);
     try { aplicarCampos(aj, { products: doCatalogo.has(sku) ? [doCatalogo.get(sku)] : [] }, sku, campos); } catch {}
@@ -756,6 +767,8 @@ function salvarSite(d) {
   const atual = lerJSON(F.site, null) || {};
   if (atual.ocultar) site.ocultar = atual.ocultar; // regras de exibição são salvas pela aba Pendências
   if (atual.ordemSetores) site.ordemSetores = atual.ordemSetores; // ordem dos departamentos tem botão próprio
+  if (atual.categorias) site.categorias = atual.categorias; // categorias criadas no painel também
+  if (atual.subcategorias) site.subcategorias = atual.subcategorias;
   gravarJSON(F.site, site);
   return { ok: true, site };
 }
@@ -767,6 +780,81 @@ function salvarOrdemSetores(d) {
   site.ordemSetores = [...new Set(lista)];
   gravarJSON(F.site, site);
   return { ok: true, site };
+}
+
+// Departamentos (categorias) criados no painel: existem mesmo sem produtos, para escolher no editor
+function criarCategoria(d) {
+  const nome = texto(d.nome, 120);
+  if (!nome) throw new Error("Informe o nome da categoria.");
+  const site = lerJSON(F.site, null) || {};
+  const cats = Array.isArray(site.categorias) ? site.categorias : [];
+  if (cats.some((c) => c.toLowerCase() === nome.toLowerCase())) throw new Error("Essa categoria já existe.");
+  site.categorias = [...cats, nome];
+  if (Array.isArray(site.ordemSetores) && !site.ordemSetores.includes(nome)) site.ordemSetores.push(nome);
+  gravarJSON(F.site, site);
+  return { ok: true, site };
+}
+
+// Exclui a categoria; os produtos dela (inclusive ocultos) passam para "destino"
+function excluirCategoria(d) {
+  const nome = texto(d.nome, 120), destino = texto(d.destino, 120);
+  if (!nome) throw new Error("Categoria inválida.");
+  if (destino && destino === nome) throw new Error("Escolha outra categoria para os produtos.");
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const doCatalogo = loja && Array.isArray(loja.products) ? loja.products : [];
+  const setorAtual = (p) => (p.sku && aj.produtos[p.sku] && "sector" in aj.produtos[p.sku].campos ? aj.produtos[p.sku].campos.sector : p.sector) || "Outros";
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  const mover = doCatalogo.filter((p) => !novos.has(p.sku) && setorAtual(p) === nome).map((p) => ({ p, catalogo: true }))
+    .concat(aj.novos.filter((p) => (p.sector || "Outros") === nome).map((p) => ({ p })));
+  if (mover.length && !destino) throw new Error("Escolha para qual categoria os produtos vão.");
+  // A subcategoria era da categoria excluída: os produtos ficam sem subcategoria no destino
+  for (const { p, catalogo } of mover) {
+    try { aplicarCampos(aj, { products: catalogo ? [p] : [] }, p.sku, { sector: destino, subsector: "" }); } catch {}
+  }
+  if (mover.length) gravarJSON(F.ajustes, aj);
+  const site = lerJSON(F.site, null) || {};
+  site.categorias = (Array.isArray(site.categorias) ? site.categorias : []).filter((c) => c !== nome);
+  if (site.subcategorias) delete site.subcategorias[nome];
+  if (destino && !site.categorias.includes(destino) && !doCatalogo.some((p) => p.sector === destino) && !aj.novos.some((p) => p.sector === destino)) site.categorias.push(destino);
+  if (Array.isArray(site.ordemSetores)) site.ordemSetores = site.ordemSetores.filter((c) => c !== nome);
+  gravarJSON(F.site, site);
+  return { ok: true, movidos: mover.length, site, ajustes: aj };
+}
+
+// Subcategorias: lista por categoria em site.subcategorias = { "Saúde": ["Peptídeos", ...] }
+function criarSubcategoria(d) {
+  const cat = texto(d.categoria, 120), nome = texto(d.nome, 120);
+  if (!cat) throw new Error("Escolha a categoria.");
+  if (!nome) throw new Error("Informe o nome da subcategoria.");
+  const site = lerJSON(F.site, null) || {};
+  const subs = (site.subcategorias = site.subcategorias && typeof site.subcategorias === "object" ? site.subcategorias : {});
+  const lista = Array.isArray(subs[cat]) ? subs[cat] : [];
+  if (lista.some((s) => s.toLowerCase() === nome.toLowerCase())) throw new Error("Essa subcategoria já existe nesta categoria.");
+  subs[cat] = [...lista, nome].slice(0, 200);
+  gravarJSON(F.site, site);
+  return { ok: true, site };
+}
+
+// Exclui a subcategoria; os produtos dela continuam na categoria, só sem subcategoria
+function excluirSubcategoria(d) {
+  const cat = texto(d.categoria, 120), nome = texto(d.nome, 120);
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  const valor = (p, k) => (p.sku && aj.produtos[p.sku] && k in aj.produtos[p.sku].campos ? aj.produtos[p.sku].campos[k] : p[k]);
+  const doCatalogo = (loja && Array.isArray(loja.products) ? loja.products : []).filter((p) => !novos.has(p.sku));
+  let n = 0;
+  for (const p of doCatalogo) if ((valor(p, "sector") || "Outros") === cat && valor(p, "subsector") === nome) { try { aplicarCampos(aj, { products: [p] }, p.sku, { subsector: "" }); n++; } catch {} }
+  for (const p of aj.novos) if ((p.sector || "Outros") === cat && p.subsector === nome) { try { aplicarCampos(aj, null, p.sku, { subsector: "" }); n++; } catch {} }
+  if (n) gravarJSON(F.ajustes, aj);
+  const site = lerJSON(F.site, null) || {};
+  if (site.subcategorias && Array.isArray(site.subcategorias[cat])) {
+    site.subcategorias[cat] = site.subcategorias[cat].filter((s) => s !== nome);
+    if (!site.subcategorias[cat].length) delete site.subcategorias[cat];
+  }
+  gravarJSON(F.site, site);
+  return { ok: true, liberados: n, site, ajustes: aj };
 }
 
 // Mostrar/ocultar no site os produtos sem foto, sem descrição ou sem estoque
@@ -1002,7 +1090,7 @@ function migrarSkusEpic() {
 // "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
 // Mesmo SKU de um extra já existente: atualiza só os campos enviados (ex.: só o preço ou só a foto).
 // SKU que já existe no Catálogo Pro: ignora.
-const CAMPOS_EXTRAS = ["name", "brand", "sector", "price", "stock", "active", "tags", "description", "photos"];
+const CAMPOS_EXTRAS = ["name", "brand", "sector", "subsector", "price", "stock", "active", "tags", "description", "photos"];
 function adicionarExtras(lista) {
   const aj = lerAjustes();
   const loja = lerJSON(F.loja, null);
