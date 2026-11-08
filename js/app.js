@@ -176,14 +176,17 @@
   /* ---------- Endereços (rotas com #, sem mudar o servidor) ---------- */
   const PAGE = 24;
   const ORDENS = ["destaque", "recentes", "menor", "maior", "nome"];
-  let state = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, limite: PAGE };
+  let state = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, oferta: false, limite: PAGE };
+  // Em oferta agora (preço anterior maior que o atual)
+  const ehOferta = (p) => !!(p.preco && p.precoAntigo && p.preco < p.precoAntigo);
   let VIEW = "home";
   const TITULO = document.title;
 
   const prodHref = (p) => "#/produto/" + encodeURIComponent(p.id);
   function catalogHref(o = {}) {
-    const st = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, ...o };
+    const st = { cat: "todos", sub: "", marca: "", q: "", sort: "destaque", disp: false, oferta: false, ...o };
     const prm = new URLSearchParams();
+    if (st.oferta) prm.set("ofertas", "1");
     if (st.cat !== "todos") prm.set("cat", st.cat);
     if (st.cat !== "todos" && st.sub) prm.set("sub", st.sub);
     if (st.marca) prm.set("marca", st.marca);
@@ -355,11 +358,15 @@
   const deptBtn = $("#deptBtn"), deptMenu = $("#deptMenu");
   const nDept = (id) => (id === "todos" ? PRODUTOS.length : qtd[id] || 0);
 
-  $("#navLinks").innerHTML = CATS.map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="nav__link" data-cat="${esc(c.id)}">${esc(c.nome)}</a></li>`).join("");
-  deptMenu.innerHTML = `<ul>${deptos
+  // "Ofertas" é sempre o primeiro item dos menus (só aparece quando há produto em oferta)
+  const nOfertas = PRODUTOS.filter((p) => ehOferta(p) && !esgotado(p)).length;
+  const hrefOfertas = catalogHref({ oferta: true });
+  $("#navLinks").innerHTML = (nOfertas ? `<li><a href="${hrefOfertas}" class="nav__link nav__link--promo" data-cat="__ofertas">Ofertas</a></li>` : "") +
+    CATS.map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="nav__link" data-cat="${esc(c.id)}">${esc(c.nome)}</a></li>`).join("");
+  deptMenu.innerHTML = `<ul>${nOfertas ? `<li><a href="${hrefOfertas}" class="dept__item dept__item--promo" data-cat="__ofertas"><span><i class="promo-dot" aria-hidden="true"></i>Ofertas</span><small>${nOfertas}</small></a></li>` : ""}${deptos
     .map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="dept__item" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${nDept(c.id)}</small></a></li>`)
     .join("")}</ul>`;
-  $("#menuList").innerHTML = deptos
+  $("#menuList").innerHTML = (nOfertas ? `<li><a href="${hrefOfertas}" class="menu__item menu__item--promo" data-cat="__ofertas"><span><i class="promo-dot" aria-hidden="true"></i>Ofertas</span><small>${nOfertas}</small></a></li>` : "") + deptos
     .map((c) => `<li><a href="${catalogHref({ cat: c.id })}" class="menu__item" data-cat="${esc(c.id)}"><span>${esc(c.nome)}</span><small>${nDept(c.id)}</small></a></li>`)
     .join("");
 
@@ -376,7 +383,7 @@
 
   // Marca o departamento atual em todos os menus
   function marcarDepartamento() {
-    const atual = VIEW === "catalogo" ? state.cat : VIEW === "produto" && produtoAtual ? produtoAtual.categoria : null;
+    const atual = VIEW === "catalogo" ? (state.oferta && state.cat === "todos" ? "__ofertas" : state.cat) : VIEW === "produto" && produtoAtual ? produtoAtual.categoria : null;
     document.querySelectorAll(".nav__link, .dept__item, .menu__item").forEach((el) => {
       const on = el.dataset.cat === atual;
       el.classList.toggle("active", on);
@@ -463,6 +470,7 @@
       (ignorar === "cat" || ignorar === "sub" || !o.sub || p.sub === o.sub) &&
       (ignorar === "marca" || !o.marca || p.marca === o.marca) &&
       (ignorar === "disp" || !o.disp || !esgotado(p)) &&
+      (ignorar === "oferta" || !o.oferta || ehOferta(p)) &&
       (!q || textoBusca(p).includes(q))
     );
   };
@@ -475,7 +483,8 @@
     if (state.sort === "nome") list = [...list].sort((a, b) => a.nome.localeCompare(b.nome));
     if (state.sort === "recentes") list = [...list].sort((a, b) => (b.adicionado || 0) - (a.adicionado || 0));
     // "Destaques" em todos os departamentos: segue a ordem dos departamentos definida no painel
-    if (state.sort === "destaque" && state.cat === "todos") list = [...list].sort((a, b) => posCat(a.categoria) - posCat(b.categoria));
+    if (state.sort === "destaque" && state.oferta) list = [...list].sort((a, b) => a.preco / a.precoAntigo - b.preco / b.precoAntigo); // maior desconto primeiro
+    else if (state.sort === "destaque" && state.cat === "todos") list = [...list].sort((a, b) => posCat(a.categoria) - posCat(b.categoria));
     // esgotados sempre por último
     return [...list].sort((a, b) => esgotado(a) - esgotado(b));
   }
@@ -514,6 +523,7 @@
     if (state.marca) ativos.push(["marca", state.marca]);
     if (state.q) ativos.push(["q", `“${state.q}”`]);
     if (state.disp) ativos.push(["disp", "Somente disponíveis"]);
+    if (state.oferta) ativos.push(["oferta", "Em oferta"]);
     $("#activeFilters").innerHTML = ativos.length
       ? ativos.map(([k, t]) => `<button class="af" data-rm-filter="${k}" aria-label="Remover filtro ${esc(t)}">${esc(t)} <span aria-hidden="true">✕</span></button>`).join("") +
         `<button class="link-btn af__clear" data-rm-filter="all">Limpar tudo</button>`
@@ -550,7 +560,7 @@
   const limparFiltros = () => {
     input.value = "";
     $("#fMarcaBusca").value = "";
-    setFiltro({ cat: "todos", sub: "", marca: "", q: "", disp: false });
+    setFiltro({ cat: "todos", sub: "", marca: "", q: "", disp: false, oferta: false });
   };
   $("#activeFilters").addEventListener("click", (e) => {
     const b = e.target.closest("[data-rm-filter]");
@@ -558,7 +568,7 @@
     const k = b.dataset.rmFilter;
     if (k === "all") return limparFiltros();
     if (k === "q") input.value = "";
-    setFiltro(k === "cat" ? { cat: "todos", sub: "" } : k === "disp" ? { disp: false } : { [k]: "" });
+    setFiltro(k === "cat" ? { cat: "todos", sub: "" } : k === "disp" || k === "oferta" ? { [k]: false } : { [k]: "" });
   });
   $("#clearFilters").addEventListener("click", limparFiltros);
   $("#emptyClear").addEventListener("click", limparFiltros);
@@ -608,6 +618,7 @@
 
   function tituloListagem() {
     if (state.q) return `Resultados para “${state.q}”`;
+    if (state.oferta) return state.cat !== "todos" ? `Ofertas em ${catName(state.cat)}` : state.marca ? `Ofertas ${state.marca}` : "Ofertas";
     if (state.cat !== "todos" && state.sub) return `${catName(state.cat)} › ${state.sub}`;
     if (state.cat !== "todos") return catName(state.cat);
     if (state.marca) return state.marca;
@@ -627,6 +638,7 @@
     const titulo = tituloListagem();
     $("#catTitle").textContent = titulo;
     const migalhas = [["Início", "#/"], ["Produtos", catalogHref()]];
+    if (state.oferta) migalhas.push(["Ofertas", catalogHref({ oferta: true })]);
     if (state.cat !== "todos") migalhas.push([catName(state.cat), catalogHref({ cat: state.cat })]);
     if (state.cat !== "todos" && state.sub) migalhas.push([state.sub, catalogHref({ cat: state.cat, sub: state.sub })]);
     if (state.marca) migalhas.push([state.marca, catalogHref({ cat: state.cat, sub: state.sub, marca: state.marca })]);
@@ -721,7 +733,7 @@
 
     // Ofertas: sempre a primeira vitrine (produtos com preço anterior maior que o atual, maior desconto primeiro)
     const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
-    if (ofertas.length >= 1) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
+    if (ofertas.length >= 1) html.push(shelfHTML("Ofertas", ofertas, verTodos(catalogHref({ oferta: true }), ofertas.length), "promo"));
 
     // Departamentos (imagem = foto real de um produto do departamento)
     if (CATS.length) {
@@ -951,6 +963,7 @@
         q: (prm.get("q") || "").trim(),
         sort: ORDENS.includes(prm.get("ordem")) ? prm.get("ordem") : "destaque",
         disp: prm.get("disp") === "1",
+        oferta: prm.get("ofertas") === "1",
         limite: PAGE,
       };
       input.value = state.q;

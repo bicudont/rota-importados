@@ -192,6 +192,12 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 }
 .nav__link:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .nav__link.active { color: #fff; box-shadow: inset 0 -2px 0 var(--electric); border-radius: 0; }
+/* Link "Ofertas" nos menus: amarelo das promoções */
+.nav__link--promo { color: var(--yellow); font-weight: 700; }
+.nav__link--promo:hover, .nav__link--promo.active { color: var(--yellow); }
+.nav__link--promo.active { box-shadow: inset 0 -2px 0 var(--yellow); }
+.promo-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 2px #fff3a6; margin-right: 8px; vertical-align: 1px; }
+.dept__item--promo, .menu__item--promo { font-weight: 700; color: var(--navy); }
 
 /* ---------- Menu lateral (celular) ---------- */
 .menu {
