@@ -1065,16 +1065,25 @@ function aplicarZip(buf) {
     }
   }
 
-  if (loja) gravarJSON(F.loja, loja);
   if (!loja && !extras && !fotos) throw new Error("O ZIP não tem loja.json, produtos-extras.json nem fotos.");
+  // O Rota é independente: uma exportação do Catálogo Pro não altera mais os produtos.
+  // Só um backup feito no próprio painel restaura a lista (substitui todos os produtos).
+  let restaurados = null, catalogoIgnorado = false;
+  if (loja) {
+    if (loja.exportadoPor === "rota-painel") restaurados = restaurarBackup(loja);
+    else if (ehIndependente()) catalogoIgnorado = true;
+    else { gravarJSON(F.loja, loja); tornarIndependente(); } // primeira importação: já converte
+  }
   const resumoExtras = extras ? adicionarExtras(extras) : null;
+  if (catalogoIgnorado && !extras && !fotos) throw new Error("O Rota Importados é independente do Catálogo Pro: a lista de produtos deste ZIP não foi importada. Para restaurar, use um backup baixado do painel (Importar/Exportar → Exportar).");
 
-  const faltando = loja
-    ? [...new Set(loja.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])))].filter(
+  const usados = loja && !catalogoIgnorado ? loja.products : null;
+  const faltando = usados
+    ? [...new Set(usados.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])))].filter(
         (id) => !fs.existsSync(path.join(DATA_DIR, "fotos", id + ".jpg"))
       ).length
     : null;
-  return { ok: true, produtos: loja ? loja.products.length : null, fotos, fotosFaltando: faltando, extras: resumoExtras };
+  return { ok: true, produtos: usados ? usados.length : null, restaurados, catalogoIgnorado, fotos, fotosFaltando: faltando, extras: resumoExtras };
 }
 
 // Prefixo dos códigos de produtos extras: o antigo "EPIC-" passa a ser sempre "ADM1-"
@@ -1107,6 +1116,60 @@ function migrarSkusEpic() {
   } catch (e) {
     console.warn("Não foi possível trocar os códigos EPIC-: " + e.message);
   }
+}
+
+/* ---------- Independência do Catálogo Pro ---------- */
+// Uma vez só: os produtos do Catálogo Pro, já com as edições do painel, viram produtos do próprio Rota
+// (ajustes.novos), com os mesmos códigos. Produtos excluídos no painel ficam de fora.
+// A exportação original fica guardada em loja-catalogo-pro-original.json. Depois disso, loja.json guarda só
+// os dados gerais (departamentos, cotação, marca) e nenhuma importação do Catálogo Pro altera os produtos.
+const ARQ_ORIGINAL_CP = () => path.join(DATA_DIR, "loja-catalogo-pro-original.json");
+function tornarIndependente() {
+  try {
+    const loja = lerJSON(F.loja, null);
+    if (!loja || loja.type !== "catalogo-pro-site" || !Array.isArray(loja.products) || loja.independente) return null;
+    const aj = lerAjustes();
+    const jaTem = new Set(aj.novos.map((p) => p.sku));
+    const excluidos = new Set(aj.excluidos);
+    const agora = new Date().toISOString();
+    const convertidos = [];
+    let semCodigo = 0, fora = 0;
+    for (const p of loja.products) {
+      if (!p || typeof p !== "object") continue;
+      let sku = texto(p.sku, 120);
+      if (!sku) sku = "CP-" + String(++semCodigo).padStart(4, "0"); // sem código no Catálogo Pro: ganha um
+      if (excluidos.has(sku)) { fora++; continue; }
+      if (jaTem.has(sku)) continue; // já é do painel (vale a versão do painel, como antes)
+      jaTem.add(sku);
+      convertidos.push({ ...aplicarAjuste(p, aj.produtos[sku]), sku, origem: "catalogo-pro", updated: agora });
+    }
+    if (!fs.existsSync(ARQ_ORIGINAL_CP())) fs.copyFileSync(F.loja, ARQ_ORIGINAL_CP());
+    // Mesma ordem do site: primeiro os que vinham do Catálogo Pro, depois os criados no painel
+    aj.novos = convertidos.concat(aj.novos);
+    aj.produtos = {};
+    aj.excluidos = [];
+    gravarJSON(F.ajustes, aj); // primeiro os produtos; se parar aqui, a próxima vez não duplica (jaTem)
+    gravarJSON(F.loja, { ...loja, products: [], independente: true, independenteEm: agora });
+    console.log(`Rota independente do Catálogo Pro: ${convertidos.length} produto(s) convertidos, ${fora} excluído(s) deixados de fora.`);
+    return { convertidos: convertidos.length, excluidosForaDoSite: fora };
+  } catch (e) {
+    console.warn("Não foi possível tornar o Rota independente do Catálogo Pro: " + e.message);
+    return null;
+  }
+}
+const ehIndependente = () => { const l = lerJSON(F.loja, null); return !!(l && l.independente); };
+
+// Backup exportado pelo painel (independente): restaura todos os produtos como produtos do Rota
+function restaurarBackup(data) {
+  const aj = lerAjustes();
+  const vistos = new Set();
+  aj.novos = data.products.filter((p) => p && typeof p === "object" && p.sku && !vistos.has(p.sku) && vistos.add(p.sku));
+  aj.produtos = {};
+  aj.excluidos = [];
+  gravarJSON(F.ajustes, aj);
+  const { products, generated, exportadoPor, ...geral } = data;
+  gravarJSON(F.loja, { ...geral, products: [], independente: true, independenteEm: geral.independenteEm || new Date().toISOString() });
+  return aj.novos.length;
 }
 
 // "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
@@ -1171,7 +1234,8 @@ async function exportarZip(req, res) {
   try { loja = montarLoja(); } catch { loja = { vazio: true }; }
   if (loja.vazio) return json(res, 404, { erro: "Ainda não há produtos para exportar." });
   const comFotos = new URL(req.url, "http://x").searchParams.get("fotos") === "1";
-  const dados = { ...loja.completo, generated: new Date().toISOString() };
+  // exportadoPor: marca o backup do painel (só ele restaura produtos depois da independência)
+  const dados = { ...loja.completo, generated: new Date().toISOString(), exportadoPor: "rota-painel" };
   const arquivos = [{ nome: "loja.json", dados: Buffer.from(JSON.stringify(dados)) }];
   if (comFotos) {
     const ids = new Set(dados.products.flatMap((p) => (Array.isArray(p.photos) ? p.photos : [])).map(String).filter((id) => ID_FOTO.test(id)));
@@ -1255,3 +1319,4 @@ function lerZip(buf) {
 
 // Ajustes únicos nos dados gravados (rodam antes de o servidor atender o primeiro pedido)
 migrarSkusEpic();
+tornarIndependente();

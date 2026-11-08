@@ -29,21 +29,17 @@ Entre com a senha definida em `ADMIN_SENHA`. A sessão dura 12 horas (e termina 
 | **Importar/Exportar → Fotos em lote** | Envie várias fotos de uma vez; cada uma é ligada ao produto pelo nome do arquivo (código, ex. `ADM2-8882 (2).jpg`, ou nome do produto). As não reconhecidas mostram sugestões; escolha usar só em produtos sem foto, adicionar ou substituir |
 | **Loja** | Nome, slogan, WhatsApp, Instagram, cidade, horário, acréscimo e parcelas do cartão, cotação manual do dólar e **departamentos (categorias)**: criar, excluir (os produtos vão para outra categoria), ordenar (vale para o menu, a navegação, a página inicial, os filtros e o catálogo PDF) e **subcategorias** por categoria (criar com Enter, excluir no ×; no site viram um filtro dentro do departamento). Na aba Produtos, “Mudar categoria…” move os selecionados de categoria/subcategoria |
 
-**Como as edições convivem com o Catálogo Pro:** o que você altera no painel continua valendo depois de novas importações. Se o Catálogo Pro exportar um valor *diferente* para o mesmo campo, vale o do Catálogo Pro (a alteração mais recente ganha). Em cada produto há o botão **Desfazer edições** para voltar aos dados do Catálogo Pro.
+**Independente do Catálogo Pro:** na primeira vez que o servidor sobe com esta versão, todos os produtos do Catálogo Pro (já com as edições do painel; os excluídos ficam de fora) viram produtos do próprio Rota, com os mesmos códigos. A exportação original fica guardada em `loja-catalogo-pro-original.json`. Depois disso, tudo é editado só no painel. Um ZIP do Catálogo Pro não altera mais a lista de produtos (só fotos e produtos extras do ZIP são usados), e um **backup baixado do painel** restaura todos os produtos (substitui a lista).
 
 **Dados do cliente** (no carrinho e no novo pedido do painel): nome completo, país (Brasil, Argentina ou Paraguai; Brasil vem selecionado), documento (CPF validado no Brasil; DNI na Argentina; CI no Paraguai) e endereço completo (rua, número, complemento opcional, bairro, cidade, estado/província/departamento e CEP — obrigatório só no Brasil).
 
 **Pedidos do site:** são registrados quando o cliente clica em "Enviar pedido pelo WhatsApp". O envio da mensagem continua sendo feito pelo cliente no WhatsApp, então um pedido registrado pode não ter chegado ao seu WhatsApp. Os valores são os estimados no momento do pedido.
 
-Arquivos gravados em `DATA_DIR`: `loja.json` (exportação original), `ajustes.json` (edições e produtos criados), `site.json` (dados da loja), `fotos/` e `privado/pedidos.json` (nunca servido ao público).
+Arquivos gravados em `DATA_DIR`: `loja.json` (dados gerais: departamentos, cotação, marca), `ajustes.json` (todos os produtos), `loja-catalogo-pro-original.json` (cópia da última exportação do Catálogo Pro, guardada na independência), `site.json` (dados da loja), `fotos/` e `privado/pedidos.json` (nunca servido ao público).
 
 ## Atualizar produtos (dia a dia)
 
-1. No **Catálogo Pro**: **Configurações → Site da loja → Exportar para o site**. Na primeira vez use **"Exportar com todas as fotos"**.
-2. Abra **https://rotaimportados.com/admin**, digite a senha do painel e envie o(s) `loja-AAAA-MM-DD.zip`. Se vier em partes, selecione todas.
-3. Pronto: o site mostra produtos, preços, estoque, setores e cotação do dia.
-
-Dica: no Catálogo Pro, em **Site da loja → Endereço do site**, coloque `https://rotaimportados.com` para ganhar os botões "Abrir site" e "Painel do site".
+Tudo pelo painel (**https://rotaimportados.com/admin**): crie e edite produtos na aba **Produtos**, ajuste a cotação na aba **Loja**, adicione muitos produtos de uma vez com um ZIP de **produtos extras** e fotos com **Fotos em lote**. Baixe um backup (Importar/Exportar → Exportar) antes de cada atualização do site.
 
 ### De onde vem cada informação
 

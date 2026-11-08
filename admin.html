@@ -304,7 +304,7 @@
           <button class="btn btn--sm btn--primary" data-ir="loja:cotacao">Atualizar cotação</button>
         </div>
         <div class="msg warn" id="dadosRisco" hidden style="margin-bottom:12px">⚠️ Os dados da loja (fotos, edições, pedidos e banners) estão dentro da pasta do app e podem ser apagados no próximo deploy. Defina a variável <code>DATA_DIR</code> na Hostinger apontando para uma pasta fora do app.</div>
-        <div class="msg warn" id="semLoja" hidden>Ainda não há produtos do Catálogo Pro no site. Vá em <b>Importar</b> e envie o ZIP exportado.</div>
+        <div class="msg warn" id="semLoja" hidden>Ainda não há produtos no site. Crie um produto ou vá em <b>Importar</b> e envie um backup.</div>
         <div class="stats" id="stats"></div>
         <div class="grid2">
           <div class="card"><h2 style="margin-bottom:12px">Catálogo</h2><div class="facts" id="facts"></div></div>
@@ -337,7 +337,7 @@
             <option value="oferta">Em oferta agora</option>
             <option value="ofertaag">Ofertas agendadas</option>
             <option value="ofertafim">Ofertas encerradas</option>
-            <option value="editado">Editados no painel</option>
+            <option value="editado" id="optEditado">Editados no painel</option>
             <option value="novo">Criados no painel</option>
           </select>
           <button class="btn" data-selpag>Selecionar esta página</button>
@@ -442,10 +442,10 @@
       <!-- Importar -->
       <section data-sec="importar" hidden>
         <div class="head"><h1>Importar e exportar produtos</h1></div>
-        <h2 style="margin-bottom:10px">Importar do Catálogo Pro</h2>
+        <h2 style="margin-bottom:10px">Importar ZIP</h2>
         <div class="card">
-          <p class="muted">No <b>Catálogo Pro</b>, use <b>Configurações → Site da loja → Exportar para o site</b> e envie aqui o(s) arquivo(s) <code>loja-AAAA-MM-DD.zip</code>. Se vier em partes, selecione todas.</p>
-          <p class="muted small" style="margin-top:8px">Edições feitas no painel continuam valendo depois da importação, a menos que o Catálogo Pro traga um valor diferente para o mesmo campo (aí vale o mais recente, o do Catálogo Pro).</p>
+          <p class="muted">Envie aqui um <b>backup baixado deste painel</b> (para restaurar os produtos), um ZIP de <b>produtos extras</b> ou um ZIP só com fotos. Se vier em partes, selecione todas.</p>
+          <p class="msg info small" style="margin-top:8px">O Rota Importados é <b>independente do Catálogo Pro</b>: todos os produtos são editados só aqui. Um ZIP exportado pelo Catálogo Pro não altera mais a lista de produtos. Restaurar um backup substitui todos os produtos pelos do backup.</p>
           <div class="drop" id="drop" role="button" tabindex="0" style="margin-top:16px">
             <input id="file" type="file" accept=".zip" multiple hidden />
             📦 Clique ou arraste o ZIP aqui
@@ -491,7 +491,7 @@
           <div class="card stack">
             <div>
               <h3>Arquivo ZIP (backup)</h3>
-              <p class="muted small" style="margin-top:4px">Mesmo formato da importação (<code>loja.json</code> + pasta <code>fotos</code>), com os produtos como estão no site: dados do Catálogo Pro, edições e produtos criados no painel, e a cotação. Pode ser reimportado aqui para restaurar tudo.</p>
+              <p class="muted small" style="margin-top:4px">Mesmo formato da importação (<code>loja.json</code> + pasta <code>fotos</code>), com todos os produtos como estão no painel e a cotação. Pode ser reimportado aqui para restaurar tudo.</p>
             </div>
             <label class="switch"><input type="checkbox" id="xFotos" checked /> Incluir fotos <span class="muted small" id="xFotosN"></span></label>
             <a class="btn btn--primary" id="xZip" href="/admin/api/exportar.zip?fotos=1">Baixar ZIP</a>
@@ -942,9 +942,11 @@
         st(n.sempreco, "Sem preço (sob consulta)", "produtos:sempreco", true),
         st(n.ocultos, "Ocultos do site", "produtos:oculto"),
         n.fora ? st(n.fora, "Fora do site pelas regras de exibição", "pendencias") : "",
-        st(n.editados, "Editados no painel", "produtos:editado"),
+        // Independente: todo produto é do Rota, "editado no painel" deixa de fazer sentido
+        D.loja && D.loja.independente ? "" : st(n.editados, "Editados no painel", "produtos:editado"),
       ].join("");
-      $("#semLoja").hidden = !!D.loja;
+      $("#semLoja").hidden = !!D.loja || PROD.length > 0;
+      $("#optEditado").hidden = !!(D.loja && D.loja.independente);
       $("#dadosRisco").hidden = !D.dados || D.dados.segura;
       renderLembreteCotacao();
       const pix = cot("pix"), efe = cot("efetivo");
@@ -952,7 +954,9 @@
       const cotTxt = (c) => (c ? `${brl(c.rate)}${c.date ? " · " + dataBR(c.date) : ""}${c.manual ? " (manual)" : ""}` : "—");
       $("#facts").innerHTML = [
         linha("Última importação", D.importadoEm ? dataBR(D.importadoEm, true) : "—"),
-        linha("Exportado pelo Catálogo Pro em", D.loja && D.loja.generated ? dataBR(D.loja.generated, true) : "—"),
+        D.loja && D.loja.independente
+          ? linha("Independente do Catálogo Pro desde", D.loja.independenteEm ? dataBR(D.loja.independenteEm, true) : "✓")
+          : linha("Exportado pelo Catálogo Pro em", D.loja && D.loja.generated ? dataBR(D.loja.generated, true) : "—"),
         linha("Departamentos", new Set(PROD.map((p) => p.sector).filter(Boolean)).size),
         linha("Marcas", new Set(PROD.map((p) => p.brand).filter(Boolean)).size),
         linha("Cotação Pix", cotTxt(pix)),
@@ -1335,7 +1339,7 @@
       ofertaag: (p) => estadoOferta(p) === "agendada",
       ofertafim: (p) => estadoOferta(p) === "encerrada",
       editado: (p) => p._editados.length > 0,
-      novo: (p) => p._novo,
+      novo: (p) => p._novo && !p.origem,
     };
     function renderProdutos() {
       const q = norm($("#pBusca").value).trim().split(/\s+/).filter(Boolean);
@@ -1359,7 +1363,7 @@
             return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
               <input type="checkbox" data-sel aria-label="Selecionar ${esc(p.name)}"${sel.has(p.sku) ? " checked" : ""} />
               <img src="${p._fotos.length ? fotoURL(p._fotos[0]) : SEMFOTO}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
-              <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}${p.subsector ? " › " + esc(p.subsector) : ""}</div></div>
+              <div style="min-width:0"><div class="nm">${esc(p.name)}${p._novo && !p.origem ? '<span class="badge b-new">Criado aqui</span>' : p._editados.length ? '<span class="badge b-edit">Editado</span>' : ""}</div><div class="meta">${esc(p.sku)}${p.brand ? " · " + esc(p.brand) : ""}${p.sector ? " · " + esc(p.sector) : ""}${p.subsector ? " › " + esc(p.subsector) : ""}</div></div>
               <div class="num c-price">${preco}</div>
               <div class="num c-stock">${p.stock == null ? "—" : p.stock === 0 ? '<span class="badge b-out">0</span>' : p.stock}</div>
               <div class="c-vis">${p.active === false ? '<span class="badge b-off">Oculto</span>' : motivoFora(p) ? `<span class="badge b-off" title="Regra de exibição (aba Pendências)">Fora do site: ${motivoFora(p)}</span>` : p.stock === 0 ? '<span class="badge b-out">Esgotado</span>' : '<span class="badge b-new">Visível</span>'}</div>
@@ -1639,7 +1643,7 @@
     });
     $("#dRestaurar").addEventListener("click", async () => {
       const novo = ed.novo;
-      if (!confirm(novo ? "Excluir este produto criado no painel?" : "Desfazer as edições feitas no painel e voltar aos dados do Catálogo Pro?")) return;
+      if (!confirm(novo ? "Excluir este produto? Ele sai do site e do painel (só volta restaurando um backup)." : "Desfazer as edições feitas no painel e voltar aos dados do Catálogo Pro?")) return;
       try {
         const r = await api("DELETE", "produto", { sku: ed.sku });
         D.ajustes = r.ajustes; sel.delete(ed.sku); montar(); renderProdutos(); renderGeral();
@@ -1832,7 +1836,8 @@
           if (!r.ok) { log(`✕ ${f.name}: ${j.erro}`, "err"); continue; }
           last = j;
           const ex = j.extras ? `${j.extras.novos} produtos novos, ${j.extras.atualizados} atualizados${j.extras.fotos ? `, ${j.extras.fotos} receberam foto` : ""}${j.extras.jaTinhamFoto ? `, ${j.extras.jaTinhamFoto} já tinham foto (mantida)` : ""}${j.extras.ignorados ? `, ${j.extras.ignorados} já existiam no catálogo` : ""}${j.extras.erros ? `, ${j.extras.erros} com erro` : ""}, ` : "";
-          log(`✓ ${f.name}: ${j.produtos != null ? j.produtos + " produtos, " : ""}${ex}${j.fotos} fotos`, "ok");
+          log(`✓ ${f.name}: ${j.restaurados != null ? `backup restaurado (${j.restaurados} produtos), ` : j.produtos != null ? j.produtos + " produtos, " : ""}${ex}${j.fotos} fotos`, "ok");
+          if (j.catalogoIgnorado) log(`${f.name}: a lista de produtos do Catálogo Pro foi ignorada (o Rota é independente). Só as fotos e os produtos extras foram usados.`, "warn");
         } catch {
           log(`✕ ${f.name}: falha de conexão`, "err");
         }
@@ -2345,7 +2350,7 @@
       const nome = lista.length === 1 ? `“${lista[0].name}”` : `${lista.length} produtos`;
       const um = (n) => n === 1;
       const avisos = [
-        deVez && (um(deVez) ? `${um(lista.length) ? "Ele foi criado" : "1 foi criado"} no painel ou importado como extra: será apagado de vez.` : `${deVez} foram criados no painel ou importados como extras: serão apagados de vez.`),
+        deVez && (um(deVez) ? `${um(lista.length) ? "Ele será apagado" : "1 será apagado"} de vez (só volta restaurando um backup). Para só tirar do site, use “Ocultar”.` : `${deVez} serão apagados de vez (só voltam restaurando um backup). Para só tirar do site, use “Ocultar”.`),
         catalogo && (um(catalogo) ? `${um(lista.length) ? "Ele vem" : "1 vem"} do Catálogo Pro: sai do site e do painel e vai para “Excluídos”, de onde pode ser restaurado.` : `${catalogo} vêm do Catálogo Pro: saem do site e do painel e vão para “Excluídos”, de onde podem ser restaurados.`),
       ].filter(Boolean);
       if (!confirm(`Excluir ${nome}?\n\n${avisos.join("\n")}`)) return;
