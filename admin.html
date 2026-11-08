@@ -208,6 +208,13 @@
     /* Importar */
     .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 30px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop:hover, .drop.over { border-color: var(--royal); background: #eef4ff; }
+    .row--fl { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.3fr) 32px; cursor: default; align-items: start; }
+    .row--fl img { width: 64px; height: 64px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+    .row--fl .fn { font-size: 13px; word-break: break-all; }
+    .row--fl .sug { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .row--fl .sug button { font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid #cfe0fb; background: #eef4ff; cursor: pointer; text-align: left; }
+    .row--fl .alvo { font-size: 12px; margin-top: 4px; }
+    @media (max-width: 640px) { .row--fl { grid-template-columns: 56px minmax(0, 1fr) 32px; } .row--fl > :nth-child(3) { grid-column: 1 / -1; } }
     .files { margin-top: 10px; font-size: .88rem; display: grid; gap: 6px; }
     .files div { display: flex; justify-content: space-between; gap: 8px; }
     .log { margin-top: 14px; display: grid; gap: 8px; }
@@ -434,6 +441,37 @@
           <div class="files" id="files"></div>
           <button class="btn btn--primary" id="send" disabled style="margin-top:16px;width:100%">Enviar para o site</button>
           <div class="log" id="log" aria-live="polite"></div>
+        </div>
+
+        <h2 style="margin:24px 0 10px">Fotos em lote</h2>
+        <div class="card">
+          <p class="muted">Envie várias fotos de uma vez. O painel liga cada foto ao produto <b>pelo nome do arquivo</b>: o código (ex.: <code>ADM2-8882.jpg</code>) ou o nome do produto (ex.: <code>Lipoland 15mg.jpg</code>). Para mais de uma foto do mesmo produto, use <code>ADM2-8882 (2).jpg</code>, <code>ADM2-8882_2.jpg</code> ou <code>ADM2-8882-2.jpg</code>.</p>
+          <p class="muted small" style="margin-top:8px">As que não forem reconhecidas aparecem com sugestões de produtos parecidos: clique na sugestão certa ou digite o código. Nada é salvo antes de você clicar em <b>Salvar fotos</b>.</p>
+          <div class="drop" id="flDrop" role="button" tabindex="0" style="margin-top:16px">
+            <input id="flIn" type="file" accept="image/*" multiple hidden />
+            🖼️ Clique ou arraste as fotos aqui
+          </div>
+          <div id="flBox" hidden style="margin-top:16px">
+            <div class="toolbar" style="margin-bottom:10px">
+              <b id="flResumo"></b>
+              <select class="field" id="flModo" aria-label="Como usar as fotos">
+                <option value="sem">Só nos produtos que estão sem foto</option>
+                <option value="add">Adicionar às fotos que o produto já tem</option>
+                <option value="trocar">Substituir as fotos do produto</option>
+              </select>
+              <select class="field" id="flFiltro" aria-label="Mostrar">
+                <option value="">Mostrar todas</option>
+                <option value="ok">Só as reconhecidas</option>
+                <option value="pendente">Só as sem produto</option>
+              </select>
+            </div>
+            <div class="list" id="flLista"></div>
+            <div class="exib-acts" style="margin-top:12px">
+              <button class="btn" id="flLimpar">Limpar lista</button>
+              <button class="btn btn--primary" id="flSalvar" disabled>Salvar fotos</button>
+            </div>
+            <div class="log" id="flLog" aria-live="polite"></div>
+          </div>
         </div>
 
         <h2 style="margin:24px 0 10px">Exportar produtos</h2>
@@ -1494,6 +1532,159 @@
     $("#novoProd").addEventListener("click", () => abrirEditor(null));
 
     /* ---------- Importar ---------- */
+    /* ---------- Fotos em lote: liga cada foto ao produto pelo nome do arquivo ---------- */
+    let fl = []; // { id, file, url, base, sku, como, sug: [sku] }
+    let flSeq = 0;
+    const skuChave = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+    let flIdx = null; // índices montados sob demanda (o catálogo muda depois de salvar)
+    function flIndices() {
+      if (flIdx && flIdx.prod === PROD) return flIdx;
+      const porSku = new Map(), porNome = new Map(), tokens = [];
+      for (const p of PROD) {
+        porSku.set(skuChave(p.sku), p.sku);
+        const sem0 = skuChave(p.sku).replace(/^0+/, "");
+        if (sem0 && !porSku.has(sem0)) porSku.set(sem0, p.sku);
+        const n = chaveNome(p.name);
+        (porNome.get(n) || porNome.set(n, []).get(n)).push(p.sku);
+        tokens.push({ sku: p.sku, t: new Set(n.split(" ").filter(Boolean)) });
+      }
+      return (flIdx = { prod: PROD, porSku, porNome, tokens });
+    }
+    // "ADM2-8882 (2)", "ADM2-8882_2", "ADM2-8882-2" -> também tenta sem o número da foto no fim
+    const variantes = (base) => {
+      const v = [base];
+      const m = /^(.*?)(?:\s*\(\d{1,2}\)|[_ ]\d{1,2}|-\d{1,2})$/.exec(base);
+      if (m && m[1].trim()) v.push(m[1].trim());
+      return v;
+    };
+    function flCasar(base) {
+      const ix = flIndices();
+      for (const v of variantes(base)) {
+        const s = ix.porSku.get(skuChave(v)) || ix.porSku.get(skuChave(v).replace(/^0+/, ""));
+        if (s) return { sku: s, como: "código" };
+      }
+      for (const v of variantes(base)) {
+        const n = ix.porNome.get(chaveNome(v));
+        if (n && n.length === 1) return { sku: n[0], como: "nome" };
+        if (n && n.length > 1) return { sku: "", como: "", sug: n.slice(0, 5) }; // nomes iguais: você escolhe
+      }
+      // Sugestões: produtos com mais palavras em comum com o nome do arquivo
+      const t = new Set(chaveNome(variantes(base).pop()).split(" ").filter(Boolean));
+      if (!t.size) return { sku: "", como: "", sug: [] };
+      const sug = [];
+      for (const x of ix.tokens) {
+        let c = 0;
+        for (const w of t) if (x.t.has(w)) c++;
+        if (!c) continue;
+        const nota = c / (t.size + x.t.size - c);
+        if (nota >= 0.15) sug.push([nota, x.sku]);
+      }
+      return { sku: "", como: "", sug: sug.sort((a, b) => b[0] - a[0]).slice(0, 4).map((s) => s[1]) };
+    }
+    const prodDe = (sku) => PROD.find((p) => p.sku === sku);
+    function flAdd(list) {
+      const novos = [...list].filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name));
+      for (const file of novos) {
+        const base = file.name.replace(/\.[^.]+$/, "").trim();
+        fl.push({ id: ++flSeq, file, url: URL.createObjectURL(file), base, ...flCasar(base) });
+      }
+      fl.sort((a, b) => a.base.localeCompare(b.base, undefined, { numeric: true }));
+      $("#flLog").innerHTML = "";
+      renderFl();
+    }
+    function renderFl() {
+      $("#flBox").hidden = !fl.length;
+      const ok = fl.filter((x) => x.sku).length;
+      $("#flResumo").textContent = `${fl.length} foto(s) · ${ok} ligada(s) a um produto · ${fl.length - ok} sem produto`;
+      const filtro = $("#flFiltro").value;
+      const vis = fl.filter((x) => !filtro || (filtro === "ok" ? x.sku : !x.sku));
+      $("#flLista").innerHTML = vis.map((x) => {
+        const p = x.sku && prodDe(x.sku);
+        return `<div class="row row--fl" data-fl="${x.id}">
+          <img src="${x.url}" alt="" />
+          <div style="min-width:0"><div class="fn">${esc(x.file.name)}</div>${x.como ? `<span class="badge b-new">pelo ${x.como}</span>` : x.sku ? '<span class="badge b-edit">escolhido</span>' : '<span class="badge b-off">sem produto</span>'}</div>
+          <div style="min-width:0">
+            <input class="field" data-fl-sku list="dlSkus" value="${esc(x.sku)}" placeholder="Código do produto (SKU)" aria-label="Produto para ${esc(x.file.name)}" />
+            <div class="alvo">${p ? `<b>${esc(p.name)}</b> <span class="muted">${p._fotos.length ? `· já tem ${p._fotos.length} foto(s)` : "· sem foto"}</span>` : x.sku ? '<span style="color:var(--err)">Código não encontrado</span>' : ""}</div>
+            ${!x.sku && x.sug && x.sug.length ? `<div class="sug">${x.sug.map((s) => `<button type="button" data-fl-sug="${esc(s)}" title="${esc(s)}">${esc((prodDe(s) || {}).name || s)} <span class="muted">· ${esc(s)}</span></button>`).join("")}</div>` : ""}
+          </div>
+          <button type="button" class="btn btn--sm" data-fl-rm aria-label="Tirar ${esc(x.file.name)} da lista">×</button>
+        </div>`;
+      }).join("") || `<div class="empty">Nenhuma foto neste filtro.</div>`;
+      $("#flSalvar").disabled = !fl.some((x) => x.sku && prodDe(x.sku));
+    }
+    const flDrop = $("#flDrop");
+    flDrop.onclick = () => $("#flIn").click();
+    flDrop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#flIn").click(); } };
+    $("#flIn").onchange = (e) => { flAdd(e.target.files); e.target.value = ""; };
+    flDrop.ondragover = (e) => { e.preventDefault(); flDrop.classList.add("over"); };
+    flDrop.ondragleave = () => flDrop.classList.remove("over");
+    flDrop.ondrop = (e) => { e.preventDefault(); flDrop.classList.remove("over"); flAdd(e.dataTransfer.files); };
+    $("#flFiltro").onchange = renderFl;
+    $("#flLimpar").onclick = () => { fl.forEach((x) => URL.revokeObjectURL(x.url)); fl = []; $("#flLog").innerHTML = ""; renderFl(); };
+    $("#flLista").addEventListener("click", (e) => {
+      const row = e.target.closest("[data-fl]");
+      if (!row) return;
+      const x = fl.find((y) => y.id === +row.dataset.fl);
+      if (e.target.closest("[data-fl-rm]")) { URL.revokeObjectURL(x.url); fl = fl.filter((y) => y !== x); return renderFl(); }
+      const sg = e.target.closest("[data-fl-sug]");
+      if (sg) { x.sku = sg.dataset.flSug; x.como = ""; renderFl(); }
+    });
+    $("#flLista").addEventListener("change", (e) => {
+      const inp = e.target.closest("[data-fl-sku]");
+      if (!inp) return;
+      const x = fl.find((y) => y.id === +inp.closest("[data-fl]").dataset.fl);
+      const v = inp.value.trim();
+      x.sku = (PROD.find((p) => p.sku.toLowerCase() === v.toLowerCase()) || {}).sku || v;
+      x.como = "";
+      renderFl();
+    });
+    $("#flSalvar").onclick = async () => {
+      const modo = $("#flModo").value;
+      const porSku = new Map();
+      for (const x of fl) if (x.sku && prodDe(x.sku)) (porSku.get(x.sku) || porSku.set(x.sku, []).get(x.sku)).push(x);
+      const pular = [...porSku.keys()].filter((s) => modo === "sem" && prodDe(s)._fotos.length);
+      pular.forEach((s) => porSku.delete(s));
+      const total = [...porSku.values()].reduce((n, l) => n + l.length, 0);
+      if (!total) return toast(pular.length ? "Todos esses produtos já têm foto. Mude a opção para “Adicionar” ou “Substituir”." : "Nenhuma foto ligada a um produto.", true);
+      $("#flSalvar").disabled = true;
+      $("#flLog").innerHTML = "";
+      const flLog = (t, cls) => { const d = document.createElement("div"); d.className = "msg " + (cls || ""); d.textContent = t; $("#flLog").appendChild(d); };
+      if (pular.length) flLog(`${pular.length} produto(s) já tinham foto e foram pulados (opção “Só nos produtos que estão sem foto”).`, "warn");
+      flLog(`Enviando ${total} foto(s) para ${porSku.size} produto(s)…`);
+      // Envia 3 fotos por vez; depois grava os produtos de uma vez só
+      const ids = new Map(), fila = [...porSku.values()].flat();
+      let feitos = 0, erros = 0;
+      await Promise.all(Array.from({ length: 3 }, async () => {
+        while (fila.length) {
+          const x = fila.shift();
+          try { ids.set(x.id, (await api("POST", "foto", await reduzir(x.file))).id); }
+          catch (err) { erros++; flLog(`${x.file.name}: ${err.message || "não foi possível ler a imagem"}`, "err"); }
+          feitos++;
+          if (feitos % 10 === 0) flLog(`${feitos} de ${total} enviadas…`);
+        }
+      }));
+      const itens = [];
+      for (const [sku, lista] of porSku) {
+        const novas = lista.map((x) => ids.get(x.id)).filter(Boolean);
+        if (!novas.length) continue;
+        const atuais = modo === "trocar" ? [] : prodDe(sku)._fotos;
+        itens.push({ sku, campos: { photos: [...atuais, ...novas].slice(0, 20) } });
+      }
+      try {
+        if (itens.length) {
+          const r = await api("PUT", "completar", { itens });
+          D.ajustes = r.ajustes; montar(); renderProdutos(); renderGeral();
+        }
+        const salvos = new Set(itens.map((i) => i.sku));
+        fl.filter((x) => salvos.has(x.sku) && ids.has(x.id)).forEach((x) => URL.revokeObjectURL(x.url));
+        fl = fl.filter((x) => !(salvos.has(x.sku) && ids.has(x.id)));
+        flLog(`✓ ${itens.length} produto(s) atualizados com ${total - erros} foto(s).${erros ? ` ${erros} com erro.` : ""}${fl.length ? " As que sobraram continuam na lista." : ""}`, erros ? "warn" : "ok");
+        toast("Fotos salvas");
+      } catch (err) { flLog(err.message, "err"); }
+      renderFl();
+    };
+
     let files = [];
     function setFiles(list) {
       files = [...list].filter((f) => /\.zip$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
