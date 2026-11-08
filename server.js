@@ -379,6 +379,7 @@ function adminApi(req, res, rota) {
   if (r === "POST produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, criarProduto(d)));
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
+  if (r === "PUT completar") return lerCorpoJSON(req, res, 20e6, (d) => json(res, 200, salvarVarios(d)));
   if (r === "POST excluir") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, excluirProdutos(d)));
   if (r === "POST restaurar") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, restaurarProdutos(d)));
   if (r === "POST foto") return enviarFoto(req, res);
@@ -700,6 +701,23 @@ function alterarVarios(d) {
   }
   gravarJSON(F.ajustes, aj);
   return { ok: true, ajustes: aj };
+}
+
+// Vários produtos com campos diferentes de uma vez (ex.: completar duplicados com foto/descrição do irmão)
+function salvarVarios(d) {
+  if (!Array.isArray(d.itens) || !d.itens.length) throw new Error("Nada para salvar.");
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const doCatalogo = new Map(loja && Array.isArray(loja.products) ? loja.products.map((p) => [p.sku, p]) : []);
+  let ok = 0;
+  for (const it of d.itens.slice(0, 20000)) {
+    const sku = texto(it && it.sku, 120);
+    const enviados = {};
+    for (const k of ["photos", "description"]) if (it && k in (it.campos || {})) enviados[k] = it.campos[k];
+    try { aplicarCampos(aj, { products: doCatalogo.has(sku) ? [doCatalogo.get(sku)] : [] }, sku, limparCampos(enviados)); ok++; } catch {}
+  }
+  gravarJSON(F.ajustes, aj);
+  return { ok: true, salvos: ok, ajustes: aj };
 }
 
 function enviarFoto(req, res) {

@@ -1713,6 +1713,22 @@
       }).filter((g) => !ign.has(g.chave)).sort((a, b) => a.itens[0].name.localeCompare(b.itens[0].name));
       return (cacheDup = { prod: PROD, ign: D.naoDuplicados, grupos, skus: new Set(grupos.flatMap((g) => g.itens.map((p) => p.sku))) });
     }
+    // Dentro de cada grupo de duplicados, quem não tem foto/descrição recebe do primeiro que tem
+    function completarDup() {
+      const itens = [];
+      let fotos = 0, descs = 0;
+      for (const g of duplicados().grupos) {
+        const dFoto = g.itens.filter((p) => !semFoto(p)).sort((a, b) => b._fotos.length - a._fotos.length)[0];
+        const dDesc = g.itens.filter((p) => !semDesc(p)).sort((a, b) => b.description.length - a.description.length)[0];
+        for (const p of g.itens) {
+          const campos = {};
+          if (dFoto && semFoto(p)) { campos.photos = dFoto._fotos; fotos++; }
+          if (dDesc && semDesc(p)) { campos.description = String(dDesc.description).trim(); descs++; }
+          if (Object.keys(campos).length) itens.push({ sku: p.sku, campos });
+        }
+      }
+      return { itens, fotos, descs };
+    }
     function linhaPd(p, extra, lixo) {
       const sd = semDesc(p), sf = semFoto(p);
       const del = lixo ? `<button class="btn btn--sm btn--danger" data-del title="Excluir este produto" aria-label="Excluir ${esc(p.name)}">🗑️</button>` : "";
@@ -1754,9 +1770,13 @@
         const pg = grupos.slice(pdPag * POR_G, (pdPag + 1) * POR_G);
         pagina = pg.flatMap((g) => g.itens);
         const extra = (p) => ` · ${p.price > 0 ? usd(p.price) : "sem preço"} · estoque ${p.stock == null ? "—" : p.stock}${p._novo ? " · criado no painel" : ""}`;
-        $("#pdLista").innerHTML = pg.length
+        const cp = completarDup();
+        const barraCp = cp.itens.length
+          ? `<div class="bulk"><span>Nos grupos abaixo, <b>${cp.fotos.toLocaleString("pt-BR")}</b> produto(s) sem foto e <b>${cp.descs.toLocaleString("pt-BR")}</b> sem descrição podem receber a foto/descrição de um duplicado que já tem.</span><button class="btn btn--sm btn--primary" id="pdCompletar">Completar fotos e descrições (${cp.itens.length.toLocaleString("pt-BR")})</button></div>`
+          : "";
+        $("#pdLista").innerHTML = barraCp + (pg.length
           ? pg.map((g) => `<div class="dup"><div class="dup__head"><div style="min-width:0"><b>${esc(g.motivo)}</b> <span class="muted small">${g.itens.length} produtos</span></div><button class="btn btn--sm" data-naodup="${esc(g.chave)}">Não são duplicados</button></div>${g.itens.map((p) => linhaPd(p, extra(p), true)).join("")}</div>`).join("")
-          : `<div class="empty">Nenhum possível duplicado encontrado. 🎉</div>`;
+          : `<div class="empty">Nenhum possível duplicado encontrado. 🎉</div>`);
         $("#pdInfo").textContent = grupos.length ? `Grupos ${pdPag * POR_G + 1}–${Math.min(grupos.length, (pdPag + 1) * POR_G)} de ${grupos.length} · selecione os que sobram e use “Ocultar do site”` : "";
         $("#pdPrev").disabled = pdPag === 0;
         $("#pdNext").disabled = pdPag >= total - 1;
@@ -1873,6 +1893,19 @@
     $("#pdPrev").addEventListener("click", () => { pdPag--; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
     $("#pdNext").addEventListener("click", () => { pdPag++; renderPendencias(); $("#pdLista").scrollIntoView({ block: "start" }); });
     $("#pdLista").addEventListener("click", async (e) => {
+      if (e.target.id === "pdCompletar") {
+        const cp = completarDup();
+        if (!cp.itens.length) return;
+        if (!confirm(`Copiar a foto para ${cp.fotos} produto(s) e a descrição para ${cp.descs} produto(s), a partir de um duplicado que já tem?\n\nSó preenche o que está vazio; nada que já existe é trocado. Grupos marcados como "Não são duplicados" ficam de fora.`)) return;
+        e.target.disabled = true;
+        try {
+          const r = await api("PUT", "completar", { itens: cp.itens });
+          D.ajustes = r.ajustes;
+          aposSalvar();
+          toast(`${r.salvos} produto(s) completados`);
+        } catch (err) { toast(err.message, true); e.target.disabled = false; }
+        return;
+      }
       const nd = e.target.closest("[data-naodup]");
       if (nd) {
         nd.disabled = true;
