@@ -104,6 +104,7 @@
     .oferta legend { font-weight: 700; color: var(--navy); padding: 0 6px; font-size: .92rem; }
     .oferta .lbl { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
     .oferta .chips { margin: 0; }
+    .of-valor { display: grid; grid-template-columns: 84px 1fr; gap: 6px; }
     .oferta > .btn { justify-self: start; }
     .c-price s { color: var(--muted); font-size: .8rem; }
     .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
@@ -617,7 +618,9 @@
         <fieldset class="oferta" id="dOferta">
           <legend>Oferta / promoção <span class="badge" id="dOfEstado" hidden></span></legend>
           <div class="grid2">
-            <div><label class="lbl" for="dOfPreco">Preço da oferta (US$)</label><input class="field" id="dOfPreco" inputmode="decimal" placeholder="Vazio = sem oferta" /><div class="preview" id="dOfBR"></div></div>
+            <div><label class="lbl" for="dOfPreco" id="dOfPrecoLbl">Preço da oferta</label>
+              <div class="of-valor"><select class="field" id="dOfMoeda" aria-label="Moeda da oferta"><option value="USD">US$</option><option value="BRL">R$</option></select><input class="field" id="dOfPreco" inputmode="decimal" placeholder="Vazio = sem oferta" /></div>
+              <div class="hint" id="dOfMoedaHint"></div><div class="preview" id="dOfBR"></div></div>
             <div>
               <span class="lbl">Duração rápida</span>
               <div class="chips" id="dOfAtalhos"><button type="button" class="btn btn--sm" data-of="1h">24 horas</button><button type="button" class="btn btn--sm" data-of="3">3 dias</button><button type="button" class="btn btn--sm" data-of="7">7 dias</button><button type="button" class="btn btn--sm" data-of="30">30 dias</button></div>
@@ -1347,7 +1350,10 @@
             const eo = estadoOferta(p);
             const preco = p.price > 0
               ? eo === "ativa"
-                ? `${usd(p.promo.price)} <s>${usd(p.price)}</s><div class="meta">${emReais(p.promo.price)}</div><span class="badge b-promo" title="${esc(ofertaResumo(p))}">−${ofertaPct(p)}% até ${esc(dataHoraBR(p.promo.end).split(" às")[0])}</span>`
+                ? (p.promo.currency === "BRL"
+                  ? `${brl(p.promo.price)} <s>${emReais(p.price)}</s><div class="meta">fixo em R$ · normal ${usd(p.price)}</div>`
+                  : `${usd(p.promo.price)} <s>${usd(p.price)}</s><div class="meta">${emReais(p.promo.price)}</div>`) +
+                  `<span class="badge b-promo" title="${esc(ofertaResumo(p))}">−${ofertaPct(p)}% até ${esc(dataHoraBR(p.promo.end).split(" às")[0])}</span>`
                 : `${usd(p.price)}<div class="meta">${emReais(p.price)}</div>${eo === "agendada" ? `<span class="badge b-edit" title="${esc(ofertaResumo(p))}">Oferta agendada</span>` : ""}`
               : `<span class="muted small">Sob consulta</span>`;
             return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
@@ -1454,10 +1460,13 @@
       if (!o || !(o.price > 0) || !o.end) return "";
       const agora = Date.now();
       if (Date.parse(o.end) <= agora) return "encerrada";
-      if (!(p.price > o.price)) return "invalida"; // oferta precisa ser menor que o preço normal
+      if (!(normalNaMoeda(p) > o.price)) return "invalida"; // oferta precisa ser menor que o preço normal
       return o.start && Date.parse(o.start) > agora ? "agendada" : "ativa";
     }
-    const ofertaPct = (p) => (p.price > 0 && p.promo && p.promo.price < p.price ? Math.round((1 - p.promo.price / p.price) * 100) : 0);
+    // Oferta em R$ é fixa (compara com o preço normal no Pix pela cotação de hoje); em US$ acompanha a cotação
+    const normalNaMoeda = (p) => (p.promo && p.promo.currency === "BRL" ? precoPix(p.price) : p.price);
+    const valorOferta = (o) => (o.currency === "BRL" ? brl(o.price) : usd(o.price));
+    const ofertaPct = (p) => { const n = normalNaMoeda(p); return n > 0 && p.promo && p.promo.price < n ? Math.round((1 - p.promo.price / n) * 100) : 0; };
     function ofertaResumo(p) {
       const e = estadoOferta(p);
       if (!e) return "";
@@ -1480,6 +1489,7 @@
       $("#dEstoque").value = p && p.stock != null ? p.stock : "";
       const o = p && p.promo;
       $("#dOfPreco").value = o && o.price > 0 ? String(o.price).replace(".", ",") : "";
+      $("#dOfMoeda").value = o && o.currency === "BRL" ? "BRL" : "USD";
       $("#dOfIni").value = o ? paraCampoData(o.start) : "";
       $("#dOfFim").value = o ? paraCampoData(o.end) : "";
       $("#dTags").value = p ? p.tags || "" : "";
@@ -1516,22 +1526,27 @@
     const promoDoForm = () => {
       const preco = numOuNull($("#dOfPreco").value), ini = $("#dOfIni").value, fim = $("#dOfFim").value;
       if (preco == null && !ini && !fim) return null;
-      return { price: preco, start: ini ? new Date(ini).toISOString() : "", end: fim ? new Date(fim).toISOString() : "" };
+      return { price: preco, currency: $("#dOfMoeda").value, start: ini ? new Date(ini).toISOString() : "", end: fim ? new Date(fim).toISOString() : "" };
     };
     function ofertaBR() {
       const normal = numOuNull($("#dPreco").value), o = promoDoForm(), el = $("#dOfBR"), est = $("#dOfEstado");
+      const emReal = $("#dOfMoeda").value === "BRL";
+      $("#dOfMoedaHint").textContent = emReal ? "R$: valor fixo no Pix, não muda com o dólar." : "US$: o valor em reais acompanha a cotação.";
       $("#dOfLimpar").hidden = !o;
       if (!o || o.price == null) { el.textContent = o ? "Informe o preço da oferta." : ""; est.hidden = true; return; }
       if (!(o.price > 0)) { el.textContent = "Preço inválido. Use apenas números, ex.: 39,90"; est.hidden = true; return; }
-      const pix = precoPix(o.price);
-      const pct = normal > o.price ? Math.round((1 - o.price / normal) * 100) : 0;
-      el.textContent = !(normal > o.price) ? "A oferta precisa ser menor que o preço normal." : `${pix != null ? `No site: ${brl(pix)} no Pix · ` : ""}−${pct}% (de ${usd(normal)} por ${usd(o.price)})`;
-      const e = o.end ? estadoOferta({ price: normal, promo: o }) : "";
+      const p = { price: normal, promo: o };
+      const ref = normalNaMoeda(p), pct = ofertaPct(p);
+      if (emReal && ref == null) el.textContent = normal > 0 ? "Sem cotação do dólar: não dá para comparar com o preço normal." : "Informe o preço normal do produto.";
+      else if (!(ref > o.price)) el.textContent = `A oferta precisa ser menor que o preço normal${emReal && ref ? ` (hoje ${brl(ref)} no Pix)` : ""}.`;
+      else if (emReal) el.textContent = `No site: ${brl(o.price)} no Pix, fixo · −${pct}% (preço normal hoje: ${brl(ref)})`;
+      else { const pix = precoPix(o.price); el.textContent = `${pix != null ? `No site: ${brl(pix)} no Pix · ` : ""}−${pct}% (de ${usd(normal)} por ${usd(o.price)})`; }
+      const e = o.end ? estadoOferta(p) : "";
       const ROT = { ativa: ["Ativa agora", "b-new"], agendada: ["Agendada", "b-edit"], encerrada: ["Encerrada", "b-off"], invalida: ["Não aparece", "b-out"] };
       est.hidden = !e;
       if (e) { est.textContent = ROT[e][0]; est.className = "badge " + ROT[e][1]; }
     }
-    ["#dOfPreco", "#dOfIni", "#dOfFim"].forEach((s) => $(s).addEventListener("input", ofertaBR));
+    ["#dOfPreco", "#dOfIni", "#dOfFim", "#dOfMoeda"].forEach((s) => $(s).addEventListener("input", ofertaBR));
     $("#dOfAtalhos").addEventListener("click", (e) => {
       const b = e.target.closest("[data-of]");
       if (!b) return;
@@ -1596,7 +1611,9 @@
       const promo = promoDoForm();
       if (promo) {
         if (!(promo.price > 0)) return toast("Oferta: informe o preço da oferta (ex.: 39,90) ou clique em “Remover oferta”.", true), $("#dOfPreco").focus();
-        if (!(preco > promo.price)) return toast("Oferta: o preço da oferta precisa ser menor que o preço normal.", true), $("#dOfPreco").focus();
+        const ref = promo.currency === "BRL" ? precoPix(preco) : preco;
+        if (promo.currency === "BRL" && ref == null) return toast("Oferta em R$: informe o preço normal e a cotação do dólar para comparar.", true), $("#dOfPreco").focus();
+        if (!(ref > promo.price)) return toast("Oferta: o preço da oferta precisa ser menor que o preço normal.", true), $("#dOfPreco").focus();
         if (!promo.end) return toast("Oferta: informe até quando ela vale (Termina em).", true), $("#dOfFim").focus();
         if (promo.start && promo.start >= promo.end) return toast("Oferta: o fim precisa ser depois do início.", true), $("#dOfFim").focus();
       }

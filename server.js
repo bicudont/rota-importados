@@ -209,7 +209,7 @@ const lerAjustes = () => {
 /* ---------- loja.json público = Catálogo Pro + ajustes do painel + cotação manual ---------- */
 // Campos que o painel pode alterar. Se o Catálogo Pro mudar o mesmo campo depois da edição
 // (nova exportação com outro valor), vale o do Catálogo Pro: a alteração mais recente ganha.
-// promo = oferta com prazo: { price (US$), start (ISO ou ""), end (ISO) }; o site decide pelo horário se está valendo
+// promo = oferta com prazo: { price, currency ("USD" ou "BRL" fixo), start (ISO ou ""), end (ISO) }; o site decide pelo horário se está valendo
 const CAMPOS = ["name", "description", "brand", "sector", "subsector", "price", "stock", "active", "tags", "photos", "promo"];
 const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 
@@ -625,7 +625,9 @@ function limparPromo(v) {
   const start = data(v.start, "início"), end = data(v.end, "fim");
   if (!end) throw new Error("Informe até quando vale a oferta.");
   if (start && Date.parse(start) >= Date.parse(end)) throw new Error("O fim da oferta precisa ser depois do início.");
-  return { price: Math.round(price * 100) / 100, start, end };
+  // currency: "USD" acompanha a cotação; "BRL" é preço fixo em reais (Pix), não muda com o dólar
+  const currency = v.currency === "BRL" ? "BRL" : "USD";
+  return { price: Math.round(price * 100) / 100, currency, start, end };
 }
 
 // Produto criado no painel ou trazido por "produtos extras" (fica em ajustes.novos, não no Catálogo Pro)

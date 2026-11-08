@@ -51,7 +51,7 @@ Dica: no Catálogo Pro, em **Site da loja → Endereço do site**, coloque `http
 - **Preço**: a base é em US$. Com cotação Pix no `loja.json`, o preço principal é em **R$ no Pix**, com US$ e valor em dinheiro embaixo. Sem cotação, mostra US$.
 - **Disponibilidade**: campo Estoque (0 = Esgotado; até 3 = "Últimas unidades").
 - **Lançamentos**: data de cadastro do produto. **Vitrines de destaque**: primeira tag de cada produto (ex.: "Mais vendido").
-- **Ofertas**: definidas no painel (editor do produto → **Oferta / promoção**). Cada uma tem preço da oferta (US$), início (opcional) e fim. Dentro do prazo, o site mostra o preço da oferta, o preço normal riscado, o selo de desconto, a vitrine **Ofertas** e uma contagem regressiva na página do produto. Fora do prazo, volta ao preço normal sozinho. A lista de Produtos tem os filtros **Em oferta agora**, **Ofertas agendadas** e **Ofertas encerradas**.
+- **Ofertas**: definidas no painel (editor do produto → **Oferta / promoção**). Cada uma tem preço da oferta, início (opcional) e fim. O preço pode ser em **US$** (o valor em reais acompanha a cotação) ou em **R$** (fixo no Pix, não muda com o dólar). Dentro do prazo, o site mostra o preço da oferta, o preço normal riscado, o selo de desconto, a vitrine **Ofertas** e uma contagem regressiva na página do produto. Fora do prazo, volta ao preço normal sozinho. A lista de Produtos tem os filtros **Em oferta agora**, **Ofertas agendadas** e **Ofertas encerradas**.
 - Nada é inventado: seções sem dados reais não aparecem.
 
 ## Configuração na Hostinger (uma vez)

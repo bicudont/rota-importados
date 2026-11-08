@@ -75,10 +75,14 @@
         // Oferta do painel: vale só entre o início e o fim, e só se for menor que o preço normal
         const o = p.promo && typeof p.promo === "object" ? p.promo : null;
         const fim = o ? Date.parse(o.end) : NaN;
-        const emOferta = !!o && normal != null && o.price > 0 && o.price < normal && fim > agora && !(o.start && Date.parse(o.start) > agora);
-        const usd = emOferta ? o.price : normal;
-        const preco = conv(usd);
-        const precoAntigo = emOferta && preco != null ? conv(normal) : null;
+        // Oferta em R$ é fixa (não muda com o dólar); em US$ é convertida pela cotação, como o preço normal
+        const emReal = !!o && o.currency === "BRL";
+        const normalSite = conv(normal);
+        const noPrazo = !!o && o.price > 0 && fim > agora && !(o.start && Date.parse(o.start) > agora);
+        const emOferta = noPrazo && normal != null && (emReal ? MOEDA === "BRL" && normalSite != null && o.price < normalSite : o.price < normal);
+        const usd = emOferta && !emReal ? o.price : normal;
+        const preco = emOferta ? (emReal ? o.price : conv(o.price)) : normalSite;
+        const precoAntigo = emOferta && preco != null ? normalSite : null;
         // Oferta agendada: recarrega os preços quando ela começar (se a página ficar aberta)
         // e quando uma oferta terminar, para o preço voltar ao normal
         if (o && !emOferta && o.start && Date.parse(o.start) > agora) proximaVirada = Math.min(proximaVirada, Date.parse(o.start));
