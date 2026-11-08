@@ -719,6 +719,10 @@
     const verTodos = (href, n) => `<a href="${href}" class="shelf__all">Ver todos${n ? ` (${n})` : ""}</a>`;
     const html = [];
 
+    // Ofertas: sempre a primeira vitrine (produtos com preço anterior maior que o atual, maior desconto primeiro)
+    const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
+    if (ofertas.length >= 1) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
+
     // Departamentos (imagem = foto real de um produto do departamento)
     if (CATS.length) {
       html.push(`<section class="depts" aria-label="Departamentos"><div class="shelf__head"><h2>Departamentos</h2></div><div class="depts__grid">${CATS.map((c) => {
@@ -738,10 +742,6 @@
       .slice(0, 48)
       .sort((a, b) => !a.imagens.length - !b.imagens.length);
     if (lancamentos.length >= 4) html.push(shelfHTML("Lançamentos", lancamentos, verTodos(catalogHref({ sort: "recentes" })), "novo"));
-
-    // Ofertas: só produtos com preço anterior maior que o atual
-    const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
-    if (ofertas.length >= 1) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
 
     // Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações.
     // Ordenadas pela ordem dos departamentos do painel (o departamento da maioria dos produtos da tag).
