@@ -596,6 +596,10 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .pdp__price .price { padding-top: 0; }
 .pdp__price .price b { font-size: 2rem; }
 .pdp__price .price-alt { font-size: .9rem; margin-top: 4px; }
+/* Oferta com prazo: contagem regressiva na página do produto */
+.promo-timer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: #fff8d6; border: 1px solid var(--yellow); color: var(--navy); font-size: .9rem; }
+.promo-timer b { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.promo-timer small { flex-basis: 100%; color: var(--muted); font-size: .78rem; }
 .pdp__block { display: grid; gap: 8px; justify-items: start; }
 .pdp__btns { display: grid; gap: 10px; }
 .pdp__btns .btn { height: 52px; font-size: 1rem; }

@@ -98,6 +98,14 @@
     .b-new { background: var(--okbg); color: var(--ok); }
     .b-off { background: #eef1f5; color: var(--muted); }
     .b-out { background: var(--errbg); color: var(--err); }
+    .b-promo { background: var(--warnbg); color: var(--warn); }
+    /* Oferta no editor de produto */
+    .oferta { border: 1px solid #ffd27a; background: #fffaf0; border-radius: var(--r); padding: 10px 14px 14px; display: grid; gap: 12px; min-width: 0; }
+    .oferta legend { font-weight: 700; color: var(--navy); padding: 0 6px; font-size: .92rem; }
+    .oferta .lbl { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+    .oferta .chips { margin: 0; }
+    .oferta > .btn { justify-self: start; }
+    .c-price s { color: var(--muted); font-size: .8rem; }
     .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
 
@@ -325,6 +333,9 @@
             <option value="esgotado">Esgotados</option>
             <option value="semfoto">Sem foto</option>
             <option value="sempreco">Sem preço</option>
+            <option value="oferta">Em oferta agora</option>
+            <option value="ofertaag">Ofertas agendadas</option>
+            <option value="ofertafim">Ofertas encerradas</option>
             <option value="editado">Editados no painel</option>
             <option value="novo">Criados no painel</option>
           </select>
@@ -603,6 +614,21 @@
           <div><label class="lbl" for="dPreco">Preço (US$)</label><input class="field" id="dPreco" inputmode="decimal" placeholder="Vazio = sob consulta" /><div class="preview" id="dPrecoBR"></div></div>
           <div><label class="lbl" for="dEstoque">Estoque</label><input class="field" id="dEstoque" inputmode="numeric" placeholder="Vazio = não informado" /><div class="hint">0 = Esgotado · até 3 = “Últimas unidades”</div></div>
         </div>
+        <fieldset class="oferta" id="dOferta">
+          <legend>Oferta / promoção <span class="badge" id="dOfEstado" hidden></span></legend>
+          <div class="grid2">
+            <div><label class="lbl" for="dOfPreco">Preço da oferta (US$)</label><input class="field" id="dOfPreco" inputmode="decimal" placeholder="Vazio = sem oferta" /><div class="preview" id="dOfBR"></div></div>
+            <div>
+              <span class="lbl">Duração rápida</span>
+              <div class="chips" id="dOfAtalhos"><button type="button" class="btn btn--sm" data-of="1h">24 horas</button><button type="button" class="btn btn--sm" data-of="3">3 dias</button><button type="button" class="btn btn--sm" data-of="7">7 dias</button><button type="button" class="btn btn--sm" data-of="30">30 dias</button></div>
+            </div>
+          </div>
+          <div class="grid2">
+            <div><label class="lbl" for="dOfIni">Começa em</label><input class="field" id="dOfIni" type="datetime-local" /><div class="hint">Vazio = começa assim que salvar.</div></div>
+            <div><label class="lbl" for="dOfFim">Termina em *</label><input class="field" id="dOfFim" type="datetime-local" /><div class="hint">Depois disso o preço volta ao normal sozinho.</div></div>
+          </div>
+          <button type="button" class="btn btn--sm" id="dOfLimpar">Remover oferta</button>
+        </fieldset>
         <div><label class="lbl" for="dTags">Etiquetas (separe por vírgula)</label><input class="field" id="dTags" maxlength="300" placeholder="Ex.: Mais vendido" /><div class="hint">A primeira etiqueta aparece no card e cria uma vitrine na página inicial.</div></div>
         <div><label class="lbl" for="dDesc">Descrição</label><textarea class="field" id="dDesc" maxlength="5000"></textarea></div>
         <div>
@@ -1302,6 +1328,9 @@
       esgotado: (p) => p.stock === 0,
       semfoto: (p) => !p._fotos.length,
       sempreco: (p) => !(p.price > 0),
+      oferta: (p) => estadoOferta(p) === "ativa",
+      ofertaag: (p) => estadoOferta(p) === "agendada",
+      ofertafim: (p) => estadoOferta(p) === "encerrada",
       editado: (p) => p._editados.length > 0,
       novo: (p) => p._novo,
     };
@@ -1315,7 +1344,12 @@
       $("#pLista").innerHTML = pagina.length
         ? `<div class="row row--head"><input type="checkbox" id="pSelCab" aria-label="Selecionar todos desta página" title="Selecionar todos desta página" /><span></span><span>Produto</span><span class="num">Preço</span><span class="num">Estoque</span><span>Site</span></div>` +
           pagina.map((p) => {
-            const preco = p.price > 0 ? `${usd(p.price)}<div class="meta">${emReais(p.price)}</div>` : `<span class="muted small">Sob consulta</span>`;
+            const eo = estadoOferta(p);
+            const preco = p.price > 0
+              ? eo === "ativa"
+                ? `${usd(p.promo.price)} <s>${usd(p.price)}</s><div class="meta">${emReais(p.promo.price)}</div><span class="badge b-promo" title="${esc(ofertaResumo(p))}">−${ofertaPct(p)}% até ${esc(dataHoraBR(p.promo.end).split(" às")[0])}</span>`
+                : `${usd(p.price)}<div class="meta">${emReais(p.price)}</div>${eo === "agendada" ? `<span class="badge b-edit" title="${esc(ofertaResumo(p))}">Oferta agendada</span>` : ""}`
+              : `<span class="muted small">Sob consulta</span>`;
             return `<div class="row${p.active === false ? " row--off" : ""}" data-sku="${esc(p.sku)}" tabindex="0" role="button" aria-label="Editar ${esc(p.name)}">
               <input type="checkbox" data-sel aria-label="Selecionar ${esc(p.name)}"${sel.has(p.sku) ? " checked" : ""} />
               <img src="${p._fotos.length ? fotoURL(p._fotos[0]) : SEMFOTO}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
@@ -1409,7 +1443,30 @@
     let ed = null; // { sku, fotos, novo }
     const dlg = $("#dlg");
     const numOuNull = (v) => { v = String(v).trim().replace(/\s/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); return Number(v); };
-    const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", subsector: "subcategoria", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos" };
+    const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", subsector: "subcategoria", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos", promo: "oferta" };
+
+    // Oferta com prazo: o site usa o preço da oferta só entre o início e o fim
+    const z2 = (n) => String(n).padStart(2, "0");
+    const paraCampoData = (iso) => { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? "" : `${d.getFullYear()}-${z2(d.getMonth() + 1)}-${z2(d.getDate())}T${z2(d.getHours())}:${z2(d.getMinutes())}`; };
+    const dataHoraBR = (iso) => { const d = new Date(iso); return `${z2(d.getDate())}/${z2(d.getMonth() + 1)}${d.getFullYear() !== new Date().getFullYear() ? "/" + d.getFullYear() : ""} às ${z2(d.getHours())}:${z2(d.getMinutes())}`; };
+    function estadoOferta(p) {
+      const o = p && p.promo;
+      if (!o || !(o.price > 0) || !o.end) return "";
+      const agora = Date.now();
+      if (Date.parse(o.end) <= agora) return "encerrada";
+      if (!(p.price > o.price)) return "invalida"; // oferta precisa ser menor que o preço normal
+      return o.start && Date.parse(o.start) > agora ? "agendada" : "ativa";
+    }
+    const ofertaPct = (p) => (p.price > 0 && p.promo && p.promo.price < p.price ? Math.round((1 - p.promo.price / p.price) * 100) : 0);
+    function ofertaResumo(p) {
+      const e = estadoOferta(p);
+      if (!e) return "";
+      const o = p.promo;
+      return e === "ativa" ? `Oferta −${ofertaPct(p)}% até ${dataHoraBR(o.end)}`
+        : e === "agendada" ? `Oferta agendada: começa ${dataHoraBR(o.start)}`
+        : e === "encerrada" ? `Oferta encerrada em ${dataHoraBR(o.end)}`
+        : "Oferta maior ou igual ao preço normal (não aparece)";
+    }
 
     function abrirEditor(sku) {
       const p = sku ? PROD.find((x) => x.sku === sku) : null;
@@ -1421,6 +1478,10 @@
       opcoesSub(p ? p.subsector || "" : "");
       $("#dPreco").value = p && p.price != null ? String(p.price).replace(".", ",") : "";
       $("#dEstoque").value = p && p.stock != null ? p.stock : "";
+      const o = p && p.promo;
+      $("#dOfPreco").value = o && o.price > 0 ? String(o.price).replace(".", ",") : "";
+      $("#dOfIni").value = o ? paraCampoData(o.start) : "";
+      $("#dOfFim").value = o ? paraCampoData(o.end) : "";
       $("#dTags").value = p ? p.tags || "" : "";
       $("#dDesc").value = p ? p.description || "" : "";
       $("#dAtivo").checked = !p || p.active !== false;
@@ -1447,8 +1508,43 @@
       const c = cot("pix") || cot("efetivo");
       const pix = precoPix(v);
       $("#dPrecoBR").textContent = pix != null ? `No site: ${brl(pix)} no Pix · cartão ${cartaoResumo(pix)} (US$ 1 = ${brl(c.rate)})` : v === null ? "Aparece como “Sob consulta”." : v > 0 ? "Sem cotação: aparece como “Sob consulta”." : "";
+      ofertaBR();
     }
     $("#dPreco").addEventListener("input", precoBR);
+
+    // Oferta no editor: mostra o preço em reais, o desconto e a situação (ativa, agendada, encerrada)
+    const promoDoForm = () => {
+      const preco = numOuNull($("#dOfPreco").value), ini = $("#dOfIni").value, fim = $("#dOfFim").value;
+      if (preco == null && !ini && !fim) return null;
+      return { price: preco, start: ini ? new Date(ini).toISOString() : "", end: fim ? new Date(fim).toISOString() : "" };
+    };
+    function ofertaBR() {
+      const normal = numOuNull($("#dPreco").value), o = promoDoForm(), el = $("#dOfBR"), est = $("#dOfEstado");
+      $("#dOfLimpar").hidden = !o;
+      if (!o || o.price == null) { el.textContent = o ? "Informe o preço da oferta." : ""; est.hidden = true; return; }
+      if (!(o.price > 0)) { el.textContent = "Preço inválido. Use apenas números, ex.: 39,90"; est.hidden = true; return; }
+      const pix = precoPix(o.price);
+      const pct = normal > o.price ? Math.round((1 - o.price / normal) * 100) : 0;
+      el.textContent = !(normal > o.price) ? "A oferta precisa ser menor que o preço normal." : `${pix != null ? `No site: ${brl(pix)} no Pix · ` : ""}−${pct}% (de ${usd(normal)} por ${usd(o.price)})`;
+      const e = o.end ? estadoOferta({ price: normal, promo: o }) : "";
+      const ROT = { ativa: ["Ativa agora", "b-new"], agendada: ["Agendada", "b-edit"], encerrada: ["Encerrada", "b-off"], invalida: ["Não aparece", "b-out"] };
+      est.hidden = !e;
+      if (e) { est.textContent = ROT[e][0]; est.className = "badge " + ROT[e][1]; }
+    }
+    ["#dOfPreco", "#dOfIni", "#dOfFim"].forEach((s) => $(s).addEventListener("input", ofertaBR));
+    $("#dOfAtalhos").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-of]");
+      if (!b) return;
+      // 24 horas a partir de agora; dias = até 23:59 do último dia
+      const fim = new Date();
+      if (b.dataset.of === "1h") fim.setHours(fim.getHours() + 24, fim.getMinutes(), 0, 0);
+      else { fim.setDate(fim.getDate() + Number(b.dataset.of)); fim.setHours(23, 59, 0, 0); }
+      $("#dOfIni").value = "";
+      $("#dOfFim").value = paraCampoData(fim.toISOString());
+      ofertaBR();
+      if (!$("#dOfPreco").value.trim()) $("#dOfPreco").focus();
+    });
+    $("#dOfLimpar").addEventListener("click", () => { ["#dOfPreco", "#dOfIni", "#dOfFim"].forEach((s) => ($(s).value = "")); ofertaBR(); });
     function renderFotos() {
       $("#dFotos").innerHTML = ed.fotos.map((id, i) => `<div class="ph"><img src="${fotoURL(id)}" alt="Foto ${i + 1}" onerror="this.onerror=null;this.src='${SEMFOTO}'" />
         <div class="ph__bar"><button type="button" data-mv="${i}" data-d="-1" aria-label="Mover foto ${i + 1} para a esquerda"${i ? "" : " disabled"}>◀</button><button type="button" data-rmf="${i}" aria-label="Remover foto ${i + 1}">✕</button><button type="button" data-mv="${i}" data-d="1" aria-label="Mover foto ${i + 1} para a direita"${i < ed.fotos.length - 1 ? "" : " disabled"}>▶</button></div></div>`).join("") +
@@ -1497,15 +1593,22 @@
       const preco = numOuNull($("#dPreco").value), estoque = numOuNull($("#dEstoque").value);
       if (preco != null && !(preco >= 0)) return toast("Preço inválido. Use apenas números, ex.: 49,90", true);
       if (estoque != null && !(Number.isInteger(estoque) && estoque >= 0)) return toast("Estoque inválido. Use um número inteiro.", true);
+      const promo = promoDoForm();
+      if (promo) {
+        if (!(promo.price > 0)) return toast("Oferta: informe o preço da oferta (ex.: 39,90) ou clique em “Remover oferta”.", true), $("#dOfPreco").focus();
+        if (!(preco > promo.price)) return toast("Oferta: o preço da oferta precisa ser menor que o preço normal.", true), $("#dOfPreco").focus();
+        if (!promo.end) return toast("Oferta: informe até quando ela vale (Termina em).", true), $("#dOfFim").focus();
+        if (promo.start && promo.start >= promo.end) return toast("Oferta: o fim precisa ser depois do início.", true), $("#dOfFim").focus();
+      }
       const campos = {
         name: $("#dNome").value.trim(), brand: $("#dMarca").value.trim(), sector: $("#dSetor").value.trim(), subsector: $("#dSub").value,
         price: preco, stock: estoque, tags: $("#dTags").value.trim(), description: $("#dDesc").value.trim(),
-        active: $("#dAtivo").checked, photos: ed.fotos,
+        active: $("#dAtivo").checked, photos: ed.fotos, promo,
       };
       // Produto do Catálogo Pro: envia só o que mudou, para não marcar campos intocados como editados
       const p = ed.sku && PROD.find((x) => x.sku === ed.sku);
       if (p && !p._novo) for (const k in campos) {
-        const atual = k === "photos" ? p._fotos : k === "active" ? p.active !== false : p[k] === undefined ? (k === "price" || k === "stock" ? null : "") : p[k];
+        const atual = k === "photos" ? p._fotos : k === "active" ? p.active !== false : p[k] === undefined ? (k === "price" || k === "stock" || k === "promo" ? null : "") : p[k];
         if (igual(atual, campos[k]) || (k === "description" || k === "tags" || k === "brand" || k === "sector" || k === "subsector") && String(atual || "") === campos[k]) delete campos[k];
       }
       $("#dSalvar").disabled = true;

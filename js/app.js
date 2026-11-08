@@ -17,6 +17,7 @@
   /* ---------- Dados: loja.json do Catálogo Pro, ou produtos do config.js ---------- */
   // MOEDA: moeda exibida. Se a base estiver em US$ e houver cotação, converte para R$.
   let PRODUTOS, CATS, MOEDA = "BRL", COTACAO = null;
+  let proximaVirada = Infinity; // próximo início de oferta agendada (ms)
 
   async function carregarLoja() {
     try {
@@ -64,12 +65,24 @@
     MOEDA = base === "USD" ? "BRL" : base;
     COTACAO = base === "USD" && (pix || efetivo) ? { pix, efetivo, principal: principal === pix ? "pix" : "efetivo" } : null;
 
-    const recente = Date.now() - 30 * 864e5;
+    const agora = Date.now();
+    const recente = agora - 30 * 864e5;
+    const conv = (v) => (v == null ? null : principal ? Math.round(v * principal.rate * 100) / 100 : base === "USD" ? null : v);
     PRODUTOS = loja.products
       .filter((p) => p.active !== false && p.name)
       .map((p, i) => {
-        const usd = typeof p.price === "number" && p.price > 0 ? p.price : null;
-        const preco = usd == null ? null : principal ? Math.round(usd * principal.rate * 100) / 100 : base === "USD" ? null : usd;
+        const normal = typeof p.price === "number" && p.price > 0 ? p.price : null;
+        // Oferta do painel: vale só entre o início e o fim, e só se for menor que o preço normal
+        const o = p.promo && typeof p.promo === "object" ? p.promo : null;
+        const fim = o ? Date.parse(o.end) : NaN;
+        const emOferta = !!o && normal != null && o.price > 0 && o.price < normal && fim > agora && !(o.start && Date.parse(o.start) > agora);
+        const usd = emOferta ? o.price : normal;
+        const preco = conv(usd);
+        const precoAntigo = emOferta && preco != null ? conv(normal) : null;
+        // Oferta agendada: recarrega os preços quando ela começar (se a página ficar aberta)
+        // e quando uma oferta terminar, para o preço voltar ao normal
+        if (o && !emOferta && o.start && Date.parse(o.start) > agora) proximaVirada = Math.min(proximaVirada, Date.parse(o.start));
+        if (emOferta) proximaVirada = Math.min(proximaVirada, fim);
         const tags = String(p.tags || "").split(/[,;|]/).map((t) => t.trim()).filter(Boolean);
         const novo = p.added && Date.parse(p.added) > recente;
         return {
@@ -86,6 +99,8 @@
           estoque: typeof p.stock === "number" ? p.stock : null,
           descricao: p.description || "",
           preco,
+          precoAntigo,
+          fimOferta: precoAntigo ? fim : 0,
           usd: base === "USD" ? usd : null,
           tag: tags[0] || (novo ? "Novo" : ""),
           tags,
@@ -563,6 +578,25 @@
   }
 
   const off = (p) => (p.preco && p.precoAntigo ? Math.round((1 - p.preco / p.precoAntigo) * 100) : 0);
+
+  // Contagem regressiva das ofertas com prazo (página do produto)
+  const z2 = (n) => String(n).padStart(2, "0");
+  function faltam(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return d ? `${d} dia${d > 1 ? "s" : ""}, ${h}h ${z2(m)}min` : `${z2(h)}:${z2(m)}:${z2(s % 60)}`;
+  }
+  const ateQuando = (t) => { const d = new Date(t); return `${z2(d.getDate())}/${z2(d.getMonth() + 1)} às ${z2(d.getHours())}:${z2(d.getMinutes())}`; };
+  const promoHTML = (p) =>
+    p.fimOferta ? `<div class="promo-timer" data-fim="${p.fimOferta}"><span>Oferta termina em</span> <b>${faltam(p.fimOferta - Date.now())}</b><small>Válida até ${ateQuando(p.fimOferta)}</small></div>` : "";
+  if (proximaVirada < Infinity) {
+    setInterval(() => {
+      const agora = Date.now();
+      // Uma oferta começou ou terminou com a página aberta: recarrega para os preços ficarem certos
+      if (agora >= proximaVirada) return location.reload();
+      document.querySelectorAll("[data-fim] b").forEach((b) => { b.textContent = faltam(+b.parentNode.dataset.fim - agora); });
+    }, 1000);
+  }
   const meta = (p) => [p.marca, p.volume ? `${p.volume} ml` : ""].filter(Boolean).join(" · ") || catName(p.categoria);
   // Disponibilidade real (só quando o Catálogo Pro informa o estoque)
   const dispHTML = (p) =>
@@ -703,7 +737,7 @@
 
     // Ofertas: só produtos com preço anterior maior que o atual
     const ofertas = PRODUTOS.filter((p) => off(p) > 0 && !esgotado(p)).sort((a, b) => off(b) - off(a));
-    if (ofertas.length >= 2) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
+    if (ofertas.length >= 1) html.push(shelfHTML("Ofertas", ofertas, "", "promo"));
 
     // Vitrines pelas tags cadastradas (ex.: "Mais vendido"), sem inventar classificações.
     // Ordenadas pela ordem dos departamentos do painel (o departamento da maioria dos produtos da tag).
@@ -798,6 +832,7 @@
           <h1 class="pdp__title">${esc(p.nome)}</h1>
           ${dispHTML(p)}
           <div class="pdp__price">${priceHTML(p, true)}</div>
+          ${out ? "" : promoHTML(p)}
           ${p.variacoes && p.variacoes.length ? `<div class="pdp__block"><span class="label">Opção</span><div class="opts">${p.variacoes.map((o, i) => `<button class="opt${i ? "" : " active"}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>` : ""}
           ${out ? "" : `<div class="pdp__block"><span class="label">Quantidade</span>
             <div class="qty"><button data-q="-1" aria-label="Diminuir">−</button><span id="pQty" aria-live="polite">1</span><button data-q="1" aria-label="Aumentar">+</button></div></div>`}

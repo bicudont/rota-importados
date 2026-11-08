@@ -209,7 +209,8 @@ const lerAjustes = () => {
 /* ---------- loja.json público = Catálogo Pro + ajustes do painel + cotação manual ---------- */
 // Campos que o painel pode alterar. Se o Catálogo Pro mudar o mesmo campo depois da edição
 // (nova exportação com outro valor), vale o do Catálogo Pro: a alteração mais recente ganha.
-const CAMPOS = ["name", "description", "brand", "sector", "subsector", "price", "stock", "active", "tags", "photos"];
+// promo = oferta com prazo: { price (US$), start (ISO ou ""), end (ISO) }; o site decide pelo horário se está valendo
+const CAMPOS = ["name", "description", "brand", "sector", "subsector", "price", "stock", "active", "tags", "photos", "promo"];
 const igual = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 
 function aplicarAjuste(p, aj) {
@@ -605,7 +606,26 @@ function limparCampos(c) {
     if (!Array.isArray(c.photos)) throw new Error("Fotos inválidas.");
     out.photos = c.photos.map(String).filter((id) => ID_FOTO.test(id)).slice(0, 20);
   }
+  if ("promo" in c) out.promo = limparPromo(c.promo);
   return out;
+}
+
+// Oferta: preço promocional em US$ e validade (início opcional = vale desde já; fim obrigatório)
+function limparPromo(v) {
+  if (v == null || v === "") return null;
+  if (typeof v !== "object" || Array.isArray(v)) throw new Error("Oferta inválida.");
+  const price = Number(v.price);
+  if (!(price > 0 && price < 1e7)) throw new Error("Informe o preço da oferta.");
+  const data = (s, nome) => {
+    if (s == null || s === "") return "";
+    const t = Date.parse(s);
+    if (!isFinite(t)) throw new Error(`Data de ${nome} da oferta inválida.`);
+    return new Date(t).toISOString();
+  };
+  const start = data(v.start, "início"), end = data(v.end, "fim");
+  if (!end) throw new Error("Informe até quando vale a oferta.");
+  if (start && Date.parse(start) >= Date.parse(end)) throw new Error("O fim da oferta precisa ser depois do início.");
+  return { price: Math.round(price * 100) / 100, start, end };
 }
 
 // Produto criado no painel ou trazido por "produtos extras" (fica em ajustes.novos, não no Catálogo Pro)
@@ -645,7 +665,7 @@ function criarProduto(d) {
   const aj = lerAjustes();
   let n = aj.novos.reduce((m, p) => Math.max(m, /^ADM-\d+$/.test(p.sku) ? Number(p.sku.slice(4)) : 0), 0) + 1;
   const agora = new Date().toISOString();
-  const p = { sku: "ADM-" + String(n).padStart(4, "0"), name: "", description: "", sector: "", brand: "", tipo: "", notes: "", volume: null, stock: null, price: null, tags: "", photos: [], ...campos, added: agora.slice(0, 10), updated: agora };
+  const p = { sku: "ADM-" + String(n).padStart(4, "0"), name: "", description: "", sector: "", brand: "", tipo: "", notes: "", volume: null, stock: null, price: null, promo: null, tags: "", photos: [], ...campos, added: agora.slice(0, 10), updated: agora };
   aj.novos.push(p);
   gravarJSON(F.ajustes, aj);
   return { ok: true, sku: p.sku, ajustes: aj };
