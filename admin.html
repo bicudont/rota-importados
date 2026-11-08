@@ -1711,7 +1711,7 @@
           if (r.status === 401) { mostrarLogin("Sua sessão expirou. Entre novamente."); break; }
           if (!r.ok) { log(`✕ ${f.name}: ${j.erro}`, "err"); continue; }
           last = j;
-          const ex = j.extras ? `${j.extras.novos} produtos novos, ${j.extras.atualizados} atualizados${j.extras.ignorados ? `, ${j.extras.ignorados} já existiam no catálogo` : ""}${j.extras.erros ? `, ${j.extras.erros} com erro` : ""}, ` : "";
+          const ex = j.extras ? `${j.extras.novos} produtos novos, ${j.extras.atualizados} atualizados${j.extras.fotos ? `, ${j.extras.fotos} receberam foto` : ""}${j.extras.jaTinhamFoto ? `, ${j.extras.jaTinhamFoto} já tinham foto (mantida)` : ""}${j.extras.ignorados ? `, ${j.extras.ignorados} já existiam no catálogo` : ""}${j.extras.erros ? `, ${j.extras.erros} com erro` : ""}, ` : "";
           log(`✓ ${f.name}: ${j.produtos != null ? j.produtos + " produtos, " : ""}${ex}${j.fotos} fotos`, "ok");
         } catch {
           log(`✕ ${f.name}: falha de conexão`, "err");

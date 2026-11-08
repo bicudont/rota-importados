@@ -1089,24 +1089,39 @@ function migrarSkusEpic() {
 
 // "Produtos extras": somam ao catálogo (ficam junto dos criados no painel) em vez de substituí-lo.
 // Mesmo SKU de um extra já existente: atualiza só os campos enviados (ex.: só o preço ou só a foto).
-// SKU que já existe no Catálogo Pro: ignora.
+// SKU que já existe no Catálogo Pro: ignora, exceto item só com fotos ({sku, photos}), que vira edição de foto.
+// "soSemFoto: true": só aplica se o produto ainda está sem foto (não troca foto existente).
 const CAMPOS_EXTRAS = ["name", "brand", "sector", "subsector", "price", "stock", "active", "tags", "description", "photos"];
 function adicionarExtras(lista) {
   const aj = lerAjustes();
   const loja = lerJSON(F.loja, null);
-  const doCatalogo = new Set(loja && Array.isArray(loja.products) ? loja.products.map((p) => p.sku) : []);
+  const doCatalogo = new Map(loja && Array.isArray(loja.products) ? loja.products.map((p) => [p.sku, p]) : []);
   const indice = new Map(aj.novos.map((p, i) => [p.sku, i]));
   const agora = new Date().toISOString();
-  const r = { novos: 0, atualizados: 0, ignorados: 0, erros: 0 };
+  const r = { novos: 0, atualizados: 0, fotos: 0, jaTinhamFoto: 0, ignorados: 0, erros: 0 };
+  const soFotos = (item) => Array.isArray(item.photos) && Object.keys(item).every((k) => k === "sku" || k === "photos" || k === "soSemFoto");
   for (const item of lista.slice(0, 20000)) {
     try {
       const sku = skuExtra(texto(item.sku, 60));
       if (!/^[A-Za-z0-9_-]{1,60}$/.test(sku)) throw new Error("SKU inválido");
-      if (doCatalogo.has(sku)) { r.ignorados++; continue; }
+      if (doCatalogo.has(sku) && !indice.has(sku)) {
+        if (!soFotos(item)) { r.ignorados++; continue; }
+        const ed = aj.produtos[sku];
+        const atuais = ed && ed.campos && "photos" in ed.campos ? ed.campos.photos : doCatalogo.get(sku).photos;
+        if (item.soSemFoto && Array.isArray(atuais) && atuais.length) { r.jaTinhamFoto++; continue; }
+        aplicarCampos(aj, loja, sku, limparCampos({ photos: item.photos }));
+        r.fotos++;
+        continue;
+      }
       const enviados = {};
       for (const k of CAMPOS_EXTRAS) if (k in item) enviados[k] = item[k];
       const campos = limparCampos(enviados);
-      if (indice.has(sku)) { const i = indice.get(sku); aj.novos[i] = { ...aj.novos[i], ...campos, updated: agora }; r.atualizados++; }
+      if (indice.has(sku)) {
+        const i = indice.get(sku);
+        if (item.soSemFoto && soFotos(item) && (aj.novos[i].photos || []).length) { r.jaTinhamFoto++; continue; }
+        aj.novos[i] = { ...aj.novos[i], ...campos, updated: agora };
+        if (soFotos(item)) r.fotos++; else r.atualizados++;
+      }
       else {
         if (!campos.name) { r.ignorados++; continue; } // atualização de um produto que não existe aqui
         indice.set(sku, aj.novos.length);
