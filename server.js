@@ -39,6 +39,7 @@ const F = {
   pedidos: path.join(DATA_DIR, "privado", "pedidos.json"),
   naoDuplicados: path.join(DATA_DIR, "privado", "nao-duplicados.json"), // grupos marcados como "não são duplicados"
   pedidoStatus: path.join(DATA_DIR, "privado", "pedido-status.json"), // colunas do quadro de pedidos (situações)
+  custos: path.join(DATA_DIR, "privado", "custos.json"), // último custo (R$) informado por SKU, sugerido nos pedidos seguintes
 };
 
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
@@ -423,6 +424,7 @@ function dadosPainel(res) {
     site: lerJSON(F.site, null) || {},
     pedidos: lerJSON(F.pedidos, []),
     pedidoStatus: listaStatus(),
+    custos: lerJSON(F.custos, {}),
     banner: lerJSON(F.banner, null) || {},
     naoDuplicados: lerJSON(F.naoDuplicados, []),
     ia: !!process.env.ANTHROPIC_API_KEY,
@@ -774,6 +776,9 @@ function salvarSite(d) {
   site.whatsapp = texto(d.whatsapp, 30).replace(/\D/g, "");
   if (site.whatsapp && site.whatsapp.length < 10) throw new Error("WhatsApp inválido: use DDI + DDD + número (ex.: 5511920889155).");
   if (site.instagram && !/^https:\/\//.test(site.instagram)) site.instagram = "https://instagram.com/" + site.instagram.replace(/^@/, "");
+  // Google Analytics 4 (ID de métricas, público por natureza: aparece no código de qualquer site)
+  site.ga = texto(d.ga, 20).replace(/\s/g, "").toUpperCase();
+  if (site.ga && !/^G-[A-Z0-9]{4,15}$/.test(site.ga)) throw new Error("ID do Google Analytics inválido: use o formato G-XXXXXXXXXX.");
   site.cotacao = {};
   for (const k of ["pix", "efetivo"]) {
     const v = d.cotacao && d.cotacao[k];
@@ -897,12 +902,14 @@ const STATUS_PADRAO = [
   { id: "atendimento", nome: "Em atendimento", cor: "azul" },
   { id: "confirmado", nome: "Confirmado", cor: "ciano" },
   { id: "entregue", nome: "Entregue", cor: "verde" },
-  { id: "cancelado", nome: "Cancelado", cor: "cinza" },
+  { id: "cancelado", nome: "Cancelado", cor: "cinza", venda: false },
 ];
+// venda = os pedidos desta situação contam nos Resultados (faturamento, lucro, itens mais vendidos)
 const CORES_STATUS = ["amarelo", "laranja", "vermelho", "rosa", "roxo", "azul", "ciano", "verde", "cinza"];
 function listaStatus() {
   const l = lerJSON(F.pedidoStatus, null);
-  return Array.isArray(l) && l.length ? l : STATUS_PADRAO;
+  // Lista salva antes da opção "conta nas vendas": "cancelado" continua fora das vendas
+  return Array.isArray(l) && l.length ? l.map((s) => ("venda" in s ? s : { ...s, venda: s.id !== "cancelado" })) : STATUS_PADRAO;
 }
 const statusValido = (s) => listaStatus().some((x) => x.id === s);
 const statusInicial = () => listaStatus()[0].id;
@@ -923,7 +930,7 @@ function salvarStatus(d) {
     }
     if (usados.has(id)) throw new Error("Situação repetida.");
     usados.add(id);
-    return { id, nome, cor: CORES_STATUS.includes(s.cor) ? s.cor : "cinza" };
+    return { id, nome, cor: CORES_STATUS.includes(s.cor) ? s.cor : "cinza", venda: s.venda !== false };
   });
   const ids = lista.map((s) => s.id);
   // Destino pela posição na lista enviada (pode ser uma situação recém-criada, ainda sem id)
@@ -1008,9 +1015,31 @@ function itensPedido(lista) {
     variacao: texto(i.v != null ? i.v : i.variacao, 120),
     q: Math.max(1, Math.min(9999, parseInt(i.q, 10) || 1)),
     preco: num(i.preco),
+    custo: num(i.custo), // custo unitário em R$ (o que a loja pagou), para o lucro
   }));
   if (itens.some((i) => !i.nome)) throw new Error("Há um item sem nome.");
   return itens;
+}
+// Fretes pagos pela loja (pode haver vários envios por pedido), cada um com custo em R$ e código de rastreio
+function enviosPedido(lista) {
+  if (!Array.isArray(lista)) return [];
+  return lista.slice(0, 20).map((e) => {
+    const data = new Date(e && e.data);
+    return {
+      transportadora: texto(e && e.transportadora, 60),
+      codigo: texto(e && e.codigo, 60).replace(/\s+/g, "").toUpperCase(),
+      custo: valorPedido(e && e.custo),
+      data: isNaN(data) ? new Date().toISOString() : data.toISOString(),
+    };
+  }).filter((e) => e.transportadora || e.codigo || e.custo);
+}
+// Guarda o último custo de cada SKU para sugerir no próximo pedido (e preencher os pedidos do site)
+function lembrarCustos(itens) {
+  const novos = itens.filter((i) => i.sku && i.custo != null);
+  if (!novos.length) return;
+  const custos = lerJSON(F.custos, {});
+  for (const i of novos) custos[i.sku] = i.custo;
+  gravarJSON(F.custos, custos);
 }
 // Total = itens + frete − desconto (nunca negativo)
 function totalPedido(p) {
@@ -1021,6 +1050,12 @@ function totalPedido(p) {
 function gravarPedido(d, origem) {
   const num = (v) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
   const itens = itensPedido(d.itens);
+  if (origem === "painel") lembrarCustos(itens);
+  else {
+    // Pedido do site: custo sugerido = último custo informado para o SKU
+    const custos = lerJSON(F.custos, {});
+    for (const i of itens) i.custo = i.sku && typeof custos[i.sku] === "number" ? custos[i.sku] : null;
+  }
   // Carrinho do site: só nome e cidade, opcionais. Pedido lançado no painel: dados completos.
   const c = d.cliente && typeof d.cliente === "object" ? d.cliente : {};
   const cliente = origem === "painel" ? limparCliente(c) : { nome: texto(c.nome, 120), cidade: texto(c.cidade, 100) };
@@ -1034,6 +1069,7 @@ function gravarPedido(d, origem) {
     itens,
     frete: origem === "painel" ? valorPedido(d.frete) : 0,
     desconto: origem === "painel" ? valorPedido(d.desconto) : 0,
+    envios: origem === "painel" ? enviosPedido(d.envios) : [],
     total: 0,
     moeda: d.moeda === "USD" ? "USD" : "BRL",
     nota: origem === "painel" ? texto(d.nota, 2000) : "",
@@ -1056,7 +1092,8 @@ function alterarPedido(d) {
   if ("nota" in d) p.nota = texto(d.nota, 2000);
   // Edição completa (aba Pedidos → Editar): cliente, itens, frete e desconto; o total é recalculado
   if ("cliente" in d) p.cliente = limparCliente(d.cliente, true);
-  if ("itens" in d) p.itens = itensPedido(d.itens);
+  if ("itens" in d) { p.itens = itensPedido(d.itens); lembrarCustos(p.itens); }
+  if ("envios" in d) p.envios = enviosPedido(d.envios);
   if ("frete" in d) p.frete = valorPedido(d.frete);
   if ("desconto" in d) p.desconto = valorPedido(d.desconto);
   if (["itens", "frete", "desconto"].some((k) => k in d)) p.total = totalPedido(p);

@@ -51,6 +51,33 @@
   }
 
   const [loja, site, banner] = await Promise.all([carregarLoja(), carregarSite(), carregarBanner()]);
+
+  // Google Analytics 4: ativo só quando o ID (G-XXXX) estiver salvo no painel (aba Loja).
+  // O site navega por "#/…", então cada troca de página é enviada como page_view com o caminho real.
+  const GA = site && typeof site.ga === "string" && /^G-[A-Z0-9]{4,15}$/.test(site.ga) ? site.ga : "";
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { window.dataLayer.push(arguments); }
+  const ga = (...a) => { if (GA) gtag(...a); };
+  if (GA) {
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA;
+    document.head.appendChild(s);
+    gtag("js", new Date());
+    gtag("config", GA, { send_page_view: false });
+    let ultimaPagina = "";
+    const paginaVista = () => {
+      const rota = (location.hash.replace(/^#/, "") || "/").split("?")[0];
+      const caminho = rota === "/" ? "/" : rota;
+      const completo = caminho + (location.hash.includes("?") ? "?" + location.hash.split("?")[1] : "");
+      if (completo === ultimaPagina) return;
+      ultimaPagina = completo;
+      // Espera o título da página ser atualizado pela renderização
+      setTimeout(() => gtag("event", "page_view", { page_location: location.origin + completo, page_path: caminho, page_title: document.title }), 300);
+    };
+    window.addEventListener("hashchange", paginaVista);
+    paginaVista();
+  }
   for (const k of ["nome", "slogan", "whatsapp", "instagram", "cidade", "horario"]) {
     if (site && typeof site[k] === "string" && site[k].trim()) S[k] = site[k].trim();
   }
@@ -1039,6 +1066,7 @@
     if (p.estoque > 0) cart.forEach((i) => { if (i.id === id) i.q = Math.min(i.q, p.estoque); });
     save();
     renderCart();
+    ga("event", "add_to_cart", { currency: MOEDA === "USD" ? "USD" : "BRL", value: p.preco ? p.preco * q : 0, items: [{ item_id: p.sku, item_name: p.nome, item_brand: p.marca || undefined, item_variant: v || undefined, price: p.preco || undefined, quantity: q }] });
     toast(`✓ ${p.nome} adicionado`);
     const b = $("#openCart");
     b.classList.remove("bump");
@@ -1113,6 +1141,8 @@
       "Aguardo confirmação de disponibilidade, pagamento e entrega. Obrigado!",
     ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
     registrarPedido(cli);
+    // Pedido enviado ao WhatsApp = "begin_checkout" no Analytics (a venda é confirmada fora do site)
+    ga("event", "begin_checkout", { currency: MOEDA === "USD" ? "USD" : "BRL", value: total(), items: cart.map((i) => { const p = byId(i.id); return { item_id: p.sku, item_name: p.nome, item_variant: i.v || undefined, price: p.preco || undefined, quantity: i.q }; }) });
     window.open(waLink(msg), "_blank", "noopener");
   });
 
