@@ -38,6 +38,7 @@ const F = {
   banner: path.join(DATA_DIR, "banner.json"), // banners do topo da página inicial e aviso da faixa superior
   pedidos: path.join(DATA_DIR, "privado", "pedidos.json"),
   naoDuplicados: path.join(DATA_DIR, "privado", "nao-duplicados.json"), // grupos marcados como "não são duplicados"
+  pedidoStatus: path.join(DATA_DIR, "privado", "pedido-status.json"), // colunas do quadro de pedidos (situações)
 };
 
 const inside = (base, file) => file === base || file.startsWith(base + path.sep);
@@ -394,7 +395,8 @@ function adminApi(req, res, rota) {
   if (r === "POST subcategoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirSubcategoria(d)));
   if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
-  if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []) });
+  if (r === "GET pedidos") return json(res, 200, { pedidos: lerJSON(F.pedidos, []), pedidoStatus: listaStatus() });
+  if (r === "PUT pedido-status") return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarStatus(d)));
   if (r === "POST ia/descricao") {
     return lerCorpoJSON(req, res, 4096, (d) =>
       gerarDescricao(d.sku).then(
@@ -420,6 +422,7 @@ function dadosPainel(res) {
     ajustes: lerAjustes(),
     site: lerJSON(F.site, null) || {},
     pedidos: lerJSON(F.pedidos, []),
+    pedidoStatus: listaStatus(),
     banner: lerJSON(F.banner, null) || {},
     naoDuplicados: lerJSON(F.naoDuplicados, []),
     ia: !!process.env.ANTHROPIC_API_KEY,
@@ -888,7 +891,50 @@ function salvarExibicao(d) {
 }
 
 /* ---------- Pedidos ---------- */
-const STATUS = ["novo", "atendimento", "confirmado", "entregue", "cancelado"];
+// Situações (colunas do quadro), configuráveis no painel. A primeira é onde entram os pedidos novos.
+const STATUS_PADRAO = [
+  { id: "novo", nome: "Novo", cor: "amarelo" },
+  { id: "atendimento", nome: "Em atendimento", cor: "azul" },
+  { id: "confirmado", nome: "Confirmado", cor: "ciano" },
+  { id: "entregue", nome: "Entregue", cor: "verde" },
+  { id: "cancelado", nome: "Cancelado", cor: "cinza" },
+];
+const CORES_STATUS = ["amarelo", "laranja", "vermelho", "rosa", "roxo", "azul", "ciano", "verde", "cinza"];
+function listaStatus() {
+  const l = lerJSON(F.pedidoStatus, null);
+  return Array.isArray(l) && l.length ? l : STATUS_PADRAO;
+}
+const statusValido = (s) => listaStatus().some((x) => x.id === s);
+const statusInicial = () => listaStatus()[0].id;
+
+// Recebe a lista inteira (ordem = ordem das colunas). Pedidos de situações removidas vão para "destino".
+function salvarStatus(d) {
+  if (!Array.isArray(d.lista) || !d.lista.length) throw new Error("Deixe pelo menos uma situação.");
+  if (d.lista.length > 20) throw new Error("No máximo 20 situações.");
+  const usados = new Set();
+  const lista = d.lista.map((s) => {
+    const nome = texto(s && s.nome, 40);
+    if (!nome) throw new Error("Há uma situação sem nome.");
+    let id = texto(s.id, 40).replace(/[^a-z0-9-]/g, "");
+    if (!id) {
+      const base = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "situacao";
+      id = base;
+      for (let n = 2; usados.has(id); n++) id = base + "-" + n;
+    }
+    if (usados.has(id)) throw new Error("Situação repetida.");
+    usados.add(id);
+    return { id, nome, cor: CORES_STATUS.includes(s.cor) ? s.cor : "cinza" };
+  });
+  const ids = lista.map((s) => s.id);
+  // Destino pela posição na lista enviada (pode ser uma situação recém-criada, ainda sem id)
+  const destino = ids.includes(d.destino) ? d.destino : ids[Number(d.destinoIndice)] || ids[0];
+  const pedidos = lerJSON(F.pedidos, []);
+  let movidos = 0;
+  for (const p of pedidos) if (!ids.includes(p.status)) { p.status = destino; movidos++; }
+  if (movidos) gravarJSON(F.pedidos, pedidos);
+  gravarJSON(F.pedidoStatus, lista);
+  return { ok: true, pedidoStatus: lista, movidos, pedidos: movidos ? pedidos : undefined };
+}
 const envios = new Map(); // ip -> { n, ate }
 
 // Chamado pelo site quando o cliente clica em "Enviar pedido pelo WhatsApp"
@@ -905,7 +951,7 @@ function novoPedido(req, res) {
 
 // Pedido lançado manualmente no painel (ex.: venda combinada direto no WhatsApp ou na loja)
 function pedidoManual(d) {
-  if ("status" in d && !STATUS.includes(d.status)) throw new Error("Status inválido.");
+  if ("status" in d && !statusValido(d.status)) throw new Error("Situação inválida.");
   return { ok: true, pedido: gravarPedido(d, "painel") };
 }
 
@@ -983,7 +1029,7 @@ function gravarPedido(d, origem) {
     id: pedidos.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1,
     data: new Date().toISOString(),
     origem,
-    status: origem === "painel" && STATUS.includes(d.status) ? d.status : "novo",
+    status: origem === "painel" && statusValido(d.status) ? d.status : statusInicial(),
     cliente,
     itens,
     frete: origem === "painel" ? valorPedido(d.frete) : 0,
@@ -1004,7 +1050,7 @@ function alterarPedido(d) {
   const p = pedidos.find((x) => x.id === Number(d.id));
   if (!p) throw new Error("Pedido não encontrado.");
   if ("status" in d) {
-    if (!STATUS.includes(d.status)) throw new Error("Status inválido.");
+    if (!statusValido(d.status)) throw new Error("Situação inválida.");
     p.status = d.status;
   }
   if ("nota" in d) p.nota = texto(d.nota, 2000);

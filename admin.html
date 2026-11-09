@@ -140,8 +140,47 @@
     .order__acts { display: flex; gap: 8px; flex-wrap: wrap; }
     .order__foot { display: grid; grid-template-columns: 180px minmax(0,1fr) auto; gap: 10px; align-items: start; }
     .st { font-size: .75rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; }
-    .st-novo { background: var(--warnbg); color: var(--warn); } .st-atendimento { background: #e8f0fe; color: var(--royal); }
-    .st-confirmado { background: #e0f7ff; color: #00658c; } .st-entregue { background: var(--okbg); color: var(--ok); } .st-cancelado { background: #eef1f5; color: var(--muted); }
+    /* Cores das situações (configuráveis): --c = texto/borda, --cb = fundo */
+    [data-cor="amarelo"] { --c:#a15c00; --cb:#fff4e0; } [data-cor="laranja"] { --c:#b84f00; --cb:#ffeedd; }
+    [data-cor="vermelho"] { --c:#c81e1e; --cb:#fdecec; } [data-cor="rosa"] { --c:#b0236f; --cb:#fde8f3; }
+    [data-cor="roxo"] { --c:#6b35c9; --cb:#f1eafd; } [data-cor="azul"] { --c:#0055cc; --cb:#e8f0fe; }
+    [data-cor="ciano"] { --c:#00658c; --cb:#e0f7ff; } [data-cor="verde"] { --c:#00852e; --cb:#e6f6ec; }
+    [data-cor="cinza"] { --c:#5b6b82; --cb:#eef1f5; }
+    .st { background: var(--cb, #eef1f5); color: var(--c, var(--muted)); white-space: nowrap; }
+
+    /* Quadro (kanban) de pedidos */
+    .ped-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+    .ped-bar .search { flex: 1 1 220px; max-width: 360px; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+    .seg button { border: 0; background: none; padding: 0 14px; min-height: 40px; font-weight: 600; cursor: pointer; color: var(--muted); }
+    .seg button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+    .kb { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 300px); gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
+    .kb__col { background: #eef2f8; border-radius: 14px; border-top: 4px solid var(--c, var(--line)); display: flex; flex-direction: column; max-height: calc(100vh - 230px); min-height: 160px; transition: background .15s, box-shadow .15s; }
+    .kb__col.over { background: var(--cb, #e8f0fe); box-shadow: inset 0 0 0 2px var(--c, var(--royal)); }
+    .kb__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 12px 14px 8px; }
+    .kb__head h3 { font-size: .95rem; color: var(--c, var(--navy)); }
+    .kb__head span { font-size: .8rem; color: var(--muted); text-align: right; }
+    .kb__list { display: grid; gap: 8px; padding: 0 10px 10px; overflow-y: auto; align-content: start; flex: 1; }
+    .kb__card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; display: grid; gap: 6px; cursor: grab; font-size: .86rem; box-shadow: 0 1px 2px rgba(16,37,77,.05); }
+    .kb__card:hover { border-color: #c5d0de; }
+    .kb__card:focus-visible { outline: 3px solid rgba(0,85,204,.35); outline-offset: 2px; }
+    .kb__card.drag { opacity: .45; }
+    .kb__top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .kb__top b:first-child { color: var(--navy); }
+    .kb__nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .kb__itens { color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .kb__nota { background: #fffbea; border-radius: 8px; padding: 4px 8px; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .kb__foot { display: flex; gap: 6px; align-items: center; }
+    .kb__foot select { min-height: 32px; padding: 3px 8px; font-size: .8rem; flex: 1; min-width: 0; }
+    .kb__foot .btn { min-height: 32px; padding: 0 9px; }
+    .kb__vazio { color: var(--muted); font-size: .84rem; text-align: center; padding: 18px 8px; border: 2px dashed #d5dde8; border-radius: 12px; }
+    .kb__mais { width: 100%; }
+    /* Configurar situações */
+    .strow { display: grid; grid-template-columns: 30px minmax(0,1fr) 130px auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .strow .dot { width: 22px; height: 22px; border-radius: 50%; background: var(--cb); border: 3px solid var(--c); }
+    .strow__acts { display: flex; gap: 4px; }
+    .strow__acts .btn { min-height: 36px; padding: 0 10px; }
+    @media (max-width: 560px) { .strow { grid-template-columns: 26px minmax(0,1fr) 104px; } .strow__acts { grid-column: 2 / 4; } }
 
     .cli { font-size: .88rem; display: grid; gap: 2px; }
     .pick { position: relative; }
@@ -314,10 +353,17 @@
 
       <!-- Pedidos -->
       <section data-sec="pedidos" hidden>
-        <div class="head"><h1>Pedidos</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="reloadPedidos">↻ Atualizar</button><button class="btn btn--primary" id="novoPed">+ Novo pedido</button></div></div>
-        <p class="muted small" style="margin:-8px 0 14px">Pedidos “Pelo site” são registrados quando o cliente clica em “Finalizar no WhatsApp” no carrinho (ele ainda precisa enviar a mensagem; valores estimados no momento do pedido). Use <b>+ Novo pedido</b> para lançar vendas combinadas direto com você.</p>
-        <div class="chips" id="pedFiltro"></div>
-        <div id="pedLista"></div>
+        <div class="head"><h1>Pedidos</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="reloadPedidos">↻ Atualizar</button><button class="btn" id="cfgStatus">⚙️ Situações</button><button class="btn btn--primary" id="novoPed">+ Novo pedido</button></div></div>
+        <p class="muted small" style="margin:-8px 0 14px">Pedidos “Pelo site” são registrados quando o cliente clica em “Finalizar no WhatsApp” no carrinho (ele ainda precisa enviar a mensagem; valores estimados no momento do pedido). Use <b>+ Novo pedido</b> para lançar vendas combinadas direto com você. No quadro, arraste o cartão para outra coluna (ou use a lista do cartão) para mudar a situação.</p>
+        <div class="ped-bar">
+          <div class="seg" role="group" aria-label="Modo de exibição"><button type="button" data-pv="quadro">▦ Quadro</button><button type="button" data-pv="lista">☰ Lista</button></div>
+          <input class="field search" id="pedBusca" type="search" placeholder="Buscar por nº, cliente, cidade ou produto" aria-label="Buscar pedidos" />
+        </div>
+        <div class="kb" id="pedQuadro"></div>
+        <div id="pedListaBox">
+          <div class="chips" id="pedFiltro"></div>
+          <div id="pedLista"></div>
+        </div>
       </section>
 
       <!-- Produtos -->
@@ -704,6 +750,33 @@
       </div>
     </form>
   </dialog>
+  <!-- Detalhes de um pedido (aberto pelo quadro) -->
+  <dialog id="dlgPedVer" aria-labelledby="pedVerTitle">
+    <div class="dlg">
+      <div class="dlg__head"><h2 id="pedVerTitle">Pedido</h2><button type="button" class="x" data-fechar-ver aria-label="Fechar">×</button></div>
+      <div class="dlg__body" id="pedVer"></div>
+    </div>
+  </dialog>
+  <!-- Configurar situações (colunas do quadro) -->
+  <dialog id="dlgSt" aria-labelledby="stTitle">
+    <form class="dlg" id="stForm" novalidate>
+      <div class="dlg__head"><h2 id="stTitle">Situações dos pedidos</h2><button type="button" class="x" data-fechar-st aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p class="muted small">Cada situação é uma coluna do quadro, nesta ordem. <b>A primeira é onde entram os pedidos novos</b> (do site e do painel).</p>
+        <div id="stLista"></div>
+        <button type="button" class="btn btn--sm" id="stAdd" style="justify-self:start">+ Adicionar situação</button>
+        <div id="stDestinoBox" hidden>
+          <label class="lbl" for="stDestino">Os pedidos das situações removidas vão para</label>
+          <select class="field" id="stDestino"></select>
+        </div>
+        <div class="msg err" id="stErro" role="alert" hidden></div>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" data-fechar-st>Cancelar</button><button class="btn btn--primary" id="stSalvar">Salvar situações</button></div>
+      </div>
+    </form>
+  </dialog>
   <!-- Texto do pedido para o WhatsApp -->
   <dialog id="dlgTxt" aria-labelledby="txtTitle">
     <div class="dlg">
@@ -931,11 +1004,11 @@
         semfoto: vis.filter((p) => !p._fotos.length).length,
         sempreco: vis.filter((p) => !(p.price > 0)).length,
         editados: PROD.filter((p) => p._editados.length || p._novo).length,
-        novos: D.pedidos.filter((p) => p.status === "novo").length,
+        novos: D.pedidos.filter((p) => stDe(p).id === ST()[0].id).length,
       };
       const st = (num, txt, acao, alerta) => `<button class="stat${alerta && num ? " stat--alert" : ""}" data-ir="${acao}"><b>${num.toLocaleString("pt-BR")}</b><span>${txt}</span></button>`;
       $("#stats").innerHTML = [
-        st(n.novos, "Pedidos novos", "pedidos", true),
+        st(n.novos, ST()[0].id === "novo" ? "Pedidos novos" : `Pedidos em “${esc(ST()[0].nome)}”`, "pedidos", true),
         st(n.visiveis, "Produtos no site", "produtos:visivel"),
         st(n.esgotados, "Esgotados", "produtos:esgotado", true),
         st(n.semfoto, "Sem foto", "produtos:semfoto", true),
@@ -967,7 +1040,7 @@
       $("#nNovos").textContent = n.novos;
       const ult = D.pedidos.slice(0, 5);
       $("#ultimos").innerHTML = ult.length
-        ? `<div class="facts">${ult.map((p) => `<div><span>#${p.id} · ${esc(p.cliente.nome || "Sem nome")} <span class="muted small">${dataBR(p.data, true)}</span></span><span class="st st-${p.status}">${STATUS[p.status]}</span></div>`).join("")}</div><button class="btn btn--sm" data-ir="pedidos" style="margin-top:12px">Ver todos</button>`
+        ? `<div class="facts">${ult.map((p) => `<div><span>#${p.id} · ${esc(p.cliente.nome || "Sem nome")} <span class="muted small">${dataBR(p.data, true)}</span></span>${stBadge(p)}</div>`).join("")}</div><button class="btn btn--sm" data-ir="pedidos" style="margin-top:12px">Ver todos</button>`
         : `<p class="muted">Nenhum pedido registrado ainda.</p>`;
       renderPendencias(); // contagem e lista de pendências acompanham qualquer alteração
     }
@@ -981,34 +1054,253 @@
     });
 
     /* ---------- Pedidos ---------- */
-    const STATUS = { novo: "Novo", atendimento: "Em atendimento", confirmado: "Confirmado", entregue: "Entregue", cancelado: "Cancelado" };
-    let pedFiltro = "";
-    function renderPedidos() {
-      const cont = (s) => D.pedidos.filter((p) => !s || p.status === s).length;
-      $("#pedFiltro").innerHTML = [["", "Todos"], ...Object.entries(STATUS)].map(([k, v]) => `<button class="chip" data-pf="${k}" aria-pressed="${pedFiltro === k}">${v} (${cont(k)})</button>`).join("");
-      const lista = D.pedidos.filter((p) => !pedFiltro || p.status === pedFiltro);
-      const moeda = (v, m) => (v == null ? "sob consulta" : m === "USD" ? usd(v) : brl(v));
-      $("#pedLista").innerHTML = lista.length
-        ? lista.map((p) => `<article class="order" data-pid="${p.id}">
+    // Situações configuráveis (aba Pedidos → ⚙️ Situações). A primeira recebe os pedidos novos.
+    const STATUS_PADRAO = [
+      { id: "novo", nome: "Novo", cor: "amarelo" }, { id: "atendimento", nome: "Em atendimento", cor: "azul" },
+      { id: "confirmado", nome: "Confirmado", cor: "ciano" }, { id: "entregue", nome: "Entregue", cor: "verde" },
+      { id: "cancelado", nome: "Cancelado", cor: "cinza" },
+    ];
+    const CORES = { amarelo: "Amarelo", laranja: "Laranja", vermelho: "Vermelho", rosa: "Rosa", roxo: "Roxo", azul: "Azul", ciano: "Ciano", verde: "Verde", cinza: "Cinza" };
+    const ST = () => (D && Array.isArray(D.pedidoStatus) && D.pedidoStatus.length ? D.pedidoStatus : STATUS_PADRAO);
+    // Pedido com situação que não existe mais (ex.: dados antigos) aparece na primeira coluna
+    const stDe = (p) => ST().find((s) => s.id === p.status) || ST()[0];
+    const stBadge = (p) => { const s = stDe(p); return `<span class="st" data-cor="${s.cor}">${esc(s.nome)}</span>`; };
+    const stOpcoes = (atual) => ST().map((s) => `<option value="${esc(s.id)}"${s.id === atual ? " selected" : ""}>${esc(s.nome)}</option>`).join("");
+    const moedaPed = (v, m) => (v == null ? "sob consulta" : m === "USD" ? usd(v) : brl(v));
+
+    let pedFiltro = "", pedBusca = "", pedLimite = {};
+    let pedVista = "quadro";
+    try { pedVista = localStorage.getItem("rota-ped-vista") === "lista" ? "lista" : "quadro"; } catch {}
+    const semAc = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    function pedBate(p) {
+      if (!pedBusca) return true;
+      const c = p.cliente || {};
+      const alvo = semAc(["#" + p.id, p.id, c.nome, c.cidade, c.telefone, c.doc, p.nota, ...p.itens.map((i) => i.nome + " " + (i.sku || ""))].join(" "));
+      return semAc(pedBusca).split(/\s+/).filter(Boolean).every((t) => alvo.includes(t));
+    }
+
+    function pedidoHTML(p) {
+      return `<article class="order" data-pid="${p.id}">
             <div class="order__top">
-              <div><h3>Pedido #${p.id} <span class="st st-${p.status}">${STATUS[p.status]}</span></h3><div class="muted small">${dataBR(p.data, true)} · ${p.origem === "painel" ? "Lançado no painel" : "Pelo site"}</div></div>
-              <b>${moeda(p.total, p.moeda)}</b>
+              <div><h3>Pedido #${p.id} ${stBadge(p)}</h3><div class="muted small">${dataBR(p.data, true)} · ${p.origem === "painel" ? "Lançado no painel" : "Pelo site"}</div></div>
+              <b>${moedaPed(p.total, p.moeda)}</b>
             </div>
             ${clienteHTML(p.cliente)}
-            <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moeda(i.preco * i.q, p.moeda)}</span></div>`).join("")}${p.frete ? `<div class="muted"><span>Frete / entrega</span><span>${moeda(p.frete, p.moeda)}</span></div>` : ""}${p.desconto ? `<div class="muted"><span>Desconto</span><span>− ${moeda(p.desconto, p.moeda)}</span></div>` : ""}</div>
+            <div class="order__items">${p.itens.map((i) => `<div><span>${i.q}× ${esc(i.nome)}${i.variacao ? " (" + esc(i.variacao) + ")" : ""}${i.sku ? ` <span class="muted">[${esc(i.sku)}]</span>` : ""}</span><span>${i.preco == null ? "sob consulta" : moedaPed(i.preco * i.q, p.moeda)}</span></div>`).join("")}${p.frete ? `<div class="muted"><span>Frete / entrega</span><span>${moedaPed(p.frete, p.moeda)}</span></div>` : ""}${p.desconto ? `<div class="muted"><span>Desconto</span><span>− ${moedaPed(p.desconto, p.moeda)}</span></div>` : ""}</div>
             <div class="order__acts">
               <button class="btn btn--sm" data-acao="editar">✏️ Editar</button>
               <button class="btn btn--sm" data-acao="pdf">📄 PDF</button>
               <button class="btn btn--sm" data-acao="whats">💬 WhatsApp</button>
             </div>
             <div class="order__foot">
-              <select class="field" data-st aria-label="Situação do pedido #${p.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}"${k === p.status ? " selected" : ""}>${v}</option>`).join("")}</select>
+              <select class="field" data-st aria-label="Situação do pedido #${p.id}">${stOpcoes(stDe(p).id)}</select>
               <input class="field" data-nota placeholder="Anotação interna (ex.: pago no Pix, entrega sábado)" value="${esc(p.nota)}" aria-label="Anotação do pedido #${p.id}" maxlength="2000" />
               <button class="btn btn--danger btn--sm" data-del style="min-height:42px">Excluir</button>
             </div>
-          </article>`).join("")
-        : `<div class="card empty">${D.pedidos.length ? "Nenhum pedido nesta situação." : "Nenhum pedido registrado ainda. Eles aparecem aqui quando um cliente finaliza o carrinho no site."}</div>`;
+          </article>`;
     }
+
+    function cartaoHTML(p) {
+      const c = p.cliente || {};
+      const itens = p.itens.map((i) => `${i.q}× ${i.nome}`).join(" · ");
+      return `<div class="kb__card" draggable="true" tabindex="0" data-pid="${p.id}" aria-label="Pedido #${p.id}, ${esc(c.nome || "sem nome")}. Enter abre os detalhes.">
+          <div class="kb__top"><b>#${p.id}</b><b>${moedaPed(p.total, p.moeda)}</b></div>
+          <div class="kb__nome">${esc(c.nome || "Sem nome")}${c.cidade ? ` <span class="muted" style="font-weight:400">· ${esc(c.cidade)}</span>` : ""}</div>
+          <div class="kb__itens" title="${esc(itens)}">${esc(itens)}</div>
+          ${p.nota ? `<div class="kb__nota" title="${esc(p.nota)}">📝 ${esc(p.nota)}</div>` : ""}
+          <div class="muted small">${dataBR(p.data, true)} · ${p.origem === "painel" ? "Painel" : "Site"}</div>
+          <div class="kb__foot">
+            <select class="field" data-st aria-label="Mover pedido #${p.id} para">${stOpcoes(stDe(p).id)}</select>
+            <button type="button" class="btn btn--sm" data-acao="whats" title="Texto para o WhatsApp" aria-label="WhatsApp do pedido #${p.id}">💬</button>
+            <button type="button" class="btn btn--sm" data-acao="editar" title="Editar" aria-label="Editar pedido #${p.id}">✏️</button>
+          </div>
+        </div>`;
+    }
+
+    function renderQuadro() {
+      const POR_COL = 40;
+      const lista = D.pedidos.filter(pedBate);
+      $("#pedQuadro").innerHTML = ST().map((s) => {
+        const meus = lista.filter((p) => stDe(p).id === s.id);
+        const lim = pedLimite[s.id] || POR_COL;
+        const soma = meus.filter((p) => p.moeda !== "USD" && p.total != null).reduce((t, p) => t + p.total, 0);
+        return `<section class="kb__col" data-cor="${s.cor}" data-col="${esc(s.id)}" aria-label="${esc(s.nome)}">
+            <div class="kb__head"><h3>${esc(s.nome)}</h3><span>${meus.length} pedido${meus.length === 1 ? "" : "s"}${soma ? "<br>" + brl(soma) : ""}</span></div>
+            <div class="kb__list">
+              ${meus.length ? meus.slice(0, lim).map(cartaoHTML).join("") : `<div class="kb__vazio">${pedBusca ? "Nada encontrado" : "Arraste pedidos para cá"}</div>`}
+              ${meus.length > lim ? `<button type="button" class="btn btn--sm kb__mais" data-mais="${esc(s.id)}">Mostrar mais ${Math.min(POR_COL, meus.length - lim)} de ${meus.length - lim}</button>` : ""}
+            </div>
+          </section>`;
+      }).join("");
+    }
+
+    function renderPedidos() {
+      $$("[data-pv]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.pv === pedVista));
+      $("#pedQuadro").hidden = pedVista !== "quadro";
+      $("#pedListaBox").hidden = pedVista !== "lista";
+      if (pedFiltro && !ST().some((s) => s.id === pedFiltro)) pedFiltro = "";
+      if (pedVista === "quadro") renderQuadro();
+      const base = D.pedidos.filter(pedBate);
+      const cont = (s) => base.filter((p) => !s || stDe(p).id === s).length;
+      $("#pedFiltro").innerHTML = [["", "Todos"], ...ST().map((s) => [s.id, s.nome])].map(([k, v]) => `<button class="chip" data-pf="${esc(k)}" aria-pressed="${pedFiltro === k}">${esc(v)} (${cont(k)})</button>`).join("");
+      const lista = base.filter((p) => !pedFiltro || stDe(p).id === pedFiltro);
+      if (pedVista === "lista") $("#pedLista").innerHTML = lista.length
+        ? lista.map(pedidoHTML).join("")
+        : `<div class="card empty">${!D.pedidos.length ? "Nenhum pedido registrado ainda. Eles aparecem aqui quando um cliente finaliza o carrinho no site." : pedBusca ? "Nenhum pedido encontrado." : "Nenhum pedido nesta situação."}</div>`;
+      // Detalhes abertos acompanham a alteração
+      if ($("#dlgPedVer").open) {
+        const p = D.pedidos.find((x) => x.id === pedVerId);
+        if (p) $("#pedVer").innerHTML = pedidoHTML(p); else $("#dlgPedVer").close();
+      }
+    }
+
+    let pedVerId = null;
+    function abrirPedidoVer(p) {
+      pedVerId = p.id;
+      $("#pedVerTitle").textContent = `Pedido #${p.id}`;
+      $("#pedVer").innerHTML = pedidoHTML(p);
+      $("#dlgPedVer").showModal();
+    }
+    $("[data-fechar-ver]").addEventListener("click", () => $("#dlgPedVer").close());
+    $$("[data-pv]").forEach((b) => b.addEventListener("click", () => {
+      pedVista = b.dataset.pv;
+      try { localStorage.setItem("rota-ped-vista", pedVista); } catch {}
+      renderPedidos();
+    }));
+    let pedBuscaT = null;
+    $("#pedBusca").addEventListener("input", (e) => { clearTimeout(pedBuscaT); pedBuscaT = setTimeout(() => { pedBusca = e.target.value.trim(); pedLimite = {}; renderPedidos(); }, 150); });
+
+    // Quadro: abrir detalhes, mover pela lista do cartão, arrastar entre colunas
+    const qd = $("#pedQuadro");
+    qd.addEventListener("click", (e) => {
+      const mais = e.target.closest("[data-mais]");
+      if (mais) { pedLimite[mais.dataset.mais] = (pedLimite[mais.dataset.mais] || 40) + 40; return renderQuadro(); }
+      const card = e.target.closest(".kb__card");
+      if (!card || e.target.closest("select")) return;
+      const p = D.pedidos.find((x) => x.id === Number(card.dataset.pid));
+      const ac = e.target.closest("[data-acao]");
+      if (ac) { if (ac.dataset.acao === "editar") abrirEdicaoPedido(p); if (ac.dataset.acao === "whats") abrirTextoPedido(p); return; }
+      abrirPedidoVer(p);
+    });
+    qd.addEventListener("keydown", (e) => {
+      const card = e.target.classList && e.target.classList.contains("kb__card") ? e.target : null;
+      if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirPedidoVer(D.pedidos.find((x) => x.id === Number(card.dataset.pid))); }
+    });
+    qd.addEventListener("change", (e) => {
+      if (!e.target.matches("[data-st]")) return;
+      salvarPedido(Number(e.target.closest("[data-pid]").dataset.pid), { status: e.target.value });
+    });
+    let arrastando = null;
+    qd.addEventListener("dragstart", (e) => {
+      const card = e.target.closest && e.target.closest(".kb__card");
+      if (!card) return;
+      arrastando = Number(card.dataset.pid);
+      card.classList.add("drag");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", String(arrastando)); } catch {}
+    });
+    qd.addEventListener("dragend", () => { arrastando = null; $$(".kb__card.drag, .kb__col.over").forEach((el) => el.classList.remove("drag", "over")); });
+    qd.addEventListener("dragover", (e) => {
+      const col = arrastando != null && e.target.closest(".kb__col");
+      if (!col) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      $$(".kb__col.over").forEach((c) => c !== col && c.classList.remove("over"));
+      col.classList.add("over");
+    });
+    qd.addEventListener("dragleave", (e) => { const col = e.target.closest(".kb__col"); if (col && !col.contains(e.relatedTarget)) col.classList.remove("over"); });
+    qd.addEventListener("drop", (e) => {
+      const col = e.target.closest(".kb__col");
+      if (!col || arrastando == null) return;
+      e.preventDefault();
+      const id = arrastando, para = col.dataset.col;
+      const p = D.pedidos.find((x) => x.id === id);
+      col.classList.remove("over");
+      if (p && stDe(p).id !== para) {
+        const antes = p.status;
+        p.status = para; renderQuadro(); // move na hora; volta se o servidor recusar
+        salvarPedido(id, { status: para }).then((ok) => { if (!ok) { p.status = antes; renderPedidos(); } });
+      }
+    });
+
+    /* Configurar situações */
+    let stEd = [];
+    const dlgSt = $("#dlgSt");
+    function renderStLista() {
+      const n = (id) => D.pedidos.filter((p) => stDe(p).id === id).length;
+      $("#stLista").innerHTML = stEd.map((s, i) => `<div class="strow" data-cor="${s.cor}" data-i="${i}">
+          <span class="dot" aria-hidden="true"></span>
+          <input class="field" data-k="nome" value="${esc(s.nome)}" maxlength="40" placeholder="Nome da situação" aria-label="Nome da situação ${i + 1}" />
+          <select class="field" data-k="cor" aria-label="Cor de ${esc(s.nome || "situação " + (i + 1))}">${Object.entries(CORES).map(([k, v]) => `<option value="${k}"${k === s.cor ? " selected" : ""}>${v}</option>`).join("")}</select>
+          <div class="strow__acts">
+            <button type="button" class="btn" data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="Subir" title="Subir">↑</button>
+            <button type="button" class="btn" data-mv="1" ${i === stEd.length - 1 ? "disabled" : ""} aria-label="Descer" title="Descer">↓</button>
+            <button type="button" class="btn btn--danger" data-rm ${stEd.length === 1 ? "disabled" : ""} aria-label="Remover ${esc(s.nome)}" title="Remover">×</button>
+          </div>
+          ${s.id && n(s.id) ? `<div class="muted small" style="grid-column:2/-1;margin-top:-4px">${n(s.id)} pedido${n(s.id) === 1 ? "" : "s"} nesta situação${i === 0 ? " · recebe os pedidos novos" : ""}</div>` : i === 0 ? `<div class="muted small" style="grid-column:2/-1;margin-top:-4px">Recebe os pedidos novos</div>` : ""}
+        </div>`).join("");
+      // Situações removidas que têm pedidos: escolher para onde eles vão
+      const ids = stEd.map((s) => s.id).filter(Boolean);
+      const removidas = ST().filter((s) => !ids.includes(s.id) && n(s.id));
+      $("#stDestinoBox").hidden = !removidas.length;
+      if (removidas.length) {
+        const atual = $("#stDestino").value;
+        $("#stDestino").innerHTML = stEd.map((s, i) => `<option value="${i}">${esc(s.nome || "(sem nome)")}</option>`).join("");
+        if (atual && +atual < stEd.length) $("#stDestino").value = atual;
+        $("#stDestinoBox .lbl").textContent = `${removidas.reduce((t, s) => t + n(s.id), 0)} pedido(s) de ${removidas.map((s) => "“" + s.nome + "”").join(", ")} vão para`;
+      }
+    }
+    $("#cfgStatus").addEventListener("click", () => {
+      stEd = ST().map((s) => ({ ...s }));
+      $("#stErro").hidden = true;
+      $("#stDestino").innerHTML = "";
+      renderStLista();
+      dlgSt.showModal();
+    });
+    $$("[data-fechar-st]").forEach((b) => b.addEventListener("click", () => dlgSt.close()));
+    $("#stLista").addEventListener("input", (e) => {
+      const row = e.target.closest("[data-i]");
+      if (!row || !e.target.dataset.k) return;
+      stEd[+row.dataset.i][e.target.dataset.k] = e.target.value;
+      if (e.target.dataset.k === "cor") row.dataset.cor = e.target.value;
+    });
+    $("#stLista").addEventListener("change", (e) => { if (e.target.dataset.k === "nome") renderStLista(); });
+    $("#stLista").addEventListener("click", (e) => {
+      const row = e.target.closest("[data-i]"), b = e.target.closest("button");
+      if (!row || !b) return;
+      const i = +row.dataset.i;
+      if (b.dataset.mv) { const j = i + Number(b.dataset.mv); [stEd[i], stEd[j]] = [stEd[j], stEd[i]]; }
+      if (b.hasAttribute("data-rm")) stEd.splice(i, 1);
+      renderStLista();
+    });
+    $("#stAdd").addEventListener("click", () => {
+      if (stEd.length >= 20) return toast("No máximo 20 situações.", true);
+      const usadas = stEd.map((s) => s.cor);
+      stEd.push({ id: "", nome: "", cor: Object.keys(CORES).find((c) => !usadas.includes(c)) || "cinza" });
+      renderStLista();
+      const ult = $$("#stLista [data-k=nome]").pop(); if (ult) ult.focus();
+    });
+    $("#stForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const erro = (m) => { $("#stErro").textContent = m; $("#stErro").hidden = false; };
+      const lista = stEd.map((s) => ({ ...s, nome: s.nome.trim() }));
+      if (!lista.length) return erro("Deixe pelo menos uma situação.");
+      if (lista.some((s) => !s.nome)) return erro("Dê um nome para todas as situações (ou remova as vazias).");
+      const nomes = lista.map((s) => semAc(s.nome));
+      if (nomes.some((n, i) => nomes.indexOf(n) !== i)) return erro("Há duas situações com o mesmo nome.");
+      // Destino pela posição na lista (pode ser uma situação recém-criada, ainda sem id)
+      const iDest = $("#stDestinoBox").hidden ? 0 : +$("#stDestino").value || 0;
+      $("#stSalvar").disabled = true;
+      try {
+        const r = await api("PUT", "pedido-status", { lista, destinoIndice: iDest });
+        D.pedidoStatus = r.pedidoStatus;
+        if (r.pedidos) D.pedidos = r.pedidos;
+        dlgSt.close();
+        renderPedidos(); renderGeral();
+        toast(r.movidos ? `Situações salvas · ${r.movidos} pedido(s) movido(s)` : "Situações salvas");
+      } catch (err) { erro(err.message); }
+      $("#stSalvar").disabled = false;
+    });
     // Pedidos antigos só têm nome e cidade; os novos têm documento e endereço completo
     function clienteHTML(c) {
       const end = c.rua
@@ -1111,17 +1403,21 @@
         const i = D.pedidos.findIndex((p) => p.id === id);
         D.pedidos[i] = r.pedido;
         renderPedidos(); renderGeral();
-        toast("Pedido atualizado");
-      } catch (err) { toast(err.message, true); }
+        toast(campos.status && Object.keys(campos).length === 1 ? `Pedido #${id} → ${stDe(r.pedido).nome}` : "Pedido atualizado");
+        return true;
+      } catch (err) { toast(err.message, true); return false; }
     }
-    $("#pedLista").addEventListener("change", (e) => {
+    // Lista e janela de detalhes usam o mesmo cartão completo
+    const aoMudarPedido = (e) => {
       const card = e.target.closest("[data-pid]");
       if (!card) return;
       const id = Number(card.dataset.pid);
       if (e.target.matches("[data-st]")) salvarPedido(id, { status: e.target.value });
       if (e.target.matches("[data-nota]")) salvarPedido(id, { nota: e.target.value });
-    });
-    $("#pedLista").addEventListener("click", async (e) => {
+    };
+    $("#pedLista").addEventListener("change", aoMudarPedido);
+    $("#pedVer").addEventListener("change", aoMudarPedido);
+    const aoClicarPedido = async (e) => {
       const ac = e.target.closest("[data-acao]");
       if (ac) {
         const p = D.pedidos.find((x) => x.id === Number(ac.closest("[data-pid]").dataset.pid));
@@ -1135,9 +1431,16 @@
       if (!confirm(`Excluir o pedido #${id}? Isso não pode ser desfeito.`)) return;
       try { await api("DELETE", "pedido", { id }); D.pedidos = D.pedidos.filter((p) => p.id !== id); renderPedidos(); renderGeral(); toast("Pedido excluído"); }
       catch (err) { toast(err.message, true); }
-    });
+    };
+    $("#pedLista").addEventListener("click", aoClicarPedido);
+    $("#pedVer").addEventListener("click", aoClicarPedido);
     $("#reloadPedidos").addEventListener("click", async () => {
-      try { D.pedidos = (await api("GET", "pedidos")).pedidos; renderPedidos(); renderGeral(); toast("Pedidos atualizados"); } catch (err) { toast(err.message, true); }
+      try {
+        const r = await api("GET", "pedidos");
+        D.pedidos = r.pedidos;
+        if (r.pedidoStatus) D.pedidoStatus = r.pedidoStatus;
+        renderPedidos(); renderGeral(); toast("Pedidos atualizados");
+      } catch (err) { toast(err.message, true); }
     });
 
     /* ---------- Novo pedido (lançado no painel) ---------- */
@@ -1158,7 +1461,6 @@
     }
     const dlgPed = $("#dlgPed"), nf = $("#pedForm").elements;
     $("#nUf").innerHTML += UFS.map((u) => `<option>${u}</option>`).join("");
-    $("#nStatus").innerHTML = Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
     let nItens = [];
     let edPedId = null, moedaEd = null; // edição de um pedido existente (null = pedido novo)
     const pedMoeda = () => moedaEd || (cot("pix") || cot("efetivo") ? "BRL" : "USD");
@@ -1181,6 +1483,7 @@
 
     function abrirNovoPedido() {
       $("#pedForm").reset();
+      $("#nStatus").innerHTML = stOpcoes(ST()[0].id);
       nItens = [];
       edPedId = null; moedaEd = null;
       $("#pedTitle").textContent = "Novo pedido";
@@ -1208,7 +1511,7 @@
       nf.bairro.value = v("bairro"); nf.cidade.value = v("cidade"); nf.obs.value = v("obs");
       nf.frete.value = p.frete ? String(p.frete).replace(".", ",") : "";
       nf.desconto.value = p.desconto ? String(p.desconto).replace(".", ",") : "";
-      nf.status.value = p.status; nf.nota.value = p.nota || "";
+      nf.status.value = stDe(p).id; nf.nota.value = p.nota || "";
       nItens = p.itens.map((i) => ({ sku: i.sku, nome: i.nome, v: i.variacao || "", q: i.q, preco: i.preco }));
       renderItensPed();
     }
