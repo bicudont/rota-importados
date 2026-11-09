@@ -406,6 +406,15 @@ function adminApi(req, res, rota) {
       )
     );
   }
+  if (r === "POST ia/foto") {
+    return lerCorpo(req, MAX_FOTO, (err, buf) => {
+      if (err) return json(res, 413, { erro: "Imagem grande demais (máx. 8 MB)." });
+      lerFotoIA(buf).then(
+        (dados) => json(res, 200, { ok: true, ...dados }),
+        (e) => { const [st, msg] = erroIA(e); json(res, st, { erro: msg }); }
+      );
+    });
+  }
   if (r === "POST pedido")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, pedidoManual(d)));
   if (r === "PUT pedido")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, alterarPedido(d)));
   if (r === "DELETE pedido") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirPedido(d.id)));
@@ -583,8 +592,62 @@ async function gerarDescricao(skuIn) {
   return txt.slice(0, 2000);
 }
 
+/* ---------- IA: lê o rótulo de uma foto para achar o produto (Fotos em lote) ---------- */
+// Só extrai o que está escrito na foto; a escolha do produto fica com você no painel. Nada é salvo aqui.
+const SISTEMA_FOTO = `Você ajuda a Rota Importados, uma loja de produtos importados (perfumes, cosméticos, suplementos, eletrônicos e outros), a ligar fotos de produtos ao cadastro do catálogo.
+
+Olhe a foto e transcreva o que está escrito no produto ou na embalagem: marca, nome do produto, volume ou peso (ex.: 100ml, 60 cápsulas, 15mg) e o tipo (ex.: Eau de Parfum, creme, suplemento). Esses dados serão comparados com os nomes do catálogo, então copie as palavras como aparecem no rótulo.
+
+Use somente o que dá para ler na foto. Não adivinhe marca, nome ou volume pelo formato do frasco ou pela cor: um palpite errado liga a foto ao produto errado no site. Deixe vazio o campo que não estiver legível. Em "texto", coloque as outras palavras legíveis mais importantes do rótulo (até 15 palavras). Marque "legivel" como false se não der para ler nada que identifique o produto.`;
+
+const ESQUEMA_FOTO = {
+  type: "object",
+  properties: {
+    legivel: { type: "boolean" },
+    marca: { type: "string" },
+    nome: { type: "string" },
+    volume: { type: "string" },
+    tipo: { type: "string" },
+    texto: { type: "string" },
+  },
+  required: ["legivel", "marca", "nome", "volume", "tipo", "texto"],
+  additionalProperties: false,
+};
+
+async function lerFotoIA(buf) {
+  const tipo = buf[0] === 0xff && buf[1] === 0xd8 ? "image/jpeg"
+    : buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47 ? "image/png"
+    : buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP" ? "image/webp" : "";
+  if (!tipo) throw new Error("Envie a imagem em JPG, PNG ou WebP.");
+  const r = await ia().beta.messages.create({
+    model: IA_MODELO,
+    max_tokens: 4000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default", // se o modelo recusar, a API tenta automaticamente outro modelo
+    output_config: { effort: "low", format: { type: "json_schema", schema: ESQUEMA_FOTO } },
+    system: SISTEMA_FOTO,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: tipo, data: buf.toString("base64") } },
+        { type: "text", text: "Transcreva os dados do produto desta foto." },
+      ],
+    }],
+  });
+  if (r.stop_reason === "refusal") throw new Error("A IA não leu esta foto.");
+  if (r.stop_reason === "max_tokens") throw new Error("A IA não terminou a leitura. Tente de novo.");
+  let d;
+  try { d = JSON.parse(r.content.filter((b) => b.type === "text").map((b) => b.text).join("")); }
+  catch { throw new Error("A IA respondeu num formato inesperado. Tente de novo."); }
+  return {
+    legivel: d.legivel === true,
+    marca: texto(d.marca, 80), nome: texto(d.nome, 160), volume: texto(d.volume, 40),
+    tipo: texto(d.tipo, 60), texto: texto(d.texto, 200),
+  };
+}
+
 /* ---------- Produtos ---------- */
-const texto = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+const texto =(v, max) => String(v == null ? "" : v).trim().slice(0, max);
 const ID_FOTO = /^[A-Za-z0-9_-]{1,120}$/;
 
 // Valida e normaliza os campos enviados pelo painel

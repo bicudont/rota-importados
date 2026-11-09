@@ -559,7 +559,7 @@
         <h2 style="margin:24px 0 10px">Fotos em lote</h2>
         <div class="card">
           <p class="muted">Envie várias fotos de uma vez. O painel liga cada foto ao produto <b>pelo nome do arquivo</b>: o código (ex.: <code>ADM2-8882.jpg</code>) ou o nome do produto (ex.: <code>Lipoland 15mg.jpg</code>). Para mais de uma foto do mesmo produto, use <code>ADM2-8882 (2).jpg</code>, <code>ADM2-8882_2.jpg</code> ou <code>ADM2-8882-2.jpg</code>.</p>
-          <p class="muted small" style="margin-top:8px">As que não forem reconhecidas aparecem com sugestões de produtos parecidos: clique na sugestão certa ou digite o código. Nada é salvo antes de você clicar em <b>Salvar fotos</b>.</p>
+          <p class="muted small" style="margin-top:8px">As que não forem reconhecidas aparecem com sugestões de produtos parecidos: clique na sugestão certa ou digite o código. Se o nome do arquivo não ajudar, use <b>🤖 Identificar com IA</b>: a IA lê o rótulo da foto (marca, nome, volume) e sugere os produtos do catálogo — você confirma com um clique. Nada é salvo antes de você clicar em <b>Salvar fotos</b>.</p>
           <div class="drop" id="flDrop" role="button" tabindex="0" style="margin-top:16px">
             <input id="flIn" type="file" accept="image/*" multiple hidden />
             🖼️ Clique ou arraste as fotos aqui
@@ -581,6 +581,7 @@
             <div class="list" id="flLista"></div>
             <div class="exib-acts" style="margin-top:12px">
               <button class="btn" id="flLimpar">Limpar lista</button>
+              <button class="btn" id="flIA" hidden>🤖 Identificar com IA</button>
               <button class="btn btn--primary" id="flSalvar" disabled>Salvar fotos</button>
             </div>
             <div class="log" id="flLog" aria-live="polite"></div>
@@ -2329,17 +2330,79 @@
         const p = x.sku && prodDe(x.sku);
         return `<div class="row row--fl" data-fl="${x.id}">
           <img src="${x.url}" alt="" />
-          <div style="min-width:0"><div class="fn">${esc(x.file.name)}</div>${x.como ? `<span class="badge b-new">pelo ${x.como}</span>` : x.sku ? '<span class="badge b-edit">escolhido</span>' : '<span class="badge b-off">sem produto</span>'}</div>
+          <div style="min-width:0"><div class="fn">${esc(x.file.name)}</div>${x.como ? `<span class="badge b-new">${x.como === "IA" ? "pela IA" : "pelo " + x.como}</span>` : x.sku ? '<span class="badge b-edit">escolhido</span>' : '<span class="badge b-off">sem produto</span>'}</div>
           <div style="min-width:0">
             <input class="field" data-fl-sku list="dlSkus" value="${esc(x.sku)}" placeholder="Código do produto (SKU)" aria-label="Produto para ${esc(x.file.name)}" />
             <div class="alvo">${p ? `<b>${esc(p.name)}</b> <span class="muted">${p._fotos.length ? `· já tem ${p._fotos.length} foto(s)` : "· sem foto"}</span>` : x.sku ? '<span style="color:var(--err)">Código não encontrado</span>' : ""}</div>
             ${!x.sku && x.sug && x.sug.length ? `<div class="sug">${x.sug.map((s) => `<button type="button" data-fl-sug="${esc(s)}" title="${esc(s)}">${esc((prodDe(s) || {}).name || s)} <span class="muted">· ${esc(s)}</span></button>`).join("")}</div>` : ""}
+            ${flIAHTML(x)}
           </div>
           <button type="button" class="btn btn--sm" data-fl-rm aria-label="Tirar ${esc(x.file.name)} da lista">×</button>
         </div>`;
       }).join("") || `<div class="empty">Nenhuma foto neste filtro.</div>`;
       $("#flSalvar").disabled = !fl.some((x) => x.sku && prodDe(x.sku));
+      const pend = flPendIA();
+      $("#flIA").hidden = !D.ia;
+      $("#flIA").disabled = flIARodando || !pend.length;
+      $("#flIA").textContent = flIARodando ? "🤖 Lendo as fotos…" : pend.length ? `🤖 Identificar com IA (${pend.length} foto${pend.length > 1 ? "s" : ""})` : "🤖 Identificar com IA";
     }
+
+    /* IA: lê o rótulo da foto e sugere produtos; você confirma clicando na sugestão */
+    let flIARodando = false;
+    const flPendIA = () => fl.filter((x) => !x.sku && x.iaEstado !== "ok" && x.iaEstado !== "lendo");
+    function flIAHTML(x) {
+      if (x.iaEstado === "lendo") return `<div class="muted small" style="margin-top:6px">🤖 Lendo a foto…</div>`;
+      if (x.iaEstado === "erro") return `<div class="small" style="margin-top:6px;color:var(--err)">🤖 ${esc(x.iaErro)} <button type="button" class="btn btn--sm" data-fl-ia>Tentar de novo</button></div>`;
+      if (x.iaEstado === "ok") {
+        const r = x.ia;
+        const lido = [r.marca, r.nome, r.volume, r.tipo].filter(Boolean).join(" · ");
+        if (!r.legivel || !lido) return `<div class="muted small" style="margin-top:6px">🤖 A IA não conseguiu ler o rótulo desta foto. Digite o código do produto.</div>`;
+        return `<div class="muted small" style="margin-top:6px">🤖 A IA leu: <b>${esc(lido)}</b>${x.sku ? "" : x.sug && x.sug.length ? " — escolha o produto certo acima." : " — nenhum produto parecido no catálogo. Digite o código."}</div>`;
+      }
+      return !x.sku && D.ia ? `<button type="button" class="btn btn--sm" data-fl-ia style="margin-top:6px">🤖 Identificar com IA</button>` : "";
+    }
+    // Compara o que a IA leu com o nome dos produtos (palavras em comum, com peso para a marca)
+    function flCasarIA(r) {
+      const q = new Set(chaveNome([r.marca, r.nome, r.volume, r.tipo].join(" ")).split(" ").filter(Boolean));
+      if (!q.size) return [];
+      const marca = norm(r.marca || "");
+      const ix = flIndices(), notas = [];
+      for (const x of ix.tokens) {
+        let c = 0;
+        for (const w of q) if (x.t.has(w)) c++;
+        if (!c) continue;
+        const p = prodDe(x.sku);
+        let nota = 0.6 * (c / q.size) + 0.4 * (c / (q.size + x.t.size - c));
+        if (marca && p && norm(p.brand || "") === marca) nota += 0.15;
+        if (nota >= 0.3) notas.push([nota, x.sku]);
+      }
+      return notas.sort((a, b) => b[0] - a[0]).slice(0, 5).map((s) => s[1]);
+    }
+    async function flLerIA(lista) {
+      lista.forEach((x) => { x.iaEstado = "lendo"; });
+      flIARodando = true;
+      renderFl();
+      const fila = [...lista];
+      await Promise.all(Array.from({ length: 3 }, async () => {
+        while (fila.length) {
+          const x = fila.shift();
+          if (!fl.includes(x)) continue; // tirada da lista enquanto esperava
+          try {
+            const r = await api("POST", "ia/foto", await reduzir(x.file));
+            x.ia = r; x.iaEstado = "ok";
+            if (!x.sku) x.sug = flCasarIA(r);
+          } catch (err) { x.iaEstado = "erro"; x.iaErro = err.message || "Não foi possível ler a foto."; }
+          renderFl();
+        }
+      }));
+      flIARodando = false;
+      renderFl();
+    }
+    $("#flIA").onclick = () => {
+      const pend = flPendIA();
+      if (pend.length > 20 && !confirm(`A IA vai ler ${pend.length} fotos (custo pequeno por foto, cobrado na conta da chave da IA). Continuar?`)) return;
+      flLerIA(pend);
+    };
     const flDrop = $("#flDrop");
     flDrop.onclick = () => $("#flIn").click();
     flDrop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#flIn").click(); } };
@@ -2354,8 +2417,9 @@
       if (!row) return;
       const x = fl.find((y) => y.id === +row.dataset.fl);
       if (e.target.closest("[data-fl-rm]")) { URL.revokeObjectURL(x.url); fl = fl.filter((y) => y !== x); return renderFl(); }
+      if (e.target.closest("[data-fl-ia]")) return flLerIA([x]);
       const sg = e.target.closest("[data-fl-sug]");
-      if (sg) { x.sku = sg.dataset.flSug; x.como = ""; renderFl(); }
+      if (sg) { x.sku = sg.dataset.flSug; x.como = x.iaEstado === "ok" ? "IA" : ""; renderFl(); }
     });
     $("#flLista").addEventListener("change", (e) => {
       const inp = e.target.closest("[data-fl-sku]");
