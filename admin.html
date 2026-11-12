@@ -488,6 +488,7 @@
           <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
           <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
           <button class="btn btn--sm" id="bulkCat">Mudar categoria…</button>
+          <button class="btn btn--sm btn--danger" id="bulkExcluir">🗑️ Excluir…</button>
           <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
         </div>
         <div class="list" id="pLista"></div>
@@ -2118,6 +2119,7 @@
       if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirEditor(row.dataset.sku); }
     });
     $("#bulkClear").addEventListener("click", () => { sel.clear(); renderProdutos(); });
+    $("#bulkExcluir").addEventListener("click", () => excluirProdutos([...sel].filter((s) => PROD.some((p) => p.sku === s))));
     // Mudar categoria/subcategoria dos selecionados
     const dlgMover = $("#dlgMover");
     $$("[data-fechar-mov]").forEach((b) => b.addEventListener("click", () => dlgMover.close()));
@@ -3126,8 +3128,8 @@
       try {
         const r = await api("POST", "excluir", { skus });
         D.ajustes = r.ajustes;
-        skus.forEach((s) => pdSel.delete(s));
-        montar(); renderProdutos(); renderGeral();
+        skus.forEach((s) => { pdSel.delete(s); sel.delete(s); });
+        montar(); renderProdutos(); renderGeral(); renderPendencias();
         toast(`${r.apagados + r.paraExcluidos} produto(s) excluído(s)`);
       } catch (err) { toast(err.message, true); }
     }
