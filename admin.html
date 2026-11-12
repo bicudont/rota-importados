@@ -88,6 +88,17 @@
     .row:hover { background: #f8fafc; }
     .row--head { cursor: default; background: #f8fafc; font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
     .row--off { opacity: .6; }
+    .filtros2 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: -2px 0 12px; }
+    .filtros2 .field { width: auto; }
+    .filtros2 .faixa { display: flex; align-items: center; gap: 6px; }
+    .filtros2 .faixa .field { width: 96px; }
+    .th { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; }
+    .th:hover { color: #0f172a; }
+    .th:focus-visible { outline: 2px solid #2a78d6; outline-offset: 2px; }
+    .th[aria-sort] { color: #1d4ed8; }
+    .th .seta { font-size: .9em; opacity: .45; }
+    .th[aria-sort] .seta { opacity: 1; }
+    .num .th { justify-content: flex-end; }
     .row img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; background: #eef4ff; }
     .row .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row .meta { font-size: .8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -443,6 +454,32 @@
           </select>
           <button class="btn" data-selpag>Selecionar esta página</button>
           <button class="btn" data-seltodos>Selecionar todos</button>
+        </div>
+        <div class="filtros2">
+          <select class="field" id="pMarca" aria-label="Marca"></select>
+          <span class="faixa"><span class="muted small">Preço US$</span>
+            <input class="field" id="pPrecoMin" inputmode="decimal" placeholder="de" aria-label="Preço mínimo em US$" />
+            <input class="field" id="pPrecoMax" inputmode="decimal" placeholder="até" aria-label="Preço máximo em US$" /></span>
+          <select class="field" id="pOrdem" aria-label="Ordenar por">
+            <option value="">Ordem: padrão do catálogo</option>
+            <option value="nome:1">Nome (A → Z)</option>
+            <option value="nome:-1">Nome (Z → A)</option>
+            <option value="preco:1">Preço (menor → maior)</option>
+            <option value="preco:-1">Preço (maior → menor)</option>
+            <option value="estoque:1">Estoque (menor → maior)</option>
+            <option value="estoque:-1">Estoque (maior → menor)</option>
+            <option value="sku:1">Código / SKU (A → Z)</option>
+            <option value="sku:-1">Código / SKU (Z → A)</option>
+            <option value="marca:1">Marca (A → Z)</option>
+            <option value="marca:-1">Marca (Z → A)</option>
+            <option value="depto:1">Departamento (A → Z)</option>
+            <option value="depto:-1">Departamento (Z → A)</option>
+            <option value="site:1">Situação: visíveis primeiro</option>
+            <option value="site:-1">Situação: ocultos primeiro</option>
+            <option value="fotos:1">Fotos: menos fotos primeiro</option>
+            <option value="fotos:-1">Fotos: mais fotos primeiro</option>
+          </select>
+          <button class="btn btn--sm" id="pLimpar" hidden>Limpar filtros</button>
         </div>
         <div class="bulk" id="bulk" hidden>
           <b id="bulkN"></b>
@@ -982,6 +1019,8 @@
       const marcas = [...new Set(PROD.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       const atual = $("#pSetor").value;
       $("#pSetor").innerHTML = `<option value="">Todos os departamentos</option>` + setores.map((s) => `<option${s === atual ? " selected" : ""}>${esc(s)}</option>`).join("");
+      const marcaAtual = $("#pMarca").value;
+      $("#pMarca").innerHTML = `<option value="">Todas as marcas</option>` + marcas.map((s) => `<option${s === marcaAtual ? " selected" : ""}>${esc(s)}</option>`).join("");
       $("#dlSetores").innerHTML = setores.map((s) => `<option value="${esc(s)}">`).join("");
       $("#dlMarcas").innerHTML = marcas.map((s) => `<option value="${esc(s)}">`).join("");
       $("#dlSkus").innerHTML = PROD.map((p) => `<option value="${esc(p.sku)}">${esc(p.name)}</option>`).join("");
@@ -1947,13 +1986,22 @@
     };
     function renderProdutos() {
       const q = norm($("#pBusca").value).trim().split(/\s+/).filter(Boolean);
-      const setor = $("#pSetor").value, st = FILTROS[$("#pStatus").value];
-      filtrados = PROD.filter((p) => (!setor || p.sector === setor) && (!st || st(p)) && q.every((t) => p._busca.includes(t)));
+      const setor = $("#pSetor").value, st = FILTROS[$("#pStatus").value], marca = $("#pMarca").value;
+      const faixa = (v) => { const n = numOuNull(v); return Number.isFinite(n) ? n : null; }; // texto inválido = sem limite
+      const pMin = faixa($("#pPrecoMin").value), pMax = faixa($("#pPrecoMax").value);
+      filtrados = PROD.filter((p) => {
+        if ((setor && p.sector !== setor) || (marca && p.brand !== marca) || (st && !st(p)) || !q.every((t) => p._busca.includes(t))) return false;
+        if (pMin == null && pMax == null) return true;
+        const v = precoOrdem(p);
+        return v != null && (pMin == null || v >= pMin) && (pMax == null || v <= pMax);
+      });
+      ordenarProdutos(filtrados);
+      $("#pLimpar").hidden = !(q.length || setor || marca || $("#pStatus").value || pMin != null || pMax != null || ordem.campo);
       const total = Math.max(1, Math.ceil(filtrados.length / POR_PAG));
       pag = Math.min(pag, total - 1);
       const pagina = filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
       $("#pLista").innerHTML = pagina.length
-        ? `<div class="row row--head"><input type="checkbox" id="pSelCab" aria-label="Selecionar todos desta página" title="Selecionar todos desta página" /><span></span><span>Produto</span><span class="num">Preço</span><span class="num">Estoque</span><span>Site</span></div>` +
+        ? `<div class="row row--head"><input type="checkbox" id="pSelCab" aria-label="Selecionar todos desta página" title="Selecionar todos desta página" /><span></span><span>${thOrd("nome", "Produto")}</span><span class="num">${thOrd("preco", "Preço")}</span><span class="num">${thOrd("estoque", "Estoque")}</span><span>${thOrd("site", "Site")}</span></div>` +
           pagina.map((p) => {
             const eo = estadoOferta(p);
             const preco = p.price > 0
@@ -1979,6 +2027,58 @@
       $("#pNext").disabled = pag >= total - 1;
       renderBulk();
     }
+    /* Ordenação: clique no título da coluna (clique de novo para inverter) ou escolha em "Ordenar por" */
+    let ordem = { campo: "", dir: 1 };
+    try { const o = JSON.parse(localStorage.getItem("rota-prod-ordem") || "null"); if (o && o.campo) ordem = { campo: String(o.campo), dir: o.dir === -1 ? -1 : 1 }; } catch {}
+    // Preço que o cliente paga agora, em US$ (oferta ativa fixada em R$ é convertida pela cotação)
+    function precoOrdem(p) {
+      if (!(p.price > 0)) return null;
+      if (estadoOferta(p) === "ativa") {
+        if (p.promo.currency !== "BRL") return p.promo.price;
+        const c = cot("pix") || cot("efetivo");
+        return c ? p.promo.price / c.rate : p.price;
+      }
+      return p.price;
+    }
+    const rankSite = (p) => (p.active === false ? 3 : motivoFora(p) ? 2 : p.stock === 0 ? 1 : 0);
+    const txtCmp = (a, b) => String(a || "").localeCompare(String(b || ""), "pt-BR", { numeric: true, sensitivity: "base" });
+    const CHAVES = {
+      nome: (p) => p.name, sku: (p) => p.sku, marca: (p) => p.brand, depto: (p) => [p.sector, p.subsector].filter(Boolean).join(" › "),
+      preco: precoOrdem, estoque: (p) => p.stock, site: rankSite, fotos: (p) => p._fotos.length,
+    };
+    function ordenarProdutos(lista) {
+      const k = CHAVES[ordem.campo];
+      if (!k) return lista;
+      const d = ordem.dir;
+      return lista.sort((a, b) => {
+        const va = k(a), vb = k(b);
+        const vazioA = va == null || va === "", vazioB = vb == null || vb === "";
+        if (vazioA || vazioB) return vazioA === vazioB ? txtCmp(a.name, b.name) : vazioA ? 1 : -1; // sem valor fica sempre no fim
+        const r = typeof va === "number" && typeof vb === "number" ? va - vb : txtCmp(va, vb);
+        return r ? r * d : txtCmp(a.name, b.name);
+      });
+    }
+    function thOrd(campo, rotulo) {
+      const ativo = ordem.campo === campo;
+      const seta = ativo ? (ordem.dir === 1 ? "▲" : "▼") : "↕";
+      return `<button type="button" class="th" data-ord="${campo}"${ativo ? ` aria-sort="${ordem.dir === 1 ? "ascending" : "descending"}"` : ""} title="Ordenar por ${rotulo.toLowerCase()}">${rotulo} <span class="seta" aria-hidden="true">${seta}</span></button>`;
+    }
+    function mudarOrdem(campo, dir) {
+      ordem = { campo, dir };
+      try { localStorage.setItem("rota-prod-ordem", JSON.stringify(ordem)); } catch {}
+      const v = campo ? `${campo}:${dir}` : "";
+      $("#pOrdem").value = [...$("#pOrdem").options].some((o) => o.value === v) ? v : "";
+      pag = 0; renderProdutos();
+    }
+    $("#pOrdem").addEventListener("change", () => { const [c, d] = $("#pOrdem").value.split(":"); mudarOrdem(c || "", d === "-1" ? -1 : 1); });
+    $("#pMarca").addEventListener("change", () => { pag = 0; renderProdutos(); });
+    let tPreco;
+    ["#pPrecoMin", "#pPrecoMax"].forEach((id) => $(id).addEventListener("input", () => { clearTimeout(tPreco); tPreco = setTimeout(() => { pag = 0; renderProdutos(); }, 300); }));
+    $("#pLimpar").addEventListener("click", () => {
+      ["#pBusca", "#pSetor", "#pStatus", "#pMarca", "#pPrecoMin", "#pPrecoMax"].forEach((id) => ($(id).value = ""));
+      mudarOrdem("", 1);
+    });
+    if (ordem.campo) $("#pOrdem").value = `${ordem.campo}:${ordem.dir}`;
     function renderBulk() {
       $("#bulk").hidden = !sel.size;
       $("#bulkN").textContent = `${sel.size.toLocaleString("pt-BR")} selecionado(s)`;
@@ -2005,6 +2105,8 @@
     $("#pPrev").addEventListener("click", () => { pag--; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
     $("#pNext").addEventListener("click", () => { pag++; renderProdutos(); $("#pLista").scrollIntoView({ block: "start" }); });
     $("#pLista").addEventListener("click", (e) => {
+      const th = e.target.closest("[data-ord]");
+      if (th) { const c = th.dataset.ord; return mudarOrdem(c, ordem.campo === c ? -ordem.dir : 1); }
       if (e.target.id === "pSelCab") { paginaAtual().forEach((p) => (e.target.checked ? sel.add(p.sku) : sel.delete(p.sku))); return renderProdutos(); }
       const row = e.target.closest("[data-sku]");
       if (!row) return;
