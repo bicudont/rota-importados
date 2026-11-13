@@ -267,6 +267,8 @@
     .subchip small { color: var(--muted); }
     .subchip button { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); }
     .subchip button:hover { background: #fde2e2; color: var(--err); }
+    .subchip button[data-subren] { font-size: 12px; }
+    .subchip button[data-subren]:hover { background: #dbeafe; color: #1d4ed8; }
     .subnova { border: 1px dashed var(--line); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 13px; min-width: 170px; background: transparent; }
     .ordem .acts button { width: 34px; min-height: 32px; padding: 0; }
     .cot-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -723,7 +725,7 @@
 
         <div class="card" style="margin-top:16px">
           <h2>Departamentos (categorias)</h2>
-          <p class="muted small" style="margin:4px 0 12px">Crie e exclua categorias, e defina a ordem. A ordem vale para o site (menu de departamentos, barra de navegação, seção “Departamentos” e vitrines da página inicial, filtros do catálogo) e para o catálogo em PDF. Use as setas e clique em <b>Salvar ordem</b>.</p>
+          <p class="muted small" style="margin:4px 0 12px">Crie, renomeie (✏️) e exclua categorias e subcategorias, e defina a ordem. Ao renomear, os produtos (inclusive ocultos) e os links dos banners acompanham o novo nome. A ordem vale para o site (menu de departamentos, barra de navegação, seção “Departamentos” e vitrines da página inicial, filtros do catálogo) e para o catálogo em PDF. Use as setas e clique em <b>Salvar ordem</b>.</p>
           <form id="catNovaForm" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
             <input class="field" id="catNova" maxlength="120" placeholder="Nome da nova categoria" aria-label="Nome da nova categoria" style="flex:1;min-width:200px" />
             <button class="btn btn--primary" id="catCriar">+ Criar categoria</button>
@@ -3360,11 +3362,12 @@
       $("#ordemLista").innerHTML = ordemEd.map((s, i) => `<li data-i="${i}"${salva[i] !== s ? ' class="mexeu"' : ""}>
           <span class="pos">${i + 1}</span>
           <span style="min-width:0"><b>${esc(s)}</b> <span class="muted small">${qtd(s).toLocaleString("pt-BR")} no site${total(s) !== qtd(s) ? ` · ${total(s).toLocaleString("pt-BR")} no total` : ""}${total(s) ? "" : " · vazia (só aparece no site quando tiver produtos)"}</span>
-            <span class="subs">${subsDe(s).map((sub) => `<span class="subchip">${esc(sub)} <small>${PROD.filter((p) => (p.sector || "Outros") === s && p.subsector === sub).length}</small><button type="button" data-subdel="${esc(sub)}" data-cat="${esc(s)}" title="Excluir subcategoria" aria-label="Excluir a subcategoria ${esc(sub)} de ${esc(s)}">×</button></span>`).join("")}<input class="subnova" data-subnova="${esc(s)}" maxlength="120" placeholder="+ subcategoria (Enter)" aria-label="Nova subcategoria em ${esc(s)}" /></span></span>
+            <span class="subs">${subsDe(s).map((sub) => `<span class="subchip">${esc(sub)} <small>${PROD.filter((p) => (p.sector || "Outros") === s && p.subsector === sub).length}</small><button type="button" data-subren="${esc(sub)}" data-cat="${esc(s)}" title="Renomear subcategoria" aria-label="Renomear a subcategoria ${esc(sub)} de ${esc(s)}">✏️</button><button type="button" data-subdel="${esc(sub)}" data-cat="${esc(s)}" title="Excluir subcategoria" aria-label="Excluir a subcategoria ${esc(sub)} de ${esc(s)}">×</button></span>`).join("")}<input class="subnova" data-subnova="${esc(s)}" maxlength="120" placeholder="+ subcategoria (Enter)" aria-label="Nova subcategoria em ${esc(s)}" /></span></span>
           <span class="acts">
             <button class="btn btn--sm" data-ord="topo" aria-label="Levar ${esc(s)} para o topo"${i ? "" : " disabled"}>⤒</button>
             <button class="btn btn--sm" data-ord="-1" aria-label="Subir ${esc(s)}"${i ? "" : " disabled"}>↑</button>
             <button class="btn btn--sm" data-ord="1" aria-label="Descer ${esc(s)}"${i < ordemEd.length - 1 ? "" : " disabled"}>↓</button>
+            <button class="btn btn--sm" data-catren="${esc(s)}" title="Renomear categoria" aria-label="Renomear a categoria ${esc(s)}">✏️</button>
             <button class="btn btn--sm btn--danger" data-catdel="${esc(s)}" title="Excluir categoria" aria-label="Excluir a categoria ${esc(s)}">🗑️</button>
           </span><span></span>
         </li>`).join("");
@@ -3424,6 +3427,29 @@
         D.site = r.site; D.ajustes = r.ajustes;
         ordemEd = null; montar(); renderOrdem(); renderProdutos();
         toast("Subcategoria excluída");
+      } catch (err) { toast(err.message, true); b.disabled = false; }
+    });
+    // Renomear categoria / subcategoria: os produtos (inclusive ocultos) acompanham o novo nome
+    $("#ordemLista").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-catren], [data-subren]");
+      if (!b) return;
+      const ehSub = "subren" in b.dataset;
+      const atual = ehSub ? b.dataset.subren : b.dataset.catren, cat = b.dataset.cat;
+      const n = PROD.filter((p) => (p.sector || "Outros") === (ehSub ? cat : atual) && (!ehSub || p.subsector === atual)).length;
+      const novo = (prompt(`Novo nome para a ${ehSub ? `subcategoria “${atual}” (em ${cat})` : `categoria “${atual}”`}:${n ? `
+
+${n.toLocaleString("pt-BR")} produto(s) passam a usar o novo nome.` : ""}`, atual) || "").trim();
+      if (!novo || novo === atual) return;
+      if (descartarOrdem()) return;
+      b.disabled = true;
+      try {
+        const r = ehSub
+          ? await api("POST", "subcategoria-renomear", { categoria: cat, nome: atual, novo })
+          : await api("POST", "categoria-renomear", { nome: atual, novo });
+        D.site = r.site; D.ajustes = r.ajustes;
+        if (r.banner) { D.banner = r.banner; renderBanner(); }
+        ordemEd = null; montar(); renderOrdem(); renderProdutos(); renderGeral(); renderExportar();
+        toast(`${ehSub ? "Subcategoria" : "Categoria"} renomeada para “${novo}”${r.movidos ? ` (${r.movidos.toLocaleString("pt-BR")} produto(s))` : ""}`);
       } catch (err) { toast(err.message, true); b.disabled = false; }
     });
     $("#ordemLista").addEventListener("click", (e) => {

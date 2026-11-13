@@ -393,6 +393,8 @@ function adminApi(req, res, rota) {
   if (r === "POST categoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarCategoria(d)));
   if (r === "POST categoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirCategoria(d)));
   if (r === "POST subcategoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarSubcategoria(d)));
+  if (r === "POST categoria-renomear") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, renomearCategoria(d)));
+  if (r === "POST subcategoria-renomear") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, renomearSubcategoria(d)));
   if (r === "POST subcategoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirSubcategoria(d)));
   if (r === "PUT exibicao") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, salvarExibicao(d)));
   if (r === "PUT site")return lerCorpoJSON(req, res, 65536, (d) => json(res, 200, salvarSite(d)));
@@ -948,6 +950,69 @@ function excluirSubcategoria(d) {
   }
   gravarJSON(F.site, site);
   return { ok: true, liberados: n, site, ajustes: aj };
+}
+
+// Renomeia a categoria em tudo: produtos (inclusive ocultos), lista de categorias, subcategorias, ordem e links dos banners
+function renomearCategoria(d) {
+  const nome = texto(d.nome, 120), novo = texto(d.novo, 120);
+  if (!nome) throw new Error("Categoria inválida.");
+  if (!novo) throw new Error("Informe o novo nome da categoria.");
+  if (novo === nome) return { ok: true, movidos: 0, site: lerJSON(F.site, null) || {}, ajustes: lerAjustes() };
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  const doCatalogo = (loja && Array.isArray(loja.products) ? loja.products : []).filter((p) => !novos.has(p.sku));
+  const valor = (p, k) => (p.sku && aj.produtos[p.sku] && k in aj.produtos[p.sku].campos ? aj.produtos[p.sku].campos[k] : p[k]);
+  const site = lerJSON(F.site, null) || {};
+  // Só troca maiúsculas/minúsculas do mesmo nome? Pode. Outro nome que já existe? Não (use Excluir para juntar).
+  const existentes = new Set([...(site.categorias || []), ...doCatalogo.map((p) => valor(p, "sector") || "Outros"), ...aj.novos.map((p) => p.sector || "Outros")]);
+  if (novo.toLowerCase() !== nome.toLowerCase() && [...existentes].some((c) => c.toLowerCase() === novo.toLowerCase()))
+    throw new Error(`Já existe a categoria “${novo}”. Para juntar as duas, exclua “${nome}” e escolha “${novo}” como destino dos produtos.`);
+  let n = 0;
+  for (const p of doCatalogo) if ((valor(p, "sector") || "Outros") === nome) { try { aplicarCampos(aj, { products: [p] }, p.sku, { sector: novo }); n++; } catch {} }
+  for (const p of aj.novos) if ((p.sector || "Outros") === nome) { try { aplicarCampos(aj, null, p.sku, { sector: novo }); n++; } catch {} }
+  if (n) gravarJSON(F.ajustes, aj);
+  if (Array.isArray(site.categorias)) site.categorias = site.categorias.map((c) => (c === nome ? novo : c));
+  if (!n && !(site.categorias || []).includes(novo)) site.categorias = [...(site.categorias || []), novo]; // categoria vazia continua existindo
+  if (Array.isArray(site.ordemSetores)) site.ordemSetores = [...new Set(site.ordemSetores.map((c) => (c === nome ? novo : c)))];
+  if (site.subcategorias && site.subcategorias[nome]) { site.subcategorias[novo] = site.subcategorias[nome]; delete site.subcategorias[nome]; }
+  gravarJSON(F.site, site);
+  // Banners e faixa com link "departamento" para a categoria antiga
+  const banner = lerJSON(F.banner, null);
+  if (banner) {
+    let mudou = false;
+    const troca = (l) => { if (l && l.tipo === "departamento" && l.valor === nome) { l.valor = novo; mudou = true; } };
+    for (const s of banner.slides || []) { troca(s.link); troca(s.btn1 && s.btn1.link); troca(s.btn2 && s.btn2.link); }
+    troca(banner.faixa && banner.faixa.link);
+    if (mudou) gravarJSON(F.banner, banner);
+  }
+  return { ok: true, movidos: n, site, ajustes: aj, banner: lerJSON(F.banner, null) || {} };
+}
+
+// Renomeia a subcategoria dentro da categoria (produtos e lista de subcategorias)
+function renomearSubcategoria(d) {
+  const cat = texto(d.categoria, 120), nome = texto(d.nome, 120), novo = texto(d.novo, 120);
+  if (!cat || !nome) throw new Error("Subcategoria inválida.");
+  if (!novo) throw new Error("Informe o novo nome da subcategoria.");
+  const aj = lerAjustes();
+  const loja = lerJSON(F.loja, null);
+  const novos = new Set(aj.novos.map((p) => p.sku));
+  const doCatalogo = (loja && Array.isArray(loja.products) ? loja.products : []).filter((p) => !novos.has(p.sku));
+  const valor = (p, k) => (p.sku && aj.produtos[p.sku] && k in aj.produtos[p.sku].campos ? aj.produtos[p.sku].campos[k] : p[k]);
+  const site = lerJSON(F.site, null) || {};
+  const subs = (site.subcategorias = site.subcategorias && typeof site.subcategorias === "object" ? site.subcategorias : {});
+  const daCat = new Set([...(subs[cat] || []), ...doCatalogo.filter((p) => (valor(p, "sector") || "Outros") === cat).map((p) => valor(p, "subsector")).filter(Boolean),
+    ...aj.novos.filter((p) => (p.sector || "Outros") === cat).map((p) => p.subsector).filter(Boolean)]);
+  if (novo.toLowerCase() !== nome.toLowerCase() && [...daCat].some((s) => s.toLowerCase() === novo.toLowerCase()))
+    throw new Error(`Já existe a subcategoria “${novo}” em ${cat}.`);
+  let n = 0;
+  for (const p of doCatalogo) if ((valor(p, "sector") || "Outros") === cat && valor(p, "subsector") === nome) { try { aplicarCampos(aj, { products: [p] }, p.sku, { subsector: novo }); n++; } catch {} }
+  for (const p of aj.novos) if ((p.sector || "Outros") === cat && p.subsector === nome) { try { aplicarCampos(aj, null, p.sku, { subsector: novo }); n++; } catch {} }
+  if (n) gravarJSON(F.ajustes, aj);
+  const lista = Array.isArray(subs[cat]) ? subs[cat] : [];
+  subs[cat] = [...new Set(lista.includes(nome) ? lista.map((s) => (s === nome ? novo : s)) : [...lista, novo])];
+  gravarJSON(F.site, site);
+  return { ok: true, movidos: n, site, ajustes: aj };
 }
 
 // Mostrar/ocultar no site os produtos sem foto, sem descrição ou sem estoque
