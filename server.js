@@ -839,7 +839,7 @@ function salvarSite(d) {
   const site = {};
   for (const k of ["nome", "slogan", "instagram", "cidade", "horario"]) site[k] = texto(d[k], k === "slogan" ? 200 : 120);
   site.whatsapp = texto(d.whatsapp, 30).replace(/\D/g, "");
-  if (site.whatsapp && site.whatsapp.length < 10) throw new Error("WhatsApp inválido: use DDI + DDD + número (ex.: 5511920889155).");
+  if (site.whatsapp && site.whatsapp.length < 10) throw new Error("WhatsApp inválido: use DDI + DDD + número (ex.: 5511972265396).");
   if (site.instagram && !/^https:\/\//.test(site.instagram)) site.instagram = "https://instagram.com/" + site.instagram.replace(/^@/, "");
   // Google Analytics 4 (ID de métricas, público por natureza: aparece no código de qualquer site)
   site.ga = texto(d.ga, 20).replace(/\s/g, "").toUpperCase();
