@@ -393,6 +393,10 @@ function adminApi(req, res, rota) {
   if (r === "POST categoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarCategoria(d)));
   if (r === "POST categoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirCategoria(d)));
   if (r === "POST subcategoria") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, criarSubcategoria(d)));
+  if (r === "POST importar-planilha") return lerCorpoJSON(req, res, 30e6, (d) => {
+    if (!Array.isArray(d.produtos) || !d.produtos.length) throw new Error("A planilha não tem produtos.");
+    json(res, 200, { ok: true, resumo: adicionarExtras(d.produtos), ajustes: lerAjustes() });
+  });
   if (r === "POST categoria-renomear") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, renomearCategoria(d)));
   if (r === "POST subcategoria-renomear") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, renomearSubcategoria(d)));
   if (r === "POST subcategoria-excluir") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, excluirSubcategoria(d)));

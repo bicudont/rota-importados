@@ -597,6 +597,26 @@
           <div class="log" id="log" aria-live="polite"></div>
         </div>
 
+        <h2 style="margin:24px 0 10px">Importar planilha</h2>
+        <div class="card">
+          <p class="muted">Cadastre ou atualize vários produtos de uma vez com uma planilha <b>CSV</b> (no Excel: <i>Arquivo → Salvar como → CSV</i>). Baixe o modelo, preencha e envie. Colunas: <b>Código</b>, <b>Nome</b>, Marca, Departamento, Subcategoria, Preço US$, Estoque, Situação no site, Etiquetas e Descrição.</p>
+          <p class="muted small" style="margin-top:8px"><b>Código que já existe</b> = atualiza só as colunas preenchidas (célula vazia não muda nada). <b>Código novo ou vazio</b> = cria o produto (o nome é obrigatório; sem código, o painel gera um). A planilha baixada em <i>Exportar</i> também pode ser editada e reenviada aqui. As fotos vão depois, em <b>Fotos em lote</b>, com o código no nome do arquivo.</p>
+          <div class="exib-acts" style="margin-top:12px;justify-content:flex-start">
+            <button class="btn" id="plModelo" type="button">⬇️ Baixar modelo</button>
+            <button class="btn btn--primary" id="plEscolher" type="button">📄 Escolher planilha (CSV)</button>
+            <input id="plIn" type="file" accept=".csv,text/csv" hidden />
+          </div>
+          <div id="plBox" hidden style="margin-top:16px">
+            <b id="plResumo"></b>
+            <div class="list" id="plPrevia" style="margin-top:10px;max-height:380px;overflow:auto"></div>
+            <div class="exib-acts" style="margin-top:12px">
+              <button class="btn" id="plCancelar" type="button">Cancelar</button>
+              <button class="btn btn--primary" id="plImportar" type="button">Importar</button>
+            </div>
+          </div>
+          <div class="log" id="plLog" aria-live="polite"></div>
+        </div>
+
         <h2 style="margin:24px 0 10px">Fotos em lote</h2>
         <div class="card">
           <p class="muted">Envie várias fotos de uma vez. O painel liga cada foto ao produto <b>pelo nome do arquivo</b>: o código (ex.: <code>ADM2-8882.jpg</code>) ou o nome do produto (ex.: <code>Lipoland 15mg.jpg</code>). Para mais de uma foto do mesmo produto, use <code>ADM2-8882 (2).jpg</code>, <code>ADM2-8882_2.jpg</code> ou <code>ADM2-8882-2.jpg</code>.</p>
@@ -2595,6 +2615,104 @@
       renderFl();
     };
 
+    /* ---------- Importar planilha (CSV): cria produtos novos e atualiza os existentes pelo código ---------- */
+    const PL_COLS = { // coluna da planilha -> campo do produto (aceita nomes parecidos, sem acento)
+      sku: ["sku", "codigo", "cod", "codigo do produto"], name: ["nome", "nome do produto", "produto"], brand: ["marca"],
+      sector: ["departamento", "categoria"], subsector: ["subcategoria"], price: ["preco us", "preco us$", "preco (us$)", "preco", "preco usd"],
+      stock: ["estoque", "quantidade"], active: ["situacao no site", "situacao", "visivel", "ativo"], tags: ["etiquetas", "tags"], description: ["descricao"],
+    };
+    const plNorm = (s) => norm(String(s || "")).replace(/[^a-z0-9$ ()]+/g, " ").replace(/\s+/g, " ").trim();
+    function plCsv(texto) { // CSV com ";" ou "," e aspas (padrão do Excel)
+      const sep = (texto.split(/\r?\n/)[0].match(/;/g) || []).length >= (texto.split(/\r?\n/)[0].match(/,/g) || []).length ? ";" : ",";
+      const linhas = []; let lin = [], cel = "", aspas = false;
+      for (let i = 0; i < texto.length; i++) {
+        const c = texto[i];
+        if (aspas) { if (c === '"') { if (texto[i + 1] === '"') { cel += '"'; i++; } else aspas = false; } else cel += c; continue; }
+        if (c === '"') aspas = true;
+        else if (c === sep) { lin.push(cel); cel = ""; }
+        else if (c === "\n" || c === "\r") { if (c === "\r" && texto[i + 1] === "\n") i++; lin.push(cel); linhas.push(lin); lin = []; cel = ""; }
+        else cel += c;
+      }
+      if (cel || lin.length) { lin.push(cel); linhas.push(lin); }
+      return linhas.filter((l) => l.some((x) => x.trim()));
+    }
+    const plNum = (v) => { v = String(v).trim().replace(/[^\d.,-]/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); const n = Number(v); return isFinite(n) ? n : NaN; };
+    let plItens = [];
+    function plLer(texto) {
+      const linhas = plCsv(texto.replace(/^﻿/, ""));
+      if (linhas.length < 2) throw new Error("A planilha está vazia (precisa do cabeçalho e de pelo menos uma linha).");
+      const cab = linhas[0].map(plNorm), idx = {};
+      for (const [campo, nomes] of Object.entries(PL_COLS)) { const i = cab.findIndex((c) => nomes.includes(c)); if (i >= 0) idx[campo] = i; }
+      if (idx.sku == null && idx.name == null) throw new Error("Não achei as colunas Código ou Nome no cabeçalho. Use o modelo.");
+      const existe = new Map(PROD.concat(EXCLUIDOS).map((p) => [String(p.sku).toLowerCase(), p]));
+      const hoje = new Date().toISOString().slice(2, 10).replace(/-/g, ""); let seq = 0;
+      const vistos = new Set();
+      return linhas.slice(1).map((l, n) => {
+        const val = (k) => (idx[k] == null ? "" : String(l[idx[k]] ?? "").trim());
+        let sku = val("sku"); const erros = [];
+        const atual = sku ? existe.get(sku.toLowerCase()) : null;
+        if (atual) sku = atual.sku;
+        if (!sku) { do { sku = `PL${hoje}-${String(++seq).padStart(3, "0")}`; } while (existe.has(sku.toLowerCase()) || vistos.has(sku)); }
+        if (!/^[A-Za-z0-9_-]{1,60}$/.test(sku)) erros.push("código só pode ter letras, números, - e _");
+        if (vistos.has(sku)) erros.push("código repetido na planilha"); vistos.add(sku);
+        const it = { sku };
+        for (const k of ["name", "brand", "sector", "subsector", "tags", "description"]) if (val(k)) it[k] = val(k);
+        if (val("price")) { const v = plNum(val("price")); if (isNaN(v) || v < 0) erros.push("preço inválido"); else it.price = v; }
+        if (val("stock")) { const v = plNum(val("stock")); if (!Number.isInteger(v) || v < 0) erros.push("estoque inválido"); else it.stock = v; }
+        if (val("active")) { const a = plNorm(val("active")); if (/^(oculto|nao|n|0|inativo)$/.test(a)) it.active = false; else if (/^(visivel|sim|s|1|ativo|esgotado)$/.test(a)) it.active = true; }
+        if (!atual && !it.name) erros.push("produto novo precisa de nome");
+        if (!atual && it.active == null) it.active = true;
+        return { linha: n + 2, it, novo: !atual, atual, erros };
+      });
+    }
+    function plRender() {
+      const ok = plItens.filter((x) => !x.erros.length), novos = ok.filter((x) => x.novo).length, err = plItens.length - ok.length;
+      $("#plBox").hidden = false;
+      $("#plResumo").textContent = `${plItens.length} linha(s): ${novos} produto(s) novo(s), ${ok.length - novos} atualização(ões)${err ? `, ${err} com erro (não serão importadas)` : ""}`;
+      const campos = (it) => Object.entries(it).filter(([k]) => k !== "sku" && k !== "name").map(([k, v]) => `${{ brand: "marca", sector: "depto", subsector: "subcat", price: "US$", stock: "estoque", active: "site", tags: "etiquetas", description: "descrição" }[k] || k}: ${k === "active" ? (v ? "visível" : "oculto") : k === "description" ? String(v).slice(0, 40) + (String(v).length > 40 ? "…" : "") : v}`).join(" · ");
+      $("#plPrevia").innerHTML = plItens.slice(0, 300).map((x) => `<div class="row" style="grid-template-columns:70px minmax(0,1fr);cursor:default">
+          <span class="badge ${x.erros.length ? "b-off" : x.novo ? "b-new" : "b-edit"}">${x.erros.length ? "Erro" : x.novo ? "Novo" : "Atualiza"}</span>
+          <div style="min-width:0"><div class="nm">${esc(x.it.name || (x.atual && x.atual.name) || "")} <span class="muted small">· linha ${x.linha} · ${esc(x.it.sku)}</span></div>
+          <div class="meta">${x.erros.length ? `<span style="color:var(--err)">${esc(x.erros.join("; "))}</span>` : esc(campos(x.it)) || "nada para mudar"}</div></div></div>`).join("") +
+        (plItens.length > 300 ? `<div class="empty">… e mais ${plItens.length - 300} linha(s)</div>` : "");
+      $("#plImportar").disabled = !ok.length;
+      $("#plImportar").textContent = `Importar ${ok.length} produto(s)`;
+    }
+    $("#plModelo").addEventListener("click", () => {
+      const linhas = ["Código;Nome;Marca;Departamento;Subcategoria;Preço US$;Estoque;Situação no site;Etiquetas;Descrição",
+        ";Exemplo Perfume Floral EDP 100 ml;Marca Exemplo;Perfumes Importados;Feminino;35,90;10;Visível;feminino, floral;Apague esta linha antes de importar."];
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["﻿" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+      a.download = "modelo-importar-produtos.csv"; document.body.appendChild(a); a.click(); a.remove();
+    });
+    $("#plEscolher").addEventListener("click", () => $("#plIn").click());
+    $("#plIn").addEventListener("change", async (e) => {
+      const f = e.target.files[0]; e.target.value = "";
+      if (!f) return;
+      $("#plLog").innerHTML = "";
+      try {
+        const buf = await f.arrayBuffer();
+        let texto = new TextDecoder("utf-8").decode(buf);
+        if (texto.includes("�")) texto = new TextDecoder("windows-1252").decode(buf); // Excel antigo salva sem UTF-8
+        plItens = plLer(texto);
+        plRender();
+      } catch (err) { $("#plBox").hidden = true; toast(err.message, true); }
+    });
+    $("#plCancelar").addEventListener("click", () => { plItens = []; $("#plBox").hidden = true; });
+    $("#plImportar").addEventListener("click", async () => {
+      const ok = plItens.filter((x) => !x.erros.length);
+      if (!ok.length) return;
+      $("#plImportar").disabled = true;
+      try {
+        const r = await api("POST", "importar-planilha", { produtos: ok.map((x) => x.it) });
+        D.ajustes = r.ajustes; montar(); renderProdutos(); renderGeral();
+        const s = r.resumo;
+        $("#plLog").innerHTML = `<div class="msg ok">✓ ${s.novos} produto(s) criado(s), ${s.atualizados} atualizado(s)${s.ignorados ? `, ${s.ignorados} ignorado(s)` : ""}${s.erros ? `, ${s.erros} com erro` : ""}.</div>`;
+        $("#plBox").hidden = true; plItens = [];
+        toast("Planilha importada");
+      } catch (err) { toast(err.message, true); $("#plImportar").disabled = false; }
+    });
+
     let files = [];
     function setFiles(list) {
       files = [...list].filter((f) => /\.zip$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -3341,9 +3459,9 @@
       const pix = cot("pix"), efe = cot("efetivo");
       const num = (v) => (v == null || v === "" || isNaN(v) ? "" : String(Math.round(v * 100) / 100).replace(".", ","));
       const cel = (v) => { const s = String(v == null ? "" : v).replace(/\r?\n/g, " "); return /[";]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-      const cab = ["SKU", "Nome", "Marca", "Departamento", "Tipo", "Volume", "Preço US$", "Preço R$ Pix", "Preço R$ cartão", "Preço R$ dinheiro", "Estoque", "Situação no site", "Fotos", "Etiquetas", "Descrição", "Origem"];
+      const cab = ["SKU", "Nome", "Marca", "Departamento", "Subcategoria", "Tipo", "Volume", "Preço US$", "Preço R$ Pix", "Preço R$ cartão", "Preço R$ dinheiro", "Estoque", "Situação no site", "Fotos", "Etiquetas", "Descrição", "Origem"];
       const linhas = lista.map((p) => [
-        p.sku, p.name, p.brand, p.sector, p.tipo, p.volume,
+        p.sku, p.name, p.brand, p.sector, p.subsector, p.tipo, p.volume,
         num(p.price > 0 ? p.price : null),
         num(p.price > 0 && pix ? p.price * pix.rate : null),
         num(precoPix(p.price) != null ? precoCartao(precoPix(p.price)) : null),
