@@ -458,6 +458,7 @@
           <button class="btn" data-seltodos>Selecionar todos</button>
         </div>
         <div class="filtros2">
+          <select class="field" id="pSub" aria-label="Subcategoria"></select>
           <select class="field" id="pMarca" aria-label="Marca"></select>
           <span class="faixa"><span class="muted small">Preço US$</span>
             <input class="field" id="pPrecoMin" inputmode="decimal" placeholder="de" aria-label="Preço mínimo em US$" />
@@ -1157,7 +1158,7 @@
       const b = e.target.closest("[data-ir]");
       if (!b) return;
       const [aba, filtro] = b.dataset.ir.split(":");
-      if (aba === "produtos") { $("#pStatus").value = filtro || ""; $("#pBusca").value = ""; $("#pSetor").value = ""; pag = 0; renderProdutos(); }
+      if (aba === "produtos") { $("#pStatus").value = filtro || ""; $("#pBusca").value = ""; $("#pSetor").value = ""; $("#pSub").value = ""; pag = 0; renderProdutos(); }
       abrirAba(aba);
       if (filtro === "cotacao") { $("#lPix").scrollIntoView({ block: "center" }); $("#lPix").focus({ preventScroll: true }); }
     });
@@ -1990,16 +1991,27 @@
     function renderProdutos() {
       const q = norm($("#pBusca").value).trim().split(/\s+/).filter(Boolean);
       const setor = $("#pSetor").value, st = FILTROS[$("#pStatus").value], marca = $("#pMarca").value;
+      // Subcategorias: as do departamento escolhido (ou todas, com o departamento na frente)
+      const subAtual = $("#pSub").value, pares = new Map();
+      const addPar = (sec, sub) => { if (sub && (!setor || sec === setor)) pares.set(JSON.stringify([sec, sub]), setor ? sub : `${sec || "Outros"} › ${sub}`); };
+      for (const p of PROD) addPar(p.sector || "", p.subsector);
+      for (const [sec, l] of Object.entries((D.site && D.site.subcategorias) || {})) (l || []).forEach((sub) => addPar(sec, sub));
+      const ops = [...pares].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+      $("#pSub").innerHTML = `<option value="">Todas as subcategorias</option><option value="__sem">Sem subcategoria</option>` +
+        ops.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+      $("#pSub").value = subAtual === "__sem" || pares.has(subAtual) ? subAtual : "";
+      const sub = $("#pSub").value, subPar = sub && sub !== "__sem" ? JSON.parse(sub) : null;
       const faixa = (v) => { const n = numOuNull(v); return Number.isFinite(n) ? n : null; }; // texto inválido = sem limite
       const pMin = faixa($("#pPrecoMin").value), pMax = faixa($("#pPrecoMax").value);
       filtrados = PROD.filter((p) => {
         if ((setor && p.sector !== setor) || (marca && p.brand !== marca) || (st && !st(p)) || !q.every((t) => p._busca.includes(t))) return false;
+        if (sub === "__sem" ? p.subsector : subPar && ((p.sector || "") !== subPar[0] || p.subsector !== subPar[1])) return false;
         if (pMin == null && pMax == null) return true;
         const v = precoOrdem(p);
         return v != null && (pMin == null || v >= pMin) && (pMax == null || v <= pMax);
       });
       ordenarProdutos(filtrados);
-      $("#pLimpar").hidden = !(q.length || setor || marca || $("#pStatus").value || pMin != null || pMax != null || ordem.campo);
+      $("#pLimpar").hidden = !(q.length || setor || sub || marca || $("#pStatus").value || pMin != null || pMax != null || ordem.campo);
       const total = Math.max(1, Math.ceil(filtrados.length / POR_PAG));
       pag = Math.min(pag, total - 1);
       const pagina = filtrados.slice(pag * POR_PAG, (pag + 1) * POR_PAG);
@@ -2075,10 +2087,11 @@
     }
     $("#pOrdem").addEventListener("change", () => { const [c, d] = $("#pOrdem").value.split(":"); mudarOrdem(c || "", d === "-1" ? -1 : 1); });
     $("#pMarca").addEventListener("change", () => { pag = 0; renderProdutos(); });
+    $("#pSub").addEventListener("change", () => { pag = 0; renderProdutos(); });
     let tPreco;
     ["#pPrecoMin", "#pPrecoMax"].forEach((id) => $(id).addEventListener("input", () => { clearTimeout(tPreco); tPreco = setTimeout(() => { pag = 0; renderProdutos(); }, 300); }));
     $("#pLimpar").addEventListener("click", () => {
-      ["#pBusca", "#pSetor", "#pStatus", "#pMarca", "#pPrecoMin", "#pPrecoMax"].forEach((id) => ($(id).value = ""));
+      ["#pBusca", "#pSetor", "#pSub", "#pStatus", "#pMarca", "#pPrecoMin", "#pPrecoMax"].forEach((id) => ($(id).value = ""));
       mudarOrdem("", 1);
     });
     if (ordem.campo) $("#pOrdem").value = `${ordem.campo}:${ordem.dir}`;
