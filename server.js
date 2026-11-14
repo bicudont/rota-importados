@@ -245,6 +245,11 @@ function montarLoja() {
     if (c && c.rate > 0) rates[k] = { rate: c.rate, date: c.date || "" };
   }
   out.rates = rates;
+  out.ratesVarejo = {};
+  for (const k of ["pix", "efetivo"]) {
+    const c = site.cotacaoVarejo && site.cotacaoVarejo[k];
+    if (c && c.rate > 0) out.ratesVarejo[k] = { rate: c.rate };
+  }
   // O site recebe só o que deve aparecer (regras de exibição do painel); o backup usa a lista completa
   const excluidos = new Set(aj.excluidos);
   const pub = { ...out, products: out.products.filter((p) => p.active !== false && !excluidos.has(p.sku) && !foraDoSite(p, site.ocultar)) };
@@ -856,6 +861,15 @@ function salvarSite(d) {
     if (!(n > 0 && n < 100)) throw new Error("Cotação inválida.");
     // Data no horário de Brasília (o lembrete diário do painel compara com o dia de hoje)
     site.cotacao[k] = { rate: Math.round(n * 10000) / 10000, date: new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) };
+  }
+  // Câmbio do varejo (o de cima é o do atacado): mesmo preço em US$, convertido por outro valor
+  site.cotacaoVarejo = {};
+  for (const k of ["pix", "efetivo"]) {
+    const v = d.cotacaoVarejo && d.cotacaoVarejo[k];
+    const n = v === "" || v == null ? null : Number(v);
+    if (n == null) continue;
+    if (!(n > 0 && n < 100)) throw new Error("Cotação de varejo inválida.");
+    site.cotacaoVarejo[k] = { rate: Math.round(n * 10000) / 10000 };
   }
   // Cartão: preço do Pix + acréscimo (%), em até N parcelas
   const c = d.cartao || {};

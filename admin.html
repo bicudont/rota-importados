@@ -737,9 +737,12 @@
             <div class="msg small" id="cotStatusLoja" style="margin:6px 0 10px"></div>
             <p class="muted small" style="margin-bottom:10px">Deixe vazio para usar a cotação exportada pelo Catálogo Pro. Se preencher, vale este valor até você apagá-lo.</p>
             <div class="grid2">
-              <div><label class="lbl" for="lPix">Cotação Pix (R$ por US$ 1)</label><input class="field" id="lPix" inputmode="decimal" /><div class="hint" id="lPixHint"></div></div>
-              <div><label class="lbl" for="lEfet">Cotação em dinheiro (R$ por US$ 1)</label><input class="field" id="lEfet" inputmode="decimal" /><div class="hint" id="lEfetHint"></div></div>
+              <div><label class="lbl" for="lPix">Atacado — cotação Pix (R$ por US$ 1)</label><input class="field" id="lPix" inputmode="decimal" /><div class="hint" id="lPixHint"></div></div>
+              <div><label class="lbl" for="lEfet">Atacado — cotação em dinheiro (R$ por US$ 1)</label><input class="field" id="lEfet" inputmode="decimal" /><div class="hint" id="lEfetHint"></div></div>
+              <div><label class="lbl" for="lPixV">Varejo — cotação Pix (R$ por US$ 1)</label><input class="field" id="lPixV" inputmode="decimal" /><div class="hint" id="lPixVHint"></div></div>
+              <div><label class="lbl" for="lEfetV">Varejo — cotação em dinheiro (R$ por US$ 1)</label><input class="field" id="lEfetV" inputmode="decimal" /><div class="hint">Vazio = igual ao atacado.</div></div>
             </div>
+            <p class="muted small" style="margin-top:8px">O site mostra “A partir de” com o preço de <b>atacado</b> e, na página do produto e no orçamento, os dois preços (atacado e varejo).</p>
           </div>
           <div><button class="btn btn--primary" id="lojaSalvar">Salvar dados da loja</button></div>
         </form>
@@ -3648,6 +3651,10 @@ ${n.toLocaleString("pt-BR")} produto(s) passam a usar o novo nome.` : ""}`, atua
       const m = s.cotacao || {};
       $("#lPix").value = m.pix ? String(m.pix.rate).replace(".", ",") : "";
       $("#lEfet").value = m.efetivo ? String(m.efetivo.rate).replace(".", ",") : "";
+      const mv = s.cotacaoVarejo || {};
+      $("#lPixV").value = mv.pix ? String(mv.pix.rate).replace(".", ",") : "";
+      $("#lEfetV").value = mv.efetivo ? String(mv.efetivo.rate).replace(".", ",") : "";
+      $("#lPixVHint").textContent = "Vazio = igual ao atacado. Ex.: atacado 7,50 e varejo 7,90.";
       const doCat = (k) => { const r = D.loja && D.loja.rates && D.loja.rates[k]; return r && r.rate > 0 ? `Catálogo Pro: ${brl(r.rate)}${r.date ? " (" + dataBR(r.date) + ")" : ""}` : "O Catálogo Pro não exportou essa cotação."; };
       $("#lPixHint").textContent = doCat("pix");
       $("#lEfetHint").textContent = doCat("efetivo");
@@ -3669,6 +3676,8 @@ ${n.toLocaleString("pt-BR")} produto(s) passam a usar o novo nome.` : ""}`, atua
       e.preventDefault();
       const pix = numOuNull($("#lPix").value), efe = numOuNull($("#lEfet").value);
       if ((pix != null && !(pix > 0)) || (efe != null && !(efe > 0))) return toast("Cotação inválida. Ex.: 5,22", true);
+      const pixV = numOuNull($("#lPixV").value), efeV = numOuNull($("#lEfetV").value);
+      if ((pixV != null && !(pixV > 0)) || (efeV != null && !(efeV > 0))) return toast("Cotação de varejo inválida. Ex.: 7,90", true);
       const acrescimo = numOuNull($("#lCartPct").value), parcelas = parseInt($("#lCartN").value, 10);
       if (!(acrescimo >= 0 && acrescimo <= 200)) return toast("Acréscimo do cartão inválido (0 a 200%).", true);
       if (!(parcelas >= 1 && parcelas <= 24)) return toast("Parcelas inválidas (1 a 24).", true);
@@ -3676,7 +3685,7 @@ ${n.toLocaleString("pt-BR")} produto(s) passam a usar o novo nome.` : ""}`, atua
       try {
         const r = await api("PUT", "site", {
           nome: $("#lNome").value, slogan: $("#lSlogan").value, whatsapp: $("#lWhats").value, instagram: $("#lInsta").value,
-          cidade: $("#lCidade").value, horario: $("#lHorario").value, ga: $("#lGA").value, cotacao: { pix, efetivo: efe }, cartao: { acrescimo, parcelas },
+          cidade: $("#lCidade").value, horario: $("#lHorario").value, ga: $("#lGA").value, cotacao: { pix, efetivo: efe }, cotacaoVarejo: { pix: pixV, efetivo: efeV }, cartao: { acrescimo, parcelas },
         });
         D.site = r.site; renderLoja(); renderGeral(); renderProdutos();
         toast("Dados da loja salvos");

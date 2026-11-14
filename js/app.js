@@ -95,6 +95,11 @@
     const agora = Date.now();
     const recente = agora - 30 * 864e5;
     const conv = (v) => (v == null ? null : principal ? Math.round(v * principal.rate * 100) / 100 : base === "USD" ? null : v);
+    // Varejo: mesmo preço em US$, convertido pelo câmbio de varejo (aba Loja). Sem câmbio de varejo = igual ao atacado.
+    const rv = loja.ratesVarejo || {};
+    const chave = principal === pix ? "pix" : "efetivo";
+    const taxaV = principal ? (rv[chave] && rv[chave].rate > 0 ? rv[chave].rate : principal.rate) : null;
+    const convV = (v) => (v == null ? null : taxaV ? Math.round(v * taxaV * 100) / 100 : base === "USD" ? null : v);
     PRODUTOS = loja.products
       .filter((p) => p.active !== false && p.name)
       .map((p, i) => {
@@ -110,6 +115,8 @@
         const usd = emOferta && !emReal ? o.price : normal;
         const preco = emOferta ? (emReal ? o.price : conv(o.price)) : normalSite;
         const precoAntigo = emOferta && preco != null ? normalSite : null;
+        const precoVarejo = emOferta ? (emReal ? o.price : convV(o.price)) : convV(normal);
+        const precoVarejoAntigo = emOferta && precoVarejo != null ? convV(normal) : null;
         // Oferta agendada: recarrega os preços quando ela começar (se a página ficar aberta)
         // e quando uma oferta terminar, para o preço voltar ao normal
         if (o && !emOferta && o.start && Date.parse(o.start) > agora) proximaVirada = Math.min(proximaVirada, Date.parse(o.start));
@@ -131,6 +138,8 @@
           descricao: p.description || "",
           preco,
           precoAntigo,
+          precoVarejo,
+          precoVarejoAntigo,
           fimOferta: precoAntigo ? fim : 0,
           usd: base === "USD" ? usd : null,
           tag: tags[0] || (novo ? "Novo" : ""),
@@ -180,6 +189,8 @@
     CARTAO.n > 1
       ? curto ? `ou ${CARTAO.n}x de ${fmt(parcela(v))} no cartão` : `ou ${fmt(noCartao(v))} no cartão em até ${CARTAO.n}x de ${fmt(parcela(v))}`
       : `ou ${fmt(noCartao(v))} no cartão`;
+  // Preço de varejo (sem câmbio de varejo configurado, igual ao atacado)
+  const varejo = (p) => (p.precoVarejo != null ? p.precoVarejo : p.preco);
   const catName = (id) => (CATS.find((c) => c.id === id) || {}).nome || "";
   // Subcategorias de um departamento: as que têm produtos, na ordem criada no painel
   const SUBS_SITE = (site && site.subcategorias) || {};
@@ -614,8 +625,11 @@
   // Preço para o cliente: Pix em destaque e cartão embaixo (curto nos cards, completo na página do produto)
   function priceHTML(p, completo) {
     if (p.preco == null) return `<div class="price"><b>Sob consulta</b></div>`;
-    return `<div class="price"><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}<small>no Pix</small></div>` +
-      `<div class="price-alt">${esc(cartaoTxt(p.preco, !completo))}</div>`;
+    // Atacado em destaque ("A partir de"); varejo embaixo; cartão sempre sobre o varejo
+    const pv = varejo(p);
+    return `<div class="price"><small class="price-de">A partir de</small><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}<small>no Pix${completo ? " (atacado)" : ""}</small></div>` +
+      `<div class="price-alt">Varejo: <b>${fmt(pv)}</b> no Pix</div>` +
+      `<div class="price-alt">${esc(cartaoTxt(pv, !completo))}</div>`;
   }
 
   const off = (p) => (p.preco && p.precoAntigo ? Math.round((1 - p.preco / p.precoAntigo) * 100) : 0);
@@ -892,7 +906,7 @@
         <section class="pdp__section"><h2>Informações de compra</h2><ul class="pdp__facts">${infoCompra(p).map(([i, t]) => `<li><span aria-hidden="true">${i}</span><span>${t}</span></li>`).join("")}</ul></section>
       </div>
       ${out ? "" : `<div class="pdp__bar" id="pBar" hidden>
-        <div class="pdp__bar-price"><small>${esc(p.nome)}</small><b>${p.preco == null ? "Sob consulta" : esc(fmt(p.preco))}</b></div>
+        <div class="pdp__bar-price"><small>${esc(p.nome)}</small><b>${p.preco == null ? "Sob consulta" : "A partir de " + esc(fmt(p.preco))}</b></div>
         <button class="btn btn--primary" data-bar-add>Adicionar</button>
       </div>`}
       ${rel.length ? `<div class="pdp__related">${shelfHTML(`Mais em ${catName(p.categoria)}`, rel, `<a href="${catalogHref({ cat: p.categoria })}" class="shelf__all">Ver todos</a>`)}</div>` : ""}`;
@@ -901,7 +915,9 @@
       $("#pBuy").href = waLink(
         out
           ? `Olá! O produto *${p.nome}*${skuTxt(p)} vai voltar ao estoque?`
-          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? ` — ${fmt(p.preco * q)} no Pix (cartão: ${cartaoResumo(p.preco * q)})` : ""}\n\nPodemos combinar pagamento e entrega?`
+          : `Olá, ${S.nome}! Quero comprar:\n\n• ${q}x *${p.nome}*${v ? ` (${v})` : ""}${skuTxt(p)}${p.preco ? `
+   Atacado: ${fmt(p.preco * q)} no Pix
+   Varejo: ${fmt(varejo(p) * q)} no Pix (cartão: ${cartaoResumo(varejo(p) * q)})` : ""}\n\nPodemos combinar pagamento e entrega?`
       );
     };
     updBuy();
@@ -937,7 +953,7 @@
   // Informações complementares: só fatos do sistema (cotação, data do catálogo, fluxo do pedido)
   function infoCompra(p) {
     const itens = [["💬", "Pedido pelo WhatsApp: adicione ao carrinho ou use “Comprar agora” e a mensagem chega pronta para a loja."]];
-    if (p.preco != null) itens.push(["💳", `Pix: ${esc(fmt(p.preco))}. Cartão: ${esc(cartaoResumo(p.preco))}.`]);
+    if (p.preco != null) itens.push(["💳", `Atacado: ${esc(fmt(p.preco))} no Pix. Varejo: ${esc(fmt(varejo(p)))} no Pix ou ${esc(cartaoResumo(varejo(p)))} no cartão.`]);
     if (p.estoque != null && loja && loja.generated && !isNaN(Date.parse(loja.generated))) {
       itens.push(["📦", `Estoque conforme a atualização do catálogo em ${new Date(loja.generated).toLocaleDateString("pt-BR")}.`]);
     }
@@ -1075,6 +1091,7 @@
   }
 
   const total = () => cart.reduce((s, i) => s + (byId(i.id).preco || 0) * i.q, 0);
+  const totalV = () => cart.reduce((s, i) => { const p = byId(i.id); return s + (p.preco == null ? 0 : varejo(p)) * i.q; }, 0);
   const temConsulta = () => cart.some((i) => byId(i.id).preco == null);
 
   function renderCart() {
@@ -1090,7 +1107,7 @@
         const p = byId(i.id);
         return `<div class="item">
           <img src="${esc(foto(p))}" alt="${esc(p.nome)}" onerror="__imgErr(this)" />
-          <div><b>${esc(p.nome)}</b>${i.v ? `<small>${esc(i.v)}</small>` : ""}<small>${p.preco == null ? "Sob consulta" : fmt(p.preco)}</small></div>
+          <div><b>${esc(p.nome)}</b>${i.v ? `<small>${esc(i.v)}</small>` : ""}<small>${p.preco == null ? "Sob consulta" : `Atacado ${fmt(p.preco)} · Varejo ${fmt(varejo(p))}`}</small></div>
           <div class="item__right">
             <div class="qty"><button data-ci="${idx}" data-d="-1" aria-label="Diminuir">−</button><span>${i.q}</span><button data-ci="${idx}" data-d="1" aria-label="Aumentar">+</button></div>
             <button class="item__rm" data-rm="${idx}">Remover</button>
@@ -1099,7 +1116,7 @@
       })
       .join("");
     $("#cartTotal").textContent = fmt(total()) + (temConsulta() ? " +" : "");
-    $("#cartNote").textContent = total() > 0 ? `Valores no Pix. No cartão: ${cartaoResumo(total())}.` : "";
+    $("#cartNote").textContent = total() > 0 ? `Total no Pix (atacado). Varejo: ${fmt(totalV())} no Pix ou ${cartaoResumo(totalV())} no cartão.` : "";
   }
 
   $("#cartItems").addEventListener("click", (e) => {
@@ -1125,15 +1142,17 @@
     const cli = { nome: String(f.get("nome") || "").trim(), cidade: String(f.get("cidade") || "").trim() };
     const lines = cart.map((i) => {
       const p = byId(i.id);
-      return `• ${i.q}x *${p.nome}*${i.v ? ` (${i.v})` : ""}${skuTxt(p)} — ${p.preco == null ? "sob consulta" : fmt(p.preco * i.q)}`;
+      return `• ${i.q}x *${p.nome}*${i.v ? ` (${i.v})` : ""}${skuTxt(p)} — ${p.preco == null ? "sob consulta" : `
+   Atacado: ${fmt(p.preco * i.q)} · Varejo: ${fmt(varejo(p) * i.q)}`}`;
     });
     const msg = [
       `🛒 *Novo pedido — ${S.nome}*`,
       "",
       ...lines,
       "",
-      `*Total no Pix:* ${fmt(total())}${temConsulta() ? " + itens sob consulta" : ""}`,
-      total() > 0 ? `*No cartão:* ${cartaoResumo(total())}` : "",
+      `*Total atacado (Pix):* ${fmt(total())}${temConsulta() ? " + itens sob consulta" : ""}`,
+      total() > 0 ? `*Total varejo (Pix):* ${fmt(totalV())}` : "",
+      total() > 0 ? `*Varejo no cartão:* ${cartaoResumo(totalV())}` : "",
       "",
       cli.nome ? `*Nome:* ${cli.nome}` : "",
       cli.cidade ? `*Cidade:* ${cli.cidade}` : "",
@@ -1151,7 +1170,7 @@
     if (!loja) return; // só com o servidor da loja (produtos do Catálogo Pro)
     const dados = JSON.stringify({
       cliente,
-      itens: cart.map((i) => { const p = byId(i.id); return { sku: p.sku, nome: p.nome, v: i.v || "", q: i.q, preco: p.preco }; }),
+      itens: cart.map((i) => { const p = byId(i.id); return { sku: p.sku, nome: p.nome, v: i.v || "", q: i.q, preco: p.preco, precoVarejo: p.preco == null ? null : varejo(p) }; }),
       total: total(),
       moeda: MOEDA,
     });

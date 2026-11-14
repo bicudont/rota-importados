@@ -522,6 +522,8 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; letter-spacing: -
 .price s { color: var(--muted); font-size: .85rem; }
 .price small { color: var(--muted); font-size: .78rem; }
 .price-alt { color: var(--muted); font-size: .8rem; }
+.price-alt b { color: var(--ink, inherit); font-weight: 700; }
+.price .price-de { flex-basis: 100%; margin-bottom: -6px; text-transform: uppercase; letter-spacing: .04em; font-size: .68rem; }
 .card__actions { display: flex; gap: 8px; margin-top: 12px; }
 .card__actions .btn { height: 42px; padding: 0 14px; font-size: .88rem; flex: 1; }
 .card__actions .btn--ghost { flex: 0 0 42px; padding: 0; }
