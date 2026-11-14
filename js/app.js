@@ -626,8 +626,11 @@
   function priceHTML(p, completo) {
     if (p.preco == null) return `<div class="price"><b>Sob consulta</b></div>`;
     // Atacado em destaque ("A partir de"); varejo embaixo; cartão sempre sobre o varejo
+    // Fora da página do produto, só o preço de atacado (o mais barato)
     const pv = varejo(p);
-    return `<div class="price"><small class="price-de">A partir de</small><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}<small>no Pix${completo ? " (atacado)" : ""}</small></div>` +
+    const base = `<div class="price"><small class="price-de">A partir de</small><b>${fmt(p.preco)}</b>${p.precoAntigo ? `<s>${fmt(p.precoAntigo)}</s>` : ""}<small>no Pix${completo ? " (atacado)" : ""}</small></div>`;
+    if (!completo) return base;
+    return base +
       `<div class="price-alt">Varejo: <b>${fmt(pv)}</b> no Pix</div>` +
       `<div class="price-alt">${esc(cartaoTxt(pv, !completo))}</div>`;
   }
