@@ -697,7 +697,10 @@
             </div>
             <div class="card">
               <h2 style="margin-bottom:10px">Opções</h2>
-              <label class="switch"><input type="checkbox" id="ePreco" checked /> Mostrar preços</label>
+              <div class="muted small" style="margin-bottom:6px">Preços que aparecem no PDF e no texto (nenhum marcado = sem preços):</div>
+              <label class="switch"><input type="checkbox" id="ePrAtac" checked /> Preço de atacado (Pix)</label><br />
+              <label class="switch" style="margin-top:8px"><input type="checkbox" id="ePrVar" /> Preço de varejo (Pix)</label><br />
+              <label class="switch" style="margin-top:8px"><input type="checkbox" id="ePrCart" /> Preço no cartão (sobre o varejo)</label>
             </div>
           </div>
           <div class="card">
@@ -969,7 +972,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/js/config.js?v=23"></script>
-  <script src="/js/catalogo-pdf.js?v=5"></script>
+  <script src="/js/catalogo-pdf.js?v=6"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -3352,17 +3355,30 @@
       return [...new Set(lista)].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
     }
     // Preço igual ao do site: R$ no Pix (convertido do US$), com US$ e valor em dinheiro embaixo
+    // Quais preços mostrar no PDF/texto: atacado (Pix), varejo (Pix) e/ou cartão (sobre o varejo)
+    const ePrecos = () => ({ atac: $("#ePrAtac").checked, vare: $("#ePrVar").checked, cart: $("#ePrCart").checked });
+    const comPrecos = () => { const o = ePrecos(); return o.atac || o.vare || o.cart; };
+    // Lista de preços do produto na ordem escolhida: [{ rot, valor, nota }]; null = sem cotação (sob consulta)
+    function precosDe(p) {
+      const o = ePrecos(), pix = precoPix(p.price);
+      if (pix == null) return null;
+      const v = precoVarejoPix(p.price), { n } = cartaoCfg(), t = precoCartao(v);
+      const out = [];
+      if (o.atac) out.push({ rot: "Atacado", valor: brl(pix), nota: "no Pix" });
+      if (o.vare) out.push({ rot: "Varejo", valor: brl(v), nota: "no Pix" });
+      if (o.cart) out.push({ rot: "Cartão", valor: brl(t), nota: n > 1 ? `no cartão (${n}x de ${brl(Math.round((t / n) * 100) / 100)})` : "no cartão" });
+      return out;
+    }
     function itemPDF(p) {
       let preco = null, precoNota = "", precoSub = "";
-      if ($("#ePreco").checked) {
-        // Igual ao site: só reais (Pix em destaque e cartão embaixo); sem cotação, "Sob consulta"
-        const pix = precoPix(p.price);
-        if (pix == null) preco = "";
+      if (comPrecos()) {
+        const ps = precosDe(p);
+        if (!ps) preco = "";
         else {
-          preco = brl(pix);
-          precoNota = "no Pix";
-          const { n } = cartaoCfg(), t = precoCartao(precoVarejoPix(p.price)); // cartão sempre sobre o varejo, como no site
-          precoSub = n > 1 ? `ou ${n}x de ${brl(Math.round((t / n) * 100) / 100)} no cartão` : `ou ${brl(t)} no cartão`; // curto, como nos cards do site
+          const [a, ...resto] = ps, varios = ps.length > 1;
+          preco = a.valor;
+          precoNota = varios ? `${a.rot.toLowerCase()} ${a.nota}` : a.nota;
+          precoSub = resto.map((r) => `${r.rot}: ${r.valor} ${r.nota}`).join(" · ");
         }
       }
       return {
@@ -3383,7 +3399,7 @@
       const wa = soDig(D.site.whatsapp || S.whatsapp || (D.loja && D.loja.brand && D.loja.brand.whatsapp));
       const waTxt = wa.length === 13 && wa.startsWith("55") ? `+55 (${wa.slice(2, 4)}) ${wa.slice(4, 9)}-${wa.slice(9)}` : wa ? "+" + wa : "";
       const c = cot("pix") || cot("efetivo");
-      const aviso = $("#ePreco").checked ? `Preços sujeitos a alteração${c && c.date ? " · atualizados em " + dataBR(c.date) : ""}` : "";
+      const aviso = comPrecos() ? `Preços sujeitos a alteração${c && c.date ? " · atualizados em " + dataBR(c.date) : ""}` : "";
       return { nome: D.site.nome || S.nome || "Rota Importados", whatsapp: waTxt, site: location.host, aviso };
     }
     const paginasDe = (gs) => 1 + gs.reduce((s, g) => s + Math.ceil(g.produtos.length / 9), 0);
@@ -3463,7 +3479,7 @@
       $("#eBar").hidden = true;
       renderExportar();
     }
-    ["#eComEst", "#eSemEst", "#eComFoto", "#eSemFoto", "#ePreco"].forEach((s) => $(s).addEventListener("change", renderExportar));
+    ["#eComEst", "#eSemEst", "#eComFoto", "#eSemFoto", "#ePrAtac", "#ePrVar", "#ePrCart"].forEach((s) => $(s).addEventListener("change", renderExportar));
     $("#eCats").addEventListener("change", (e) => {
       const s = e.target.dataset.setor;
       if (s == null) return;
@@ -3489,12 +3505,16 @@
       }
       renderExportar();
     });
-    // Texto para WhatsApp: mesma seleção do PDF, preço de atacado ("a partir de") no Pix
+    // Texto para WhatsApp: mesma seleção e mesmos preços escolhidos para o PDF
     function textoWhats() {
-      const L = lojaPDF(), comPreco = $("#ePreco").checked;
+      const L = lojaPDF(), comPreco = comPrecos();
       const prods = visiveis().filter(filtroExp);
       const out = [`*${L.nome} — Catálogo*`];
-      if (comPreco) out.push("_Preços a partir de, no Pix._");
+      if (comPreco) {
+        const o = ePrecos(), { n: np } = cartaoCfg();
+        out.push("_" + [o.atac && "A = atacado no Pix", o.vare && "V = varejo no Pix", o.cart && `C = no cartão${np > 1 ? ` (até ${np}x)` : ""}`].filter(Boolean).join(" | ") + "_");
+      }
+
       let n = 0;
       for (const s of ordemSetores(prods.map(setorDe)).filter((s) => !eFora.has(s))) {
         const ps = prods.filter((p) => setorDe(p) === s).sort(ordemProd);
@@ -3503,8 +3523,10 @@
         let sub = null;
         for (const p of ps) {
           if (subDe(p) !== sub) { sub = subDe(p); if (sub !== "Sem subcategoria") out.push(`_${sub}_`); }
-          const pix = comPreco ? precoPix(p.price) : null;
-          out.push(`• ${p.name}${comPreco ? ` — ${pix != null ? brl(pix) : "sob consulta"}` : ""}${p.stock === 0 ? " (esgotado)" : ""}`);
+          const ps = comPreco ? precosDe(p) : null;
+          // Formato curto: A: R$ x | V: R$ y | C: R$ z (legenda no topo)
+          const pr = !comPreco ? "" : !ps ? " — sob consulta" : " — " + ps.map((r) => `${r.rot[0]}: ${r.valor}`).join(" | ");
+          out.push(`• ${p.name}${pr}${p.stock === 0 ? " (esgotado)" : ""}`);
           n++;
         }
       }

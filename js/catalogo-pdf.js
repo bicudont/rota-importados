@@ -257,9 +257,12 @@
           const meta = [p.marca, p.sku && "Cód. " + p.sku].filter(Boolean).join(" · ");
           if (meta) pg.txt(x + 8, y + 148 + linhas.length * 11 + 1, 7, false, COR.muted, quebrar(meta, 7, false, CW - 16, 1)[0]);
           if (p.preco) {
-            pg.txt(x + 8, y + 204, 12, true, p.esgotado ? COR.muted : COR.royal, p.preco);
-            if (p.precoNota) pg.txt(x + 11 + largura(p.preco, 12, true), y + 204, 7, false, COR.muted, p.precoNota);
-            if (p.precoSub) pg.txt(x + 8, y + 216, 6.8, false, COR.muted, quebrar(p.precoSub, 6.8, false, CW - 16, 1)[0]);
+            // Até 2 linhas de preços extras (ex.: varejo e cartão); com 2, o preço principal sobe um pouco
+            const subs = p.precoSub ? p.precoSub.split(" · ").slice(0, 2).map((t) => quebrar(t, 6.8, false, CW - 16, 1)[0]) : [];
+            const yp = subs.length > 1 ? y + 198 : y + 204;
+            pg.txt(x + 8, yp, 12, true, p.esgotado ? COR.muted : COR.royal, p.preco);
+            if (p.precoNota) pg.txt(x + 11 + largura(p.preco, 12, true), yp, 7, false, COR.muted, p.precoNota);
+            subs.forEach((ln, j) => pg.txt(x + 8, yp + 12 + j * 9, 6.8, false, COR.muted, ln));
           } else if (p.preco === "") {
             pg.txt(x + 8, y + 204, 10, true, COR.muted, "Sob consulta");
           }
