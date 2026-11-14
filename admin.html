@@ -293,6 +293,13 @@
     .ecat input { width: 18px; height: 18px; accent-color: var(--royal); }
     .ecat label { cursor: pointer; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ecat--off label { color: var(--muted); }
+    .ecat { grid-template-columns: auto minmax(0,1fr) auto auto auto; }
+    .esubs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; padding: 6px 4px 10px 32px; border-bottom: 1px solid var(--line); }
+    .esub { display: flex; gap: 8px; align-items: center; font-size: .88rem; cursor: pointer; min-width: 0; }
+    .esub input { width: 16px; height: 16px; accent-color: var(--royal); flex: none; }
+    .esub span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .esub--off { color: var(--muted); }
+    .esubs__acoes { grid-column: 1 / -1; display: flex; gap: 6px; }
     .exp-foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; position: sticky; bottom: 12px; box-shadow: 0 10px 30px -12px rgba(0,27,80,.25); }
     .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 6px; width: min(320px, 70vw); }
     .bar span { display: block; height: 100%; width: 0; background: var(--royal); transition: width .2s; }
@@ -694,16 +701,22 @@
             </div>
           </div>
           <div class="card">
-            <div class="head" style="margin-bottom:10px"><h2>Departamentos</h2><div style="display:flex;gap:6px"><button class="btn btn--sm" id="eTodas">Marcar todos</button><button class="btn btn--sm" id="eNenhuma">Desmarcar todos</button></div></div>
+            <div class="head" style="margin-bottom:10px"><h2>Departamentos e subcategorias</h2><div style="display:flex;gap:6px"><button class="btn btn--sm" id="eTodas">Marcar todos</button><button class="btn btn--sm" id="eNenhuma">Desmarcar todos</button></div></div>
             <div class="ecats" id="eCats"></div>
           </div>
         </div>
         <div class="card exp-foot">
           <div><b id="eResumo"></b><div class="muted small" id="eStatus" aria-live="polite"></div><div class="bar" id="eBar" hidden><span></span></div></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="eWa">💬 Texto para WhatsApp</button>
             <button class="btn" id="ePorCat">Baixar um PDF por departamento</button>
             <button class="btn btn--primary" id="eCompleto">Baixar PDF completo</button>
           </div>
+        </div>
+        <div class="card" id="eWaBox" hidden style="margin-top:12px">
+          <div class="head" style="margin-bottom:8px"><h2>Texto para WhatsApp</h2><div style="display:flex;gap:6px"><button class="btn btn--sm" id="eWaFechar">Fechar</button><button class="btn btn--primary btn--sm" id="eWaCopiar">Copiar texto</button></div></div>
+          <p class="muted small" id="eWaInfo" style="margin:0 0 8px"></p>
+          <textarea class="field" id="eWaTxt" rows="16" readonly style="font-family:inherit;white-space:pre-wrap"></textarea>
         </div>
       </section>
 
@@ -3313,14 +3326,25 @@
 
     /* ---------- Exportar catálogo em PDF ---------- */
     const eFora = new Set(); // departamentos desmarcados
+    const eSubFora = new Set(); // subcategorias desmarcadas (departamento + separador + subcategoria)
+    const eAbertos = new Set(); // departamentos com a lista de subcategorias aberta
+    const subDe = (p) => p.subsector || "Sem subcategoria";
+    const subKey = (setor, sub) => setor + "\u0001" + sub;
     let gerando = false;
     const setorDe = (p) => p.sector || "Outros";
     const visiveis = () => PROD.filter((p) => p.active !== false);
     const slugA = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    function filtroExp(p) {
+    function filtroBase(p) {
       const esg = p.stock === 0, temFoto = p._fotos.length > 0;
       return (esg ? $("#eSemEst").checked : $("#eComEst").checked) && (temFoto ? $("#eComFoto").checked : $("#eSemFoto").checked);
     }
+    const filtroExp = (p) => filtroBase(p) && !eSubFora.has(subKey(setorDe(p), subDe(p)));
+    const ordemProd = (a, b) => subDe(a).localeCompare(subDe(b)) || a.name.localeCompare(b.name);
+    // Varejo: mesmo US$ com o câmbio de varejo (aba Loja); sem ele, igual ao atacado
+    const precoVarejoPix = (v) => {
+      const k = cot("pix") ? "pix" : "efetivo", m = D.site.cotacaoVarejo && D.site.cotacaoVarejo[k];
+      return m && m.rate > 0 && v > 0 ? Math.round(v * m.rate * 100) / 100 : precoPix(v);
+    };
     // Ordem definida na aba Loja; depois a do Catálogo Pro; os demais em ordem alfabética
     function ordemSetores(lista) {
       const ordem = [...(D.site.ordemSetores || []), ...((D.loja && D.loja.sectors) || []).map((s) => s.name)];
@@ -3337,7 +3361,7 @@
         else {
           preco = brl(pix);
           precoNota = "no Pix";
-          const { n } = cartaoCfg(), t = precoCartao(pix);
+          const { n } = cartaoCfg(), t = precoCartao(precoVarejoPix(p.price)); // cartão sempre sobre o varejo, como no site
           precoSub = n > 1 ? `ou ${n}x de ${brl(Math.round((t / n) * 100) / 100)} no cartão` : `ou ${brl(t)} no cartão`; // curto, como nos cards do site
         }
       }
@@ -3352,7 +3376,7 @@
       const prods = visiveis().filter(filtroExp);
       return ordemSetores(prods.map(setorDe))
         .filter((s) => (soSetor ? s === soSetor : !eFora.has(s)))
-        .map((s) => ({ nome: s, produtos: prods.filter((p) => setorDe(p) === s).sort((a, b) => a.name.localeCompare(b.name)).map(itemPDF) }));
+        .map((s) => ({ nome: s, produtos: prods.filter((p) => setorDe(p) === s).sort(ordemProd).map(itemPDF) }));
     }
     function lojaPDF() {
       const S = window.STORE || {};
@@ -3371,15 +3395,23 @@
       $("#eSemEstN").textContent = n((p) => p.stock === 0);
       $("#eComFotoN").textContent = n((p) => p._fotos.length > 0);
       $("#eSemFotoN").textContent = n((p) => !p._fotos.length);
-      const prods = vis.filter(filtroExp);
+      const prods = vis.filter(filtroExp), base = vis.filter(filtroBase);
       $("#eCats").innerHTML = ordemSetores(vis.map(setorDe)).map((s, i) => {
         const q = prods.filter((p) => setorDe(p) === s).length;
+        const subs = [...new Set(vis.filter((p) => setorDe(p) === s).map(subDe))].sort((a, b) => a.localeCompare(b));
+        const nOff = subs.filter((u) => eSubFora.has(subKey(s, u))).length;
+        const aberto = eAbertos.has(s);
         return `<div class="ecat${eFora.has(s) ? " ecat--off" : ""}">
           <input type="checkbox" id="ec${i}" data-setor="${esc(s)}"${eFora.has(s) ? "" : " checked"} />
           <label for="ec${i}">${esc(s)}</label>
           <span class="muted small">${q.toLocaleString("pt-BR")}</span>
+          <button class="btn btn--sm" data-subs="${esc(s)}" title="Escolher subcategorias">${aberto ? "▾" : "▸"} ${subs.length - nOff}/${subs.length} subcat.</button>
           <button class="btn btn--sm" data-pdf-setor="${esc(s)}" title="Baixar o PDF só deste departamento"${q && !gerando ? "" : " disabled"}>PDF</button>
-        </div>`;
+        </div>` + (aberto ? `<div class="esubs">
+          <div class="esubs__acoes"><button class="btn btn--sm" data-subtodas="${esc(s)}">Marcar todas</button><button class="btn btn--sm" data-subnenhuma="${esc(s)}">Desmarcar todas</button></div>
+          ${subs.map((u) => { const off = eSubFora.has(subKey(s, u)); const n = base.filter((p) => setorDe(p) === s && subDe(p) === u).length;
+            return `<label class="esub${off ? " esub--off" : ""}"><input type="checkbox" data-sub-setor="${esc(s)}" data-sub="${esc(u)}"${off ? "" : " checked"} /><span>${esc(u)}</span><span class="muted small">${n}</span></label>`; }).join("")}
+        </div>` : "");
       }).join("") || `<p class="muted">Nenhum produto visível no site.</p>`;
       const gs = gruposExp().filter((g) => g.produtos.length);
       const total = gs.reduce((s, g) => s + g.produtos.length, 0);
@@ -3437,6 +3469,64 @@
       if (s == null) return;
       e.target.checked ? eFora.delete(s) : eFora.add(s);
       renderExportar();
+    });
+    $("#eCats").addEventListener("change", (e) => {
+      const s = e.target.dataset.subSetor;
+      if (s == null) return;
+      const k = subKey(s, e.target.dataset.sub);
+      e.target.checked ? eSubFora.delete(k) : eSubFora.add(k);
+      if (e.target.checked) eFora.delete(s);
+      renderExportar();
+    });
+    $("#eCats").addEventListener("click", (e) => {
+      const t = e.target.closest("[data-subs],[data-subtodas],[data-subnenhuma]");
+      if (!t) return;
+      if (t.dataset.subs != null) { const s = t.dataset.subs; eAbertos.has(s) ? eAbertos.delete(s) : eAbertos.add(s); }
+      else {
+        const todas = t.dataset.subtodas != null, s = todas ? t.dataset.subtodas : t.dataset.subnenhuma;
+        visiveis().filter((p) => setorDe(p) === s).forEach((p) => { const k = subKey(s, subDe(p)); todas ? eSubFora.delete(k) : eSubFora.add(k); });
+        if (todas) eFora.delete(s);
+      }
+      renderExportar();
+    });
+    // Texto para WhatsApp: mesma seleção do PDF, preço de atacado ("a partir de") no Pix
+    function textoWhats() {
+      const L = lojaPDF(), comPreco = $("#ePreco").checked;
+      const prods = visiveis().filter(filtroExp);
+      const out = [`*${L.nome} — Catálogo*`];
+      if (comPreco) out.push("_Preços a partir de, no Pix._");
+      let n = 0;
+      for (const s of ordemSetores(prods.map(setorDe)).filter((s) => !eFora.has(s))) {
+        const ps = prods.filter((p) => setorDe(p) === s).sort(ordemProd);
+        if (!ps.length) continue;
+        out.push("", `*${s.toUpperCase()}*`);
+        let sub = null;
+        for (const p of ps) {
+          if (subDe(p) !== sub) { sub = subDe(p); if (sub !== "Sem subcategoria") out.push(`_${sub}_`); }
+          const pix = comPreco ? precoPix(p.price) : null;
+          out.push(`• ${p.name}${comPreco ? ` — ${pix != null ? brl(pix) : "sob consulta"}` : ""}${p.stock === 0 ? " (esgotado)" : ""}`);
+          n++;
+        }
+      }
+      out.push("");
+      if (L.aviso) out.push(`_${L.aviso}_`);
+      out.push(`🛒 Veja fotos e faça seu pedido: ${location.origin}`);
+      if (L.whatsapp) out.push(`💬 WhatsApp: ${L.whatsapp}`);
+      return { txt: out.join("\n").trim(), n };
+    }
+    $("#eWa").addEventListener("click", () => {
+      const { txt, n } = textoWhats();
+      if (!n) return toast("Nenhum produto com esses filtros.", true);
+      $("#eWaTxt").value = txt;
+      $("#eWaInfo").textContent = `${n.toLocaleString("pt-BR")} produtos · ${txt.length.toLocaleString("pt-BR")} caracteres.` + (txt.length > 60000 ? " Muito longo para uma mensagem só: selecione menos subcategorias." : txt.length > 4000 ? " Texto longo: o WhatsApp mostra “Ler mais”." : "");
+      $("#eWaBox").hidden = false;
+      $("#eWaBox").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    $("#eWaFechar").addEventListener("click", () => { $("#eWaBox").hidden = true; });
+    $("#eWaCopiar").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("#eWaTxt").value); }
+      catch { $("#eWaTxt").select(); document.execCommand("copy"); }
+      toast("Texto copiado. Cole no WhatsApp.");
     });
     $("#eCats").addEventListener("click", (e) => { const b = e.target.closest("[data-pdf-setor]"); if (b) exportar("setor", b.dataset.pdfSetor); });
     $("#eTodas").addEventListener("click", () => { eFora.clear(); renderExportar(); });
