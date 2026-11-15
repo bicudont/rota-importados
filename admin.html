@@ -3511,6 +3511,8 @@
       renderExportar();
     });
     // Texto para WhatsApp: mesma seleção e mesmos preços escolhidos para o PDF
+    // Riscado que aparece em qualquer lugar (traço combinante U+0336 em cada letra), sem depender da formatação ~ do WhatsApp
+    const riscado = (t) => [...String(t).replace(/\s/g, " ")].map((c) => c + "̶").join("");
     function textoWhats() {
       const L = lojaPDF(), comPreco = comPrecos();
       const prods = visiveis().filter(filtroExp);
@@ -3532,7 +3534,7 @@
           // Nome numa linha, preços na de baixo (A: R$ x | V: R$ y | C: R$ z) e uma linha em branco entre produtos
           // 🔥 = em oferta; preço antigo riscado (~R$ x~) antes do valor da oferta
           out.push(`${emOfertaExp(p) ? "🔥 " : "• "}${p.name}${p.stock === 0 ? " (esgotado)" : ""}`);
-          if (comPreco) out.push(!ps ? "Sob consulta" : ps.map((r) => `${r.rot[0]}: ${r.de ? `~${r.de}~ ` : ""}${r.valor}`).join(" | "), "");
+          if (comPreco) out.push(!ps ? "Sob consulta" : ps.map((r) => `${r.rot[0]}: ${r.de ? riscado(r.de) + " " : ""}${r.valor}`).join(" | "), "");
           n++;
         }
       }
