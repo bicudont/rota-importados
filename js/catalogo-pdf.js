@@ -204,7 +204,7 @@
       indice.push({ nome: g.nome, n: g.produtos.length, pg: plano.length - 1 });
       for (const sb of subs) {
         if (comSubs) {
-          if (y + SUBH + CH > LIM) nova();
+          if (pg.itens.length) nova(); // cada subcategoria começa numa página nova (fica bem tabulado)
           pg.itens.push({ tipo: "sub", nome: sb.nome || "Outros", n: sb.produtos.length, y });
           indice.push({ nome: sb.nome || "Outros", n: sb.produtos.length, pg: plano.length - 1, sub: true });
           y += SUBH;

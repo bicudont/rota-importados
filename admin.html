@@ -972,7 +972,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/js/config.js?v=23"></script>
-  <script src="/js/catalogo-pdf.js?v=9"></script>
+  <script src="/js/catalogo-pdf.js?v=10"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -3407,7 +3407,11 @@
       const aviso = comPrecos() ? `Preços sujeitos a alteração${c && c.date ? " · atualizados em " + dataBR(c.date) : ""}` : "";
       return { nome: D.site.nome || S.nome || "Rota Importados", whatsapp: waTxt, site: location.host, aviso };
     }
-    const paginasDe = (gs) => 1 + gs.reduce((s, g) => s + Math.ceil(g.produtos.length / 9), 0);
+    // Cada subcategoria começa numa página nova, 9 produtos por página
+    const paginasDe = (gs) => 1 + gs.reduce((s, g) => {
+      const n = {}; g.produtos.forEach((p) => { n[p.sub] = (n[p.sub] || 0) + 1; });
+      return s + Object.values(n).reduce((t, q) => t + Math.ceil(q / 9), 0);
+    }, 0);
 
     function renderExportar() {
       const vis = visiveis();
