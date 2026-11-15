@@ -3342,7 +3342,10 @@
       return (esg ? $("#eSemEst").checked : $("#eComEst").checked) && (temFoto ? $("#eComFoto").checked : $("#eSemFoto").checked);
     }
     const filtroExp = (p) => filtroBase(p) && !eSubFora.has(subKey(setorDe(p), subDe(p)));
-    const ordemProd = (a, b) => subDe(a).localeCompare(subDe(b)) || a.name.localeCompare(b.name);
+    // Ordem alfabética (sem diferenciar maiúsculas/acentos; "Modelo 2" antes de "Modelo 10"): subcategoria e depois nome
+    const alfa = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+    const nomeOrd = (t) => String(t || "").trim().replace(/^[^\p{L}\p{N}]+/u, "");
+    const ordemProd = (a, b) => alfa.compare(subDe(a), subDe(b)) || alfa.compare(nomeOrd(a.name), nomeOrd(b.name));
     // Varejo: mesmo US$ com o câmbio de varejo (aba Loja); sem ele, igual ao atacado
     const precoVarejoPix = (v) => {
       const k = cot("pix") ? "pix" : "efetivo", m = D.site.cotacaoVarejo && D.site.cotacaoVarejo[k];
@@ -3423,7 +3426,7 @@
       const prods = vis.filter(filtroExp), base = vis.filter(filtroBase);
       $("#eCats").innerHTML = ordemSetores(vis.map(setorDe)).map((s, i) => {
         const q = prods.filter((p) => setorDe(p) === s).length;
-        const subs = [...new Set(vis.filter((p) => setorDe(p) === s).map(subDe))].sort((a, b) => a.localeCompare(b));
+        const subs = [...new Set(vis.filter((p) => setorDe(p) === s).map(subDe))].sort(alfa.compare);
         const nOff = subs.filter((u) => eSubFora.has(subKey(s, u))).length;
         const aberto = eAbertos.has(s);
         return `<div class="ecat${eFora.has(s) ? " ecat--off" : ""}">
