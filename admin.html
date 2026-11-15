@@ -499,7 +499,7 @@
           <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
           <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
           <button class="btn btn--sm" id="bulkCat">Mudar categoria…</button>
-          <button class="btn btn--sm" id="bulkCusto">💲 Preço de custo…</button>
+          <button class="btn btn--sm" id="bulkPreco">💲 Alterar preço…</button>
           <button class="btn btn--sm btn--danger" id="bulkExcluir">🗑️ Excluir…</button>
           <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
         </div>
@@ -948,18 +948,24 @@
     </form>
   </dialog>
 
-  <dialog id="dlgCusto" aria-labelledby="custoTitle">
-    <form class="dlg" id="custoForm" style="max-width:420px">
-      <div class="dlg__head"><h2 id="custoTitle">Preço de custo em lote</h2><button type="button" class="x" data-fechar-custo aria-label="Fechar">×</button></div>
+  <dialog id="dlgPrecoLote" aria-labelledby="plTitle">
+    <form class="dlg" id="plForm" style="max-width:440px">
+      <div class="dlg__head"><h2 id="plTitle">Alterar preço em lote</h2><button type="button" class="x" data-fechar-pl aria-label="Fechar">×</button></div>
       <div class="dlg__body">
-        <p class="muted small" id="custoMsg" style="margin-top:0"></p>
-        <label class="lbl" for="custoValor">Preço de custo por unidade (R$)</label>
-        <input class="field" id="custoValor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 85,50" />
-        <p class="muted small" style="margin:10px 0 0">É o custo usado nos pedidos e nos Resultados para calcular o lucro. Deixe em branco e clique em Aplicar para apagar o custo desses produtos.</p>
+        <p class="muted small" id="plMsg" style="margin-top:0"></p>
+        <label class="lbl" for="plModo">O que fazer com o Preço (US$)</label>
+        <select class="field" id="plModo">
+          <option value="definir">Definir um preço igual para todos</option>
+          <option value="aumentar">Aumentar em %</option>
+          <option value="diminuir">Diminuir em %</option>
+        </select>
+        <label class="lbl" for="plValor" id="plRot" style="margin-top:12px">Novo preço (US$)</label>
+        <input class="field" id="plValor" inputmode="decimal" autocomplete="off" />
+        <p class="small" id="plPrevia" aria-live="polite" style="margin:10px 0 0;min-height:1.4em"></p>
       </div>
       <div class="dlg__foot">
         <div></div>
-        <div><button type="button" class="btn" data-fechar-custo>Cancelar</button><button type="submit" class="btn btn--primary" id="custoAplicar">Aplicar</button></div>
+        <div><button type="button" class="btn" data-fechar-pl>Cancelar</button><button type="submit" class="btn btn--primary" id="plAplicar">Aplicar</button></div>
       </div>
     </form>
   </dialog>
@@ -2231,32 +2237,58 @@
       movSubs();
       dlgMover.showModal();
     });
-    // Preço de custo dos selecionados (fica no servidor, por SKU, e é sugerido nos pedidos)
-    const dlgCusto = $("#dlgCusto");
-    $$("[data-fechar-custo]").forEach((b) => b.addEventListener("click", () => dlgCusto.close()));
-    $("#bulkCusto").addEventListener("click", () => {
-      const cs = [...sel].map((s) => (D.custos || {})[s]);
-      const comum = cs.every((c) => c === cs[0]) && typeof cs[0] === "number" ? cs[0] : null;
-      const com = cs.filter((c) => typeof c === "number").length;
-      $("#custoMsg").textContent = `${sel.size.toLocaleString("pt-BR")} produto(s) selecionado(s)` +
-        (comum != null ? `, todos com custo ${brl(comum)}.` : com ? ` (${com} já têm custo, com valores diferentes).` : ", sem custo informado.");
-      $("#custoValor").value = comum != null ? String(comum).replace(".", ",") : "";
-      dlgCusto.showModal();
-      $("#custoValor").focus();
+    // Alterar o Preço (US$) dos selecionados: valor fixo ou aumentar/diminuir %
+    const dlgPL = $("#dlgPrecoLote");
+    $$("[data-fechar-pl]").forEach((b) => b.addEventListener("click", () => dlgPL.close()));
+    const plSel = () => PROD.filter((p) => sel.has(p.sku));
+    // Novo preço de cada produto (null = não muda: sem preço no modo %)
+    function plCalc() {
+      const modo = $("#plModo").value, v = numOuNull($("#plValor").value);
+      if (v == null || !Number.isFinite(v) || v < 0 || (modo === "diminuir" && v >= 100)) return null;
+      return plSel().map((p) => {
+        if (modo === "definir") return { p, novo: Math.round(v * 100) / 100 };
+        if (!(p.price > 0)) return { p, novo: null };
+        const f = modo === "aumentar" ? 1 + v / 100 : 1 - v / 100;
+        return { p, novo: Math.round(p.price * f * 100) / 100 };
+      });
+    }
+    function plPrevia() {
+      const modo = $("#plModo").value;
+      $("#plRot").textContent = modo === "definir" ? "Novo preço (US$)" : "Porcentagem (%)";
+      $("#plValor").placeholder = modo === "definir" ? "Ex.: 27,50" : "Ex.: 10";
+      const r = plCalc();
+      if (!r) { $("#plPrevia").textContent = $("#plValor").value.trim() ? (modo === "diminuir" ? "Use uma porcentagem menor que 100." : "Valor inválido.") : ""; return; }
+      const muda = r.filter((x) => x.novo != null), sem = r.length - muda.length;
+      const ex = muda.find((x) => x.p.price > 0) || muda[0];
+      $("#plPrevia").textContent = `${muda.length.toLocaleString("pt-BR")} produto(s) mudam de preço` +
+        (ex ? `. Ex.: ${ex.p.name.slice(0, 40)}: ${ex.p.price > 0 ? usd(ex.p.price) : "sem preço"} → ${usd(ex.novo)}${precoPix(ex.novo) != null ? ` (${brl(precoPix(ex.novo))} no Pix)` : ""}` : "") +
+        (sem ? `. ${sem} sem preço ficam como estão.` : ".");
+    }
+    $("#plModo").addEventListener("change", plPrevia);
+    $("#plValor").addEventListener("input", plPrevia);
+    $("#bulkPreco").addEventListener("click", () => {
+      const ps = plSel(), com = ps.filter((p) => p.price > 0).length;
+      $("#plMsg").textContent = `${ps.length.toLocaleString("pt-BR")} produto(s) selecionado(s)${com < ps.length ? `, ${ps.length - com} sem preço` : ""}. O site converte o US$ pelo câmbio de atacado e de varejo.`;
+      $("#plModo").value = "definir"; $("#plValor").value = "";
+      plPrevia();
+      dlgPL.showModal();
+      $("#plValor").focus();
     });
-    $("#custoForm").addEventListener("submit", async (e) => {
+    $("#plForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const v = numOuNull($("#custoValor").value);
-      if (v != null && !(v >= 0)) return toast("Custo inválido. Ex.: 85,50", true);
-      if (v == null && !confirm(`Apagar o preço de custo de ${sel.size} produto(s)?`)) return;
-      $("#custoAplicar").disabled = true;
+      const r = plCalc();
+      if (!r) return toast("Preencha um valor válido.", true);
+      const itens = r.filter((x) => x.novo != null).map((x) => ({ sku: x.p.sku, campos: { price: x.novo } }));
+      if (!itens.length) return toast("Nenhum produto com preço para alterar.", true);
+      if (!confirm(`Alterar o preço de ${itens.length} produto(s)?`)) return;
+      $("#plAplicar").disabled = true;
       try {
-        const r = await api("PUT", "custos", { skus: [...sel], custo: v });
-        D.custos = r.custos;
-        dlgCusto.close();
-        toast(v == null ? `Custo apagado de ${r.n} produto(s)` : `Custo ${brl(v)} aplicado a ${r.n} produto(s)`);
+        const res = await api("PUT", "completar", { itens });
+        D.ajustes = res.ajustes; sel.clear(); montar(); renderProdutos(); renderGeral();
+        dlgPL.close();
+        toast(`Preço alterado em ${res.salvos} produto(s)`);
       } catch (err) { toast(err.message, true); }
-      $("#custoAplicar").disabled = false;
+      $("#plAplicar").disabled = false;
     });
     $("#movAplicar").addEventListener("click", async () => {
       $("#movAplicar").disabled = true;
