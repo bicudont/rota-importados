@@ -382,7 +382,7 @@
       <button class="tab" data-tab="exportar">📄 <span>Catálogo PDF</span></button>
       <button class="tab" data-tab="loja">⚙️ <span>Loja</span><b class="count" id="nCot" hidden title="Cotação do dólar desatualizada">!</b></button>
       <div class="side__foot">
-        <button class="tab" id="abrirCalc" type="button">🧮 <span class="lbl-long">Calcular %</span></button>
+        <button class="tab" id="abrirCalc" type="button">🧮 <span class="lbl-long">Calculadora</span></button>
         <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
         <button class="tab" id="logout">🚪 <span class="lbl-long">Sair</span></button>
       </div>
@@ -927,7 +927,7 @@
   <!-- Texto do pedido para o WhatsApp -->
   <dialog id="dlgCalc" aria-labelledby="calcTitle">
     <form class="dlg" id="calcForm" style="max-width:440px">
-      <div class="dlg__head"><h2 id="calcTitle">Calcular porcentagem</h2><button type="button" class="x" data-fechar-calc aria-label="Fechar">×</button></div>
+      <div class="dlg__head"><h2 id="calcTitle">Calculadora</h2><button type="button" class="x" data-fechar-calc aria-label="Fechar">×</button></div>
       <div class="dlg__body">
         <p class="muted small" style="margin-top:0">Preencha dois valores e deixe o terceiro em branco.</p>
         <label class="lbl" for="calcOrig">Preço original do produto</label>
@@ -940,6 +940,15 @@
         <label class="lbl" for="calcFinal" style="margin-top:12px">Preço de venda final</label>
         <input class="field" id="calcFinal" inputmode="decimal" autocomplete="off" />
         <p class="small" id="calcRes" aria-live="polite" style="margin:12px 0 0;min-height:1.4em"></p>
+        <hr style="border:0;border-top:1px solid var(--line);margin:16px 0" />
+        <label class="lbl" for="multA">Multiplicar</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="field" id="multA" inputmode="decimal" autocomplete="off" placeholder="20" aria-label="Primeiro número" style="flex:1;min-width:0" />
+          <b>×</b>
+          <input class="field" id="multB" inputmode="decimal" autocomplete="off" placeholder="5,78" aria-label="Segundo número" style="flex:1;min-width:0" />
+          <b>=</b>
+          <output id="multRes" aria-live="polite" style="flex:1;min-width:0;font-weight:700;font-size:1.05rem"></output>
+        </div>
       </div>
       <div class="dlg__foot">
         <div></div>
@@ -2324,7 +2333,14 @@
       const res = (t, erro) => { $("#calcRes").textContent = t; $("#calcRes").style.color = erro ? "var(--err, #c0392b)" : ""; };
       $("#abrirCalc").addEventListener("click", () => { $("#dlgCalc").showModal(); $("#calcOrig").focus(); });
       $("[data-fechar-calc]").addEventListener("click", () => $("#dlgCalc").close());
-      $("#calcLimpar").addEventListener("click", () => { campos.forEach((c) => { $(c).value = ""; }); $("#calcDir").value = "1"; res(""); $("#calcOrig").focus(); });
+      // Multiplicação: resultado na hora (ex.: 20 × 5,78 = 115,6)
+      const multiplicar = () => {
+        const a = numOuNull($("#multA").value), b = numOuNull($("#multB").value);
+        $("#multRes").textContent = a != null && b != null && Number.isFinite(a) && Number.isFinite(b)
+          ? (Math.round(a * b * 1e6) / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 6 }) : "";
+      };
+      ["#multA", "#multB"].forEach((c) => $(c).addEventListener("input", multiplicar));
+      $("#calcLimpar").addEventListener("click", () => { [...campos, "#multA", "#multB"].forEach((c) => { $(c).value = ""; }); $("#multRes").textContent = ""; $("#calcDir").value = "1"; res(""); $("#calcOrig").focus(); });
       $("#calcForm").addEventListener("submit", (e) => {
         e.preventDefault();
         const [o, p, fi] = campos.map((c) => numOuNull($(c).value));
