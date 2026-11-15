@@ -220,12 +220,27 @@
       }
     }
 
-    // 2) Índice (depois da capa): departamentos e subcategorias com a página, 2 colunas, clicável
-    const temIndice = indice.length > 1;
-    const LH = 14, IDX_TOPO = 96, POR_COL = Math.floor((LIM - IDX_TOPO) / LH), POR_IDX = POR_COL * 2;
-    const nIdx = temIndice ? Math.ceil(indice.length / POR_IDX) : 0;
-    const primeira = 2 + nIdx; // página da 1ª página de produtos
-    const total = 1 + nIdx + plano.length;
+    // 2) Capa com departamentos e subcategorias selecionados (clicáveis). Se não couber, continua numa
+    //    página no mesmo estilo da capa. Escolhe colunas (1 a 3) e altura de linha para caber.
+    const temLista = indice.length > 1;
+    const LISTA_Y = 468, LISTA_FIM = 752, CONT_Y = 110;
+    function arranjo(n, altura) {
+      for (let lh = 16; lh >= 10; lh--) for (const cols of [1, 2, 3]) if (Math.ceil(n / cols) * lh <= altura) return { cols, lh, cabem: n };
+      return { cols: 3, lh: 10, cabem: Math.floor(altura / 10) * 3 };
+    }
+    const blocos = []; // [{ itens, cols, lh, y0 }] — o 1º na capa, os demais em páginas de continuação
+    if (temLista) {
+      let resto = indice, y0 = LISTA_Y;
+      while (resto.length) {
+        const a = arranjo(resto.length, LISTA_FIM - y0);
+        blocos.push({ itens: resto.slice(0, a.cabem), cols: a.cols, lh: a.lh, y0 });
+        resto = resto.slice(a.cabem);
+        y0 = CONT_Y;
+      }
+    }
+    const nCont = Math.max(0, blocos.length - 1);
+    const primeira = 2 + nCont; // página da 1ª página de produtos
+    const total = 1 + nCont + plano.length;
     const paginas = [];
     const rodape = (pg, num) => {
       pg.ret(M, H - 34, W - 2 * M, 0.75, COR.line);
@@ -237,6 +252,19 @@
       pg.txt(M, 25, 12, true, COR.white, L.nome || "Catálogo");
       pg.direita(W - M, 25, 9, false, "#CFD9EC", quebrar(opts.titulo, 9, false, 260, 1)[0]);
     };
+    function lista(pg, b, titulo) {
+      const gap = 14, larg = b.cols === 1 ? 360 : b.cols === 2 ? 254 : (W - 2 * M - 2 * gap) / 3;
+      const x0 = (W - larg * b.cols - (b.cols - 1) * gap) / 2, porCol = Math.ceil(b.itens.length / b.cols);
+      const fs = Math.min(9.5, b.lh * 0.64);
+      pg.txt(x0, b.y0 - 23, 11, true, COR.orange, titulo);
+      b.itens.forEach((it, i) => {
+        const col = Math.floor(i / porCol), x = x0 + col * (larg + gap), y = b.y0 + (i % porCol) * b.lh;
+        const xi = it.sub ? x + 10 : x, pag = primeira + it.pg;
+        pg.txt(xi, y, it.sub ? fs - 0.5 : fs, !it.sub, it.sub ? "#CFD9EC" : COR.white, quebrar(`${it.nome} (${it.n})`, it.sub ? fs - 0.5 : fs, !it.sub, larg - (xi - x) - 26, 1)[0]);
+        pg.direita(x + larg, y, it.sub ? fs - 0.5 : fs, !it.sub, it.sub ? "#CFD9EC" : COR.white, String(pag));
+        pg.link(x, y - b.lh + 3, larg, b.lh, pag);
+      });
+    }
 
     // Capa
     const capa = new Pagina();
@@ -247,43 +275,20 @@
     capa.centro(340, 30, true, COR.white, "Catálogo de produtos");
     capa.centro(370, 15, false, COR.sky, opts.titulo);
     capa.centro(396, 10, false, "#CFD9EC", `Atualizado em ${data} · ${todos.length.toLocaleString("pt-BR")} produtos`);
-    if (temIndice) {
-      // Departamentos na capa (clicáveis); o índice completo, com subcategorias, vem na página seguinte
-      const deps = indice.filter((it) => !it.sub);
-      const porCol = deps.length > 16 ? Math.ceil(deps.length / 2) : deps.length, cols = deps.length > 16 ? 2 : 1;
-      const larg = cols === 2 ? 240 : 360, x0 = (W - larg * cols - (cols - 1) * 20) / 2;
-      capa.txt(x0, 445, 11, true, COR.orange, "DEPARTAMENTOS");
-      capa.direita(x0 + larg * cols + (cols - 1) * 20, 445, 8.5, false, "#CFD9EC", `Índice completo na página 2`);
-      deps.slice(0, 40).forEach((it, i) => {
-        const col = Math.floor(i / porCol), x = x0 + col * (larg + 20), y = 468 + (i % porCol) * 16;
-        capa.txt(x, y, 9.5, false, COR.white, quebrar(`${it.nome} (${it.n})`, 9.5, false, larg - 40, 1)[0]);
-        capa.direita(x + larg, y, 9.5, true, COR.white, String(primeira + it.pg));
-        capa.link(x, y - 11, larg, 15, primeira + it.pg);
-      });
-    }
+    if (blocos.length) lista(capa, blocos[0], "DEPARTAMENTOS");
     if (L.whatsapp) {
       capa.centro(770, 10, false, "#CFD9EC", "Pedidos e informações pelo WhatsApp");
       capa.centro(790, 15, true, COR.orange, L.whatsapp);
     }
     if (L.site) capa.centro(808, 9, false, "#CFD9EC", L.site);
     paginas.push(capa);
-
-    for (let k = 0; k < nIdx; k++) {
+    blocos.slice(1).forEach((b) => {
       const pg = new Pagina();
-      cabecalho(pg);
-      pg.txt(M, 70, 15, true, COR.navy, k ? "Índice (continuação)" : "Índice");
-      const larg = (W - 2 * M - 24) / 2;
-      indice.slice(k * POR_IDX, (k + 1) * POR_IDX).forEach((it, i) => {
-        const col = Math.floor(i / POR_COL), x = M + col * (larg + 24), y = IDX_TOPO + (i % POR_COL) * LH;
-        const pag = primeira + it.pg, xi = it.sub ? x + 12 : x;
-        if (!it.sub) pg.ret(x, y - 10, larg, LH - 1, "#EEF4FF");
-        pg.txt(xi + 3, y, it.sub ? 8.5 : 9, !it.sub, it.sub ? COR.text : COR.navy, quebrar(`${it.nome} (${it.n})`, it.sub ? 8.5 : 9, !it.sub, larg - (xi - x) - 40, 1)[0]);
-        pg.direita(x + larg - 3, y, it.sub ? 8.5 : 9, !it.sub, it.sub ? COR.muted : COR.navy, String(pag));
-        pg.link(x, y - 10, larg, LH - 1, pag);
-      });
-      rodape(pg, 2 + k);
+      pg.ret(0, 0, W, H, COR.navy);
+      pg.ret(0, H - 8, W, 8, COR.orange);
+      lista(pg, b, "DEPARTAMENTOS (continuação)");
       paginas.push(pg);
-    }
+    });
 
     // 3) Páginas de produtos
     plano.forEach((pl, idx) => {
