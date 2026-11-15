@@ -246,8 +246,8 @@
           const im = p.foto && nomeImg.get(p.foto);
           if (im) pg.img(im, ix, iy, s, s);
           else { pg.ret(ix, iy, s, s, COR.bg); pg.centro(iy + s / 2 + 14, 40, true, "#9DB5DD", limpar(p.nome).charAt(0).toUpperCase() || "?", ix, s); }
-          if (p.esgotado || p.ultimas) {
-            const t = p.esgotado ? "ESGOTADO" : "ÚLTIMAS UNIDADES";
+          if (p.esgotado || p.ultimas || p.oferta) {
+            const t = p.esgotado ? "ESGOTADO" : p.ultimas ? "ÚLTIMAS UNIDADES" : "OFERTA";
             const bw = largura(t, 6.5, true) + 10;
             pg.ret(x + 6, y + 6, bw, 13, p.esgotado ? COR.err : COR.orange);
             pg.txt(x + 11, y + 15.5, 6.5, true, p.esgotado ? COR.white : COR.navy, t);

@@ -972,7 +972,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/js/config.js?v=23"></script>
-  <script src="/js/catalogo-pdf.js?v=6"></script>
+  <script src="/js/catalogo-pdf.js?v=7"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -3359,14 +3359,19 @@
     const ePrecos = () => ({ atac: $("#ePrAtac").checked, vare: $("#ePrVar").checked, cart: $("#ePrCart").checked });
     const comPrecos = () => { const o = ePrecos(); return o.atac || o.vare || o.cart; };
     // Lista de preços do produto na ordem escolhida: [{ rot, valor, nota }]; null = sem cotação (sob consulta)
+    // Em oferta ativa, mesma regra do site: oferta em US$ é convertida por cada câmbio; em R$ é fixa (atacado = varejo)
+    const emOfertaExp = (p) => estadoOferta(p) === "ativa";
     function precosDe(p) {
-      const o = ePrecos(), pix = precoPix(p.price);
-      if (pix == null) return null;
-      const v = precoVarejoPix(p.price), { n } = cartaoCfg(), t = precoCartao(v);
+      const o = ePrecos(), pixN = precoPix(p.price);
+      if (pixN == null) return null;
+      const vN = precoVarejoPix(p.price), of = emOfertaExp(p) ? p.promo : null;
+      const pix = !of ? pixN : of.currency === "BRL" ? of.price : precoPix(of.price);
+      const v = !of ? vN : of.currency === "BRL" ? of.price : precoVarejoPix(of.price);
+      const { n } = cartaoCfg(), t = precoCartao(v), tN = precoCartao(vN);
       const out = [];
-      if (o.atac) out.push({ rot: "Atacado", valor: brl(pix), nota: "no Pix" });
-      if (o.vare) out.push({ rot: "Varejo", valor: brl(v), nota: "no Pix" });
-      if (o.cart) out.push({ rot: "Cartão", valor: brl(t), nota: n > 1 ? `no cartão (${n}x de ${brl(Math.round((t / n) * 100) / 100)})` : "no cartão" });
+      if (o.atac) out.push({ rot: "Atacado", valor: brl(pix), de: of ? brl(pixN) : "", nota: "no Pix" });
+      if (o.vare) out.push({ rot: "Varejo", valor: brl(v), de: of ? brl(vN) : "", nota: "no Pix" });
+      if (o.cart) out.push({ rot: "Cartão", valor: brl(t), de: of ? brl(tN) : "", nota: n > 1 ? `no cartão (${n}x de ${brl(Math.round((t / n) * 100) / 100)})` : "no cartão" });
       return out;
     }
     function itemPDF(p) {
@@ -3377,13 +3382,13 @@
         else {
           const [a, ...resto] = ps, varios = ps.length > 1;
           preco = a.valor;
-          precoNota = varios ? `${a.rot.toLowerCase()} ${a.nota}` : a.nota;
+          precoNota = (varios ? `${a.rot.toLowerCase()} ${a.nota}` : a.nota) + (a.de ? ` (de ${a.de})` : "");
           precoSub = resto.map((r) => `${r.rot}: ${r.valor} ${r.nota}`).join(" · ");
         }
       }
       return {
         nome: p.name, marca: p.brand || "", sku: p.sku, preco, precoNota, precoSub,
-        esgotado: p.stock === 0, ultimas: p.stock > 0 && p.stock <= 3,
+        oferta: comPrecos() && emOfertaExp(p), esgotado: p.stock === 0, ultimas: p.stock > 0 && p.stock <= 3,
         foto: p._fotos.length ? fotoURL(p._fotos[0]) : null,
         url: location.origin + "/#/produto/" + encodeURIComponent(p.sku),
       };
@@ -3525,8 +3530,9 @@
           if (subDe(p) !== sub) { sub = subDe(p); if (sub !== "Sem subcategoria") out.push(`_${sub}_`); }
           const ps = comPreco ? precosDe(p) : null;
           // Nome numa linha, preços na de baixo (A: R$ x | V: R$ y | C: R$ z) e uma linha em branco entre produtos
-          out.push(`• ${p.name}${p.stock === 0 ? " (esgotado)" : ""}`);
-          if (comPreco) out.push(!ps ? "Sob consulta" : ps.map((r) => `${r.rot[0]}: ${r.valor}`).join(" | "), "");
+          // 🔥 = em oferta; preço antigo riscado (~R$ x~) antes do valor da oferta
+          out.push(`${emOfertaExp(p) ? "🔥 " : "• "}${p.name}${p.stock === 0 ? " (esgotado)" : ""}`);
+          if (comPreco) out.push(!ps ? "Sob consulta" : ps.map((r) => `${r.rot[0]}: ${r.de ? `~${r.de}~ ` : ""}${r.valor}`).join(" | "), "");
           n++;
         }
       }
