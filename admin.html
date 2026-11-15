@@ -2325,7 +2325,7 @@
     const dlg = $("#dlg");
     const numOuNull = (v) => { v = String(v).trim().replace(/\s/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); return Number(v); };
 
-    /* ---------- Calculadora de porcentagem (botão "Calcular %" no menu) ---------- */
+    /* ---------- Calculadora: porcentagem e multiplicação (botão "Calculadora" no menu) ---------- */
     {
       const n2 = (v) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const pctTxt = (v) => v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
