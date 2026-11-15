@@ -387,6 +387,7 @@ function adminApi(req, res, rota) {
   if (r === "POST produto") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, criarProduto(d)));
   if (r === "DELETE produto") return lerCorpoJSON(req, res, 4096, (d) => json(res, 200, removerAjuste(d.sku)));
   if (r === "PUT produtos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, alterarVarios(d)));
+  if (r === "PUT custos") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, custosEmLote(d)));
   if (r === "PUT completar") return lerCorpoJSON(req, res, 20e6, (d) => json(res, 200, salvarVarios(d)));
   if (r === "POST excluir") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, excluirProdutos(d)));
   if (r === "POST restaurar") return lerCorpoJSON(req, res, 1e6, (d) => json(res, 200, restaurarProdutos(d)));
@@ -793,6 +794,18 @@ function restaurarProdutos(d) {
 }
 
 // Ação em lote (por enquanto: mostrar/ocultar)
+// Custo (R$, o que a loja paga por unidade) de vários produtos de uma vez; custo vazio/null apaga
+function custosEmLote(d) {
+  const skus = Array.isArray(d.skus) ? d.skus.map((s) => String(s).trim()).filter(Boolean) : [];
+  if (!skus.length) throw new Error("Nenhum produto selecionado.");
+  const v = d.custo === "" || d.custo == null ? null : Number(d.custo);
+  if (v != null && !(v >= 0 && v < 1e7)) throw new Error("Custo inválido.");
+  const custos = lerJSON(F.custos, {});
+  for (const s of skus) { if (v == null) delete custos[s]; else custos[s] = Math.round(v * 100) / 100; }
+  gravarJSON(F.custos, custos);
+  return { ok: true, custos, n: skus.length };
+}
+
 function alterarVarios(d) {
   if (!Array.isArray(d.skus) || !d.skus.length) throw new Error("Nenhum produto selecionado.");
   // Ação: mostrar/ocultar (active) ou mudar categoria/subcategoria (campos.sector / campos.subsector)

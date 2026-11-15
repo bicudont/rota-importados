@@ -499,6 +499,7 @@
           <button class="btn btn--sm" data-bulk="true">Mostrar no site</button>
           <button class="btn btn--sm" data-bulk="false">Ocultar do site</button>
           <button class="btn btn--sm" id="bulkCat">Mudar categoria…</button>
+          <button class="btn btn--sm" id="bulkCusto">💲 Preço de custo…</button>
           <button class="btn btn--sm btn--danger" id="bulkExcluir">🗑️ Excluir…</button>
           <button class="btn btn--sm" id="bulkClear">Limpar seleção</button>
         </div>
@@ -943,6 +944,22 @@
       <div class="dlg__foot">
         <div></div>
         <div><button type="button" class="btn" id="calcLimpar">Limpar</button><button type="submit" class="btn btn--primary">Calcular</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgCusto" aria-labelledby="custoTitle">
+    <form class="dlg" id="custoForm" style="max-width:420px">
+      <div class="dlg__head"><h2 id="custoTitle">Preço de custo em lote</h2><button type="button" class="x" data-fechar-custo aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p class="muted small" id="custoMsg" style="margin-top:0"></p>
+        <label class="lbl" for="custoValor">Preço de custo por unidade (R$)</label>
+        <input class="field" id="custoValor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 85,50" />
+        <p class="muted small" style="margin:10px 0 0">É o custo usado nos pedidos e nos Resultados para calcular o lucro. Deixe em branco e clique em Aplicar para apagar o custo desses produtos.</p>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" data-fechar-custo>Cancelar</button><button type="submit" class="btn btn--primary" id="custoAplicar">Aplicar</button></div>
       </div>
     </form>
   </dialog>
@@ -2213,6 +2230,33 @@
       $("#movCat").innerHTML = setoresUsados().sort((a, b) => a.localeCompare(b)).map((s) => `<option${s === comum ? " selected" : ""}>${esc(s)}</option>`).join("");
       movSubs();
       dlgMover.showModal();
+    });
+    // Preço de custo dos selecionados (fica no servidor, por SKU, e é sugerido nos pedidos)
+    const dlgCusto = $("#dlgCusto");
+    $$("[data-fechar-custo]").forEach((b) => b.addEventListener("click", () => dlgCusto.close()));
+    $("#bulkCusto").addEventListener("click", () => {
+      const cs = [...sel].map((s) => (D.custos || {})[s]);
+      const comum = cs.every((c) => c === cs[0]) && typeof cs[0] === "number" ? cs[0] : null;
+      const com = cs.filter((c) => typeof c === "number").length;
+      $("#custoMsg").textContent = `${sel.size.toLocaleString("pt-BR")} produto(s) selecionado(s)` +
+        (comum != null ? `, todos com custo ${brl(comum)}.` : com ? ` (${com} já têm custo, com valores diferentes).` : ", sem custo informado.");
+      $("#custoValor").value = comum != null ? String(comum).replace(".", ",") : "";
+      dlgCusto.showModal();
+      $("#custoValor").focus();
+    });
+    $("#custoForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const v = numOuNull($("#custoValor").value);
+      if (v != null && !(v >= 0)) return toast("Custo inválido. Ex.: 85,50", true);
+      if (v == null && !confirm(`Apagar o preço de custo de ${sel.size} produto(s)?`)) return;
+      $("#custoAplicar").disabled = true;
+      try {
+        const r = await api("PUT", "custos", { skus: [...sel], custo: v });
+        D.custos = r.custos;
+        dlgCusto.close();
+        toast(v == null ? `Custo apagado de ${r.n} produto(s)` : `Custo ${brl(v)} aplicado a ${r.n} produto(s)`);
+      } catch (err) { toast(err.message, true); }
+      $("#custoAplicar").disabled = false;
     });
     $("#movAplicar").addEventListener("click", async () => {
       $("#movAplicar").disabled = true;
