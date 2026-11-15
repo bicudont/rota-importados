@@ -377,7 +377,7 @@
   <div class="app" id="app" hidden>
     <nav class="side" aria-label="Seções do painel">
       <a class="side__logo" href="/" target="_blank" rel="noopener" title="Abrir o site"><img src="/img/logo.png" alt="" width="264" height="220" /><span>Painel</span></a>
-      <button class="tab" data-tab="geral">📊 <span>Visão geral</span></button>
+      <button class="tab" data-tab="geral">📊 <span>Visão geral</span><b class="count" id="nOfVence" hidden title="Ofertas perto do fim"></b></button>
       <button class="tab" data-tab="pedidos">🧾 <span>Pedidos</span><b class="count" id="nNovos" hidden></b></button>
       <button class="tab" data-tab="resultados">📈 <span>Resultados</span></button>
       <button class="tab" data-tab="produtos">📦 <span>Produtos</span></button>
@@ -400,6 +400,15 @@
         <div class="msg warn cot-lembrete" id="cotLembrete" hidden style="margin-bottom:12px">
           <span id="cotLembreteTxt"></span>
           <button class="btn btn--sm btn--primary" data-ir="loja:cotacao">Atualizar cotação</button>
+        </div>
+        <div class="msg warn" id="ofAviso" hidden style="margin-bottom:12px">
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+            <b id="ofAvisoTit"></b>
+            <label class="small">Avisar com
+              <select id="ofAvisoDias" class="field" style="width:auto;display:inline-block;padding:2px 6px;margin:0 4px"><option>1</option><option>2</option><option selected>3</option><option>5</option><option>7</option></select>
+              dia(s) de antecedência</label>
+          </div>
+          <ul id="ofAvisoLista" style="margin:8px 0 0;padding-left:18px"></ul>
         </div>
         <div class="msg warn" id="dadosRisco" hidden style="margin-bottom:12px">⚠️ Os dados da loja (fotos, edições, pedidos e banners) estão dentro da pasta do app e podem ser apagados no próximo deploy. Defina a variável <code>DATA_DIR</code> na Hostinger apontando para uma pasta fora do app.</div>
         <div class="msg warn" id="semLoja" hidden>Ainda não há produtos no site. Crie um produto ou vá em <b>Importar</b> e envie um backup.</div>
@@ -1209,6 +1218,26 @@
     $$(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => abrirAba(b.dataset.tab)));
 
     /* ---------- Visão geral ---------- */
+    // Ofertas ativas que terminam nos próximos dias (antecedência escolhida no aviso, lembrada neste navegador)
+    function diasAvisoOferta() { try { return Number(localStorage.getItem("rotaAvisoOfertaDias")) || 3; } catch { return 3; } }
+    function renderAvisoOfertas() {
+      const dias = diasAvisoOferta(), agora = Date.now(), lim = agora + dias * 864e5;
+      const lista = PROD.filter((p) => estadoOferta(p) === "ativa" && Date.parse(p.promo.end) <= lim)
+        .sort((a, b) => Date.parse(a.promo.end) - Date.parse(b.promo.end));
+      $("#ofAvisoDias").value = String(dias);
+      $("#nOfVence").hidden = !lista.length;
+      $("#nOfVence").textContent = lista.length;
+      $("#ofAviso").hidden = !lista.length;
+      if (!lista.length) return;
+      const falta = (t) => { const h = Math.max(0, Math.round((t - agora) / 36e5)); return h < 24 ? `em ${h || "menos de 1"} h` : `em ${Math.round(h / 24)} dia(s)`; };
+      $("#ofAvisoTit").textContent = `⏰ ${lista.length} oferta(s) terminam nos próximos ${dias} dia(s)`;
+      $("#ofAvisoLista").innerHTML = lista.slice(0, 30).map((p) => { const t = Date.parse(p.promo.end);
+        return `<li><a href="#" data-of-sku="${esc(p.sku)}">${esc(p.name)}</a> <span class="muted small">— termina ${falta(t)} (${dataHoraBR(p.promo.end)})</span></li>`; }).join("") +
+        (lista.length > 30 ? `<li class="muted small">e mais ${lista.length - 30}… (Produtos → filtro “Em oferta agora”)</li>` : "");
+    }
+    $("#ofAvisoDias").addEventListener("change", (e) => { try { localStorage.setItem("rotaAvisoOfertaDias", e.target.value); } catch {} renderAvisoOfertas(); });
+    $("#ofAvisoLista").addEventListener("click", (e) => { const a = e.target.closest("[data-of-sku]"); if (a) { e.preventDefault(); abrirEditor(a.dataset.ofSku); } });
+
     function renderGeral() {
       const vis = PROD.filter((p) => p.active !== false);
       const n = {
@@ -1237,6 +1266,7 @@
       $("#optEditado").hidden = !!(D.loja && D.loja.independente);
       $("#dadosRisco").hidden = !D.dados || D.dados.segura;
       renderLembreteCotacao();
+      renderAvisoOfertas();
       const pix = cot("pix"), efe = cot("efetivo");
       const linha = (a, b) => `<div><span class="muted">${a}</span><b>${b}</b></div>`;
       const cotTxt = (c) => (c ? `${brl(c.rate)}${c.date ? " · " + dataBR(c.date) : ""}${c.manual ? " (manual)" : ""}` : "—");
