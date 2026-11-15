@@ -382,6 +382,7 @@
       <button class="tab" data-tab="exportar">📄 <span>Catálogo PDF</span></button>
       <button class="tab" data-tab="loja">⚙️ <span>Loja</span><b class="count" id="nCot" hidden title="Cotação do dólar desatualizada">!</b></button>
       <div class="side__foot">
+        <button class="tab" id="abrirCalc" type="button">🧮 <span class="lbl-long">Calcular %</span></button>
         <a class="tab" href="/" target="_blank" rel="noopener">🌐 <span class="lbl-long">Ver o site</span></a>
         <button class="tab" id="logout">🚪 <span class="lbl-long">Sair</span></button>
       </div>
@@ -923,6 +924,29 @@
     </form>
   </dialog>
   <!-- Texto do pedido para o WhatsApp -->
+  <dialog id="dlgCalc" aria-labelledby="calcTitle">
+    <form class="dlg" id="calcForm" style="max-width:440px">
+      <div class="dlg__head"><h2 id="calcTitle">Calcular porcentagem</h2><button type="button" class="x" data-fechar-calc aria-label="Fechar">×</button></div>
+      <div class="dlg__body">
+        <p class="muted small" style="margin-top:0">Preencha dois valores e deixe o terceiro em branco.</p>
+        <label class="lbl" for="calcOrig">Preço original do produto</label>
+        <input class="field" id="calcOrig" inputmode="decimal" autocomplete="off" />
+        <label class="lbl" for="calcPct" style="margin-top:12px">O preço foi</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="field" id="calcDir" style="flex:1"><option value="1">aumentado</option><option value="-1">diminuído</option></select>
+          <input class="field" id="calcPct" inputmode="decimal" autocomplete="off" style="width:110px" aria-label="Porcentagem" /><b>%</b>
+        </div>
+        <label class="lbl" for="calcFinal" style="margin-top:12px">Preço de venda final</label>
+        <input class="field" id="calcFinal" inputmode="decimal" autocomplete="off" />
+        <p class="small" id="calcRes" aria-live="polite" style="margin:12px 0 0;min-height:1.4em"></p>
+      </div>
+      <div class="dlg__foot">
+        <div></div>
+        <div><button type="button" class="btn" id="calcLimpar">Limpar</button><button type="submit" class="btn btn--primary">Calcular</button></div>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlgTxt" aria-labelledby="txtTitle">
     <div class="dlg">
       <div class="dlg__head"><h2 id="txtTitle">Texto para o WhatsApp</h2><button type="button" class="x" data-fechar-txt aria-label="Fechar">×</button></div>
@@ -2215,6 +2239,43 @@
     let ed = null; // { sku, fotos, novo }
     const dlg = $("#dlg");
     const numOuNull = (v) => { v = String(v).trim().replace(/\s/g, ""); if (!v) return null; if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); return Number(v); };
+
+    /* ---------- Calculadora de porcentagem (botão "Calcular %" no menu) ---------- */
+    {
+      const n2 = (v) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const pctTxt = (v) => v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const campos = ["#calcOrig", "#calcPct", "#calcFinal"];
+      const res = (t, erro) => { $("#calcRes").textContent = t; $("#calcRes").style.color = erro ? "var(--err, #c0392b)" : ""; };
+      $("#abrirCalc").addEventListener("click", () => { $("#dlgCalc").showModal(); $("#calcOrig").focus(); });
+      $("[data-fechar-calc]").addEventListener("click", () => $("#dlgCalc").close());
+      $("#calcLimpar").addEventListener("click", () => { campos.forEach((c) => { $(c).value = ""; }); $("#calcDir").value = "1"; res(""); $("#calcOrig").focus(); });
+      $("#calcForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const [o, p, fi] = campos.map((c) => numOuNull($(c).value));
+        if ([o, p, fi].some((v) => v != null && !Number.isFinite(v))) return res("Valor inválido. Use números, ex.: 150,50", true);
+        const cheios = [o, p, fi].filter((v) => v != null).length;
+        if (cheios < 2) return res("Preencha dois valores.", true);
+        const dir = Number($("#calcDir").value);
+        if (o != null && p != null) {
+          // Com os três preenchidos, recalcula o preço final
+          const f = o * (1 + (dir * p) / 100);
+          $("#calcFinal").value = n2(f);
+          res(`${dir > 0 ? "Aumento" : "Desconto"} de ${n2(Math.abs(f - o))} sobre ${n2(o)}.`);
+        } else if (o != null && fi != null) {
+          if (!(o > 0)) return res("O preço original precisa ser maior que zero.", true);
+          const pct = (fi / o - 1) * 100;
+          $("#calcDir").value = pct < 0 ? "-1" : "1";
+          $("#calcPct").value = pctTxt(Math.abs(pct));
+          res(`O preço foi ${pct < 0 ? "diminuído" : "aumentado"} em ${pctTxt(Math.abs(pct))}% (diferença de ${n2(Math.abs(fi - o))}).`);
+        } else {
+          const fator = 1 + (dir * p) / 100;
+          if (!(fator > 0)) return res("Porcentagem inválida para desconto (precisa ser menor que 100%).", true);
+          const orig = fi / fator;
+          $("#calcOrig").value = n2(orig);
+          res(`Preço original: ${n2(orig)} (diferença de ${n2(Math.abs(fi - orig))}).`);
+        }
+      });
+    }
     const NOMES = { name: "nome", description: "descrição", brand: "marca", sector: "departamento", subsector: "subcategoria", price: "preço", stock: "estoque", active: "visibilidade", tags: "etiquetas", photos: "fotos", promo: "oferta" };
 
     // Oferta com prazo: o site usa o preço da oferta só entre o início e o fim
