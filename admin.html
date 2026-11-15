@@ -3511,8 +3511,8 @@
       renderExportar();
     });
     // Texto para WhatsApp: mesma seleção e mesmos preços escolhidos para o PDF
-    // Riscado que aparece em qualquer lugar (traço combinante U+0336 em cada letra), sem depender da formatação ~ do WhatsApp
-    const riscado = (t) => [...String(t).replace(/\s/g, " ")].map((c) => c + "̶").join("");
+    // Riscado do WhatsApp: ~texto~ (no painel aparecem os ~; no WhatsApp vira riscado)
+    const riscado = (t) => `~${String(t).trim()}~`;
     function textoWhats() {
       const L = lojaPDF(), comPreco = comPrecos();
       const prods = visiveis().filter(filtroExp);
