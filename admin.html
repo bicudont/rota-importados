@@ -299,6 +299,11 @@
     .esub input { width: 16px; height: 16px; accent-color: var(--royal); flex: none; }
     .esub span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .esub--off { color: var(--muted); }
+    .emarcas { max-height: 260px; overflow: auto; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+    .emarca { display: flex; gap: 8px; align-items: center; font-size: .88rem; cursor: pointer; padding: 2px 0; }
+    .emarca input { width: 16px; height: 16px; accent-color: var(--royal); flex: none; }
+    .emarca span:first-of-type { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .emarca--off { color: var(--muted); }
     .esubs__acoes { grid-column: 1 / -1; display: flex; gap: 6px; }
     .exp-foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; position: sticky; bottom: 12px; box-shadow: 0 10px 30px -12px rgba(0,27,80,.25); }
     .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 6px; width: min(320px, 70vw); }
@@ -703,6 +708,12 @@
               <label class="switch"><input type="checkbox" id="ePrAtac" checked /> Preço de atacado (Pix)</label><br />
               <label class="switch" style="margin-top:8px"><input type="checkbox" id="ePrVar" /> Preço de varejo (Pix)</label><br />
               <label class="switch" style="margin-top:8px"><input type="checkbox" id="ePrCart" /> Preço no cartão (sobre o varejo)</label>
+            </div>
+            <div class="card">
+              <div class="head" style="margin-bottom:8px"><h2>Marcas <span class="muted small" id="eMarcasN"></span></h2><div style="display:flex;gap:6px"><button class="btn btn--sm" id="eMarcasTodas">Marcar todas</button><button class="btn btn--sm" id="eMarcasNenhuma">Desmarcar todas</button></div></div>
+              <input class="field" id="eMarcaBusca" type="search" placeholder="Buscar marca…" autocomplete="off" style="margin-bottom:8px" />
+              <div id="eMarcas" class="emarcas"></div>
+              <p class="muted small" style="margin:6px 0 0">“Marcar/Desmarcar todas” vale para as marcas da busca.</p>
             </div>
           </div>
           <div class="card">
@@ -3490,9 +3501,30 @@
     const setorDe = (p) => p.sector || "Outros";
     const visiveis = () => PROD.filter((p) => p.active !== false);
     const slugA = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    function filtroBase(p) {
+    // Marcas desmarcadas no catálogo (produto sem marca = "Sem marca")
+    const eMarcaFora = new Set();
+    const marcaDe = (p) => String(p.brand || "").trim() || "Sem marca";
+    function filtroEstFoto(p) {
       const esg = p.stock === 0, temFoto = p._fotos.length > 0;
       return (esg ? $("#eSemEst").checked : $("#eComEst").checked) && (temFoto ? $("#eComFoto").checked : $("#eSemFoto").checked);
+    }
+    const filtroBase = (p) => filtroEstFoto(p) && !eMarcaFora.has(marcaDe(p));
+    function renderMarcas() {
+      const box = $("#eMarcas"), topo = box.scrollTop;
+      const q = norm($("#eMarcaBusca").value.trim());
+      const cont = new Map();
+      // Contagem respeitando estoque/foto e departamentos/subcategorias marcados
+      visiveis().filter((p) => filtroEstFoto(p) && !eFora.has(setorDe(p)) && !eSubFora.has(subKey(setorDe(p), subDe(p))))
+        .forEach((p) => cont.set(marcaDe(p), (cont.get(marcaDe(p)) || 0) + 1));
+      const todas = [...cont.keys()].sort(alfa.compare);
+      const vis = todas.filter((m) => !q || norm(m).includes(q));
+      const on = todas.filter((m) => !eMarcaFora.has(m)).length;
+      $("#eMarcasN").textContent = `(${on} de ${todas.length})`;
+      box.innerHTML = vis.map((m) => { const off = eMarcaFora.has(m);
+        return `<label class="emarca${off ? " emarca--off" : ""}"><input type="checkbox" data-marca="${esc(m)}"${off ? "" : " checked"} /><span>${esc(m)}</span><span class="muted small">${cont.get(m)}</span></label>`; }).join("")
+        || `<p class="muted small" style="margin:4px 0">Nenhuma marca encontrada.</p>`;
+      box.scrollTop = topo;
+      return vis;
     }
     const filtroExp = (p) => filtroBase(p) && !eSubFora.has(subKey(setorDe(p), subDe(p)));
     // Ordem alfabética (sem diferenciar maiúsculas/acentos; "Modelo 2" antes de "Modelo 10"): subcategoria e depois nome
@@ -3570,6 +3602,7 @@
     }, 0);
 
     function renderExportar() {
+      renderMarcas();
       const vis = visiveis();
       const n = (fn) => `(${vis.filter(fn).length.toLocaleString("pt-BR")})`;
       $("#eComEstN").textContent = n((p) => p.stock !== 0);
@@ -3721,6 +3754,20 @@
     });
     $("#eCats").addEventListener("click", (e) => { const b = e.target.closest("[data-pdf-setor]"); if (b) exportar("setor", b.dataset.pdfSetor); });
     $("#eTodas").addEventListener("click", () => { eFora.clear(); renderExportar(); });
+    $("#eMarcas").addEventListener("change", (e) => {
+      const m = e.target.dataset.marca;
+      if (m == null) return;
+      e.target.checked ? eMarcaFora.delete(m) : eMarcaFora.add(m);
+      renderExportar();
+    });
+    $("#eMarcaBusca").addEventListener("input", renderMarcas);
+    $("#eMarcasTodas").addEventListener("click", () => { renderMarcas().forEach((m) => eMarcaFora.delete(m)); renderExportar(); });
+    $("#eMarcasNenhuma").addEventListener("click", () => {
+      const vis = renderMarcas();
+      // Sem busca: desmarca todas as marcas (inclusive de departamentos desmarcados), para ir marcando só as desejadas
+      (norm($("#eMarcaBusca").value.trim()) ? vis : [...new Set(visiveis().map(marcaDe))]).forEach((m) => eMarcaFora.add(m));
+      renderExportar();
+    });
     $("#eNenhuma").addEventListener("click", () => { visiveis().forEach((p) => eFora.add(setorDe(p))); renderExportar(); });
     $("#eCompleto").addEventListener("click", () => exportar("completo"));
     $("#ePorCat").addEventListener("click", () => exportar("porSetor"));
