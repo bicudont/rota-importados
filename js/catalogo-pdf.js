@@ -135,13 +135,14 @@
     for (const [nome, im] of imagens) {
       idImg.set(nome, novo({ dict: `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>`, bytes: im.bytes }));
     }
-    const kids = [];
-    for (const p of paginas) {
+    const kids = paginas.map(() => novo()); // reservados antes, para os links internos (índice) apontarem para a página
+    for (const [i, p] of paginas.entries()) {
       const c = await comprimir(bytesDe(p.ops.join("\n")));
       const idC = novo({ dict: `<< /Length ${c.bytes.length}${c.flate ? " /Filter /FlateDecode" : ""} >>`, bytes: c.bytes });
-      const annots = p.links.map((l) => novo(`<< /Type /Annot /Subtype /Link /Rect [${l.slice(0, 4).map(f).join(" ")}] /Border [0 0 0] /A << /S /URI /URI (${enc(encodeURI(l[4]))}) >> >>`));
+      const annots = p.links.map((l) => novo(`<< /Type /Annot /Subtype /Link /Rect [${l.slice(0, 4).map(f).join(" ")}] /Border [0 0 0] ${
+        typeof l[4] === "number" ? `/Dest [${kids[l[4] - 1]} 0 R /XYZ null null null]` : `/A << /S /URI /URI (${enc(encodeURI(l[4]))}) >>`} >>`));
       const xo = [...p.imgs].map((n) => `/${n} ${idImg.get(n)} 0 R`).join(" ");
-      kids.push(novo(`<< /Type /Page /Parent ${idPages} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${idF1} 0 R /F2 ${idF2} 0 R >>${xo ? ` /XObject << ${xo} >>` : ""} >> /Contents ${idC} 0 R${annots.length ? ` /Annots [${annots.map((a) => a + " 0 R").join(" ")}]` : ""} >>`));
+      objs[kids[i] - 1] = `<< /Type /Page /Parent ${idPages} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${idF1} 0 R /F2 ${idF2} 0 R >>${xo ? ` /XObject << ${xo} >>` : ""} >> /Contents ${idC} 0 R${annots.length ? ` /Annots [${annots.map((a) => a + " 0 R").join(" ")}]` : ""} >>`;
     }
     objs[idPages - 1] = `<< /Type /Pages /Kids [${kids.map((k) => k + " 0 R").join(" ")}] /Count ${kids.length} >>`;
     objs[idCat - 1] = `<< /Type /Catalog /Pages ${idPages} 0 R >>`;
@@ -185,10 +186,57 @@
     if (lg) imagens.set("Logo", lg);
     prog(0.92, "Montando páginas…");
 
-    const total = 1 + opts.grupos.reduce((s, g) => s + Math.ceil(g.produtos.length / POR_PAG), 0);
-    const paginas = [];
     const L = opts.loja;
     const data = new Date().toLocaleDateString("pt-BR");
+    const CW = (W - 2 * M - 2 * 12) / 3, CH = 226, TOPO = 78, LIM = H - 40, SUBH = 22;
+
+    // 1) Planeja as páginas de produtos: cada departamento começa numa página nova; dentro dele,
+    //    cada subcategoria ganha uma faixa de título e começa numa linha nova
+    const plano = []; // [{ grupo, itens: [{ tipo: "sub"|"card", ... }], cont }]
+    const indice = []; // [{ nome, n, pg, sub? }] (pg = índice na lista de páginas de produtos, ajustado depois)
+    for (const g of opts.grupos) {
+      const subs = [];
+      for (const p of g.produtos) { const nome = p.sub || ""; const u = subs[subs.length - 1]; if (u && u.nome === nome) u.produtos.push(p); else subs.push({ nome, produtos: [p] }); }
+      const comSubs = subs.length > 1 || (subs[0] && subs[0].nome && subs[0].nome !== "Sem subcategoria");
+      let pg = null, y = 0;
+      const nova = () => { pg = { grupo: g, itens: [], cont: plano.some((x) => x.grupo === g) }; plano.push(pg); y = TOPO; };
+      nova();
+      indice.push({ nome: g.nome, n: g.produtos.length, pg: plano.length - 1 });
+      for (const sb of subs) {
+        if (comSubs) {
+          if (y + SUBH + CH > LIM) nova();
+          pg.itens.push({ tipo: "sub", nome: sb.nome || "Outros", n: sb.produtos.length, y });
+          indice.push({ nome: sb.nome || "Outros", n: sb.produtos.length, pg: plano.length - 1, sub: true });
+          y += SUBH;
+        }
+        for (let i = 0; i < sb.produtos.length; i += 3) {
+          if (y + CH > LIM) {
+            nova();
+            if (comSubs) { pg.itens.push({ tipo: "sub", nome: (sb.nome || "Outros") + " (continuação)", y }); y += SUBH; }
+          }
+          sb.produtos.slice(i, i + 3).forEach((p, k) => pg.itens.push({ tipo: "card", p, x: M + k * (CW + 12), y }));
+          y += CH + 10;
+        }
+      }
+    }
+
+    // 2) Índice (depois da capa): departamentos e subcategorias com a página, 2 colunas, clicável
+    const temIndice = indice.length > 1;
+    const LH = 14, IDX_TOPO = 96, POR_COL = Math.floor((LIM - IDX_TOPO) / LH), POR_IDX = POR_COL * 2;
+    const nIdx = temIndice ? Math.ceil(indice.length / POR_IDX) : 0;
+    const primeira = 2 + nIdx; // página da 1ª página de produtos
+    const total = 1 + nIdx + plano.length;
+    const paginas = [];
+    const rodape = (pg, num) => {
+      pg.ret(M, H - 34, W - 2 * M, 0.75, COR.line);
+      pg.txt(M, H - 20, 7.5, false, COR.muted, quebrar([L.whatsapp && "WhatsApp " + L.whatsapp, L.aviso].filter(Boolean).join(" · "), 7.5, false, W - 2 * M - 70, 1)[0] || "");
+      pg.direita(W - M, H - 20, 7.5, true, COR.muted, `${num} / ${total}`);
+    };
+    const cabecalho = (pg) => {
+      pg.ret(0, 0, W, 40, COR.navy);
+      pg.txt(M, 25, 12, true, COR.white, L.nome || "Catálogo");
+      pg.direita(W - M, 25, 9, false, "#CFD9EC", quebrar(opts.titulo, 9, false, 260, 1)[0]);
+    };
 
     // Capa
     const capa = new Pagina();
@@ -199,19 +247,18 @@
     capa.centro(340, 30, true, COR.white, "Catálogo de produtos");
     capa.centro(370, 15, false, COR.sky, opts.titulo);
     capa.centro(396, 10, false, "#CFD9EC", `Atualizado em ${data} · ${todos.length.toLocaleString("pt-BR")} produtos`);
-    if (opts.grupos.length > 1) {
-      // Sumário com a página de início de cada departamento (2 colunas se precisar)
-      let pg = 2;
-      const itens = opts.grupos.map((g) => { const it = { nome: g.nome, n: g.produtos.length, pg }; pg += Math.ceil(g.produtos.length / POR_PAG); return it; });
-      const porCol = itens.length > 16 ? Math.ceil(itens.length / 2) : itens.length;
-      const cols = itens.length > 16 ? 2 : 1;
+    if (temIndice) {
+      // Departamentos na capa (clicáveis); o índice completo, com subcategorias, vem na página seguinte
+      const deps = indice.filter((it) => !it.sub);
+      const porCol = deps.length > 16 ? Math.ceil(deps.length / 2) : deps.length, cols = deps.length > 16 ? 2 : 1;
       const larg = cols === 2 ? 240 : 360, x0 = (W - larg * cols - (cols - 1) * 20) / 2;
       capa.txt(x0, 445, 11, true, COR.orange, "DEPARTAMENTOS");
-      itens.slice(0, 40).forEach((it, i) => {
+      capa.direita(x0 + larg * cols + (cols - 1) * 20, 445, 8.5, false, "#CFD9EC", `Índice completo na página 2`);
+      deps.slice(0, 40).forEach((it, i) => {
         const col = Math.floor(i / porCol), x = x0 + col * (larg + 20), y = 468 + (i % porCol) * 16;
-        const nome = quebrar(`${it.nome} (${it.n})`, 9.5, false, larg - 40, 1)[0];
-        capa.txt(x, y, 9.5, false, COR.white, nome);
-        capa.direita(x + larg, y, 9.5, true, COR.white, String(it.pg));
+        capa.txt(x, y, 9.5, false, COR.white, quebrar(`${it.nome} (${it.n})`, 9.5, false, larg - 40, 1)[0]);
+        capa.direita(x + larg, y, 9.5, true, COR.white, String(primeira + it.pg));
+        capa.link(x, y - 11, larg, 15, primeira + it.pg);
       });
     }
     if (L.whatsapp) {
@@ -221,56 +268,68 @@
     if (L.site) capa.centro(808, 9, false, "#CFD9EC", L.site);
     paginas.push(capa);
 
-    // Páginas de produtos
-    const CW = (W - 2 * M - 2 * 12) / 3, CH = 226, TOPO = 88;
-    let num = 1;
-    for (const g of opts.grupos) {
-      for (let i = 0; i < g.produtos.length; i += POR_PAG) {
-        const pg = new Pagina();
-        num++;
-        // Cabeçalho
-        pg.ret(0, 0, W, 40, COR.navy);
-        pg.txt(M, 25, 12, true, COR.white, L.nome || "Catálogo");
-        pg.direita(W - M, 25, 9, false, "#CFD9EC", quebrar(opts.titulo, 9, false, 260, 1)[0]);
-        pg.txt(M, 70, 15, true, COR.navy, quebrar(g.nome, 15, true, 380, 1)[0]);
-        pg.direita(W - M, 70, 9, false, COR.muted, i === 0 ? `${g.produtos.length} produto${g.produtos.length === 1 ? "" : "s"}` : "continuação");
-        // Rodapé
-        pg.ret(M, H - 34, W - 2 * M, 0.75, COR.line);
-        pg.txt(M, H - 20, 7.5, false, COR.muted, quebrar([L.whatsapp && "WhatsApp " + L.whatsapp, L.aviso].filter(Boolean).join(" · "), 7.5, false, W - 2 * M - 70, 1)[0] || "");
-        pg.direita(W - M, H - 20, 7.5, true, COR.muted, `${num} / ${total}`);
-
-        g.produtos.slice(i, i + POR_PAG).forEach((p, k) => {
-          const x = M + (k % 3) * (CW + 12), y = TOPO + Math.floor(k / 3) * (CH + 10);
-          pg.ret(x, y, CW, CH, COR.white, COR.line);
-          const s = 124, ix = x + (CW - s) / 2, iy = y + 10;
-          const im = p.foto && nomeImg.get(p.foto);
-          if (im) pg.img(im, ix, iy, s, s);
-          else { pg.ret(ix, iy, s, s, COR.bg); pg.centro(iy + s / 2 + 14, 40, true, "#9DB5DD", limpar(p.nome).charAt(0).toUpperCase() || "?", ix, s); }
-          if (p.esgotado || p.ultimas || p.oferta) {
-            const t = p.esgotado ? "ESGOTADO" : p.ultimas ? "ÚLTIMAS UNIDADES" : "OFERTA";
-            const bw = largura(t, 6.5, true) + 10;
-            pg.ret(x + 6, y + 6, bw, 13, p.esgotado ? COR.err : COR.orange);
-            pg.txt(x + 11, y + 15.5, 6.5, true, p.esgotado ? COR.white : COR.navy, t);
-          }
-          const linhas = quebrar(p.nome, 9, true, CW - 16, 3);
-          linhas.forEach((ln, j) => pg.txt(x + 8, y + 148 + j * 11, 9, true, COR.text, ln));
-          const meta = [p.marca, p.sku && "Cód. " + p.sku].filter(Boolean).join(" · ");
-          if (meta) pg.txt(x + 8, y + 148 + linhas.length * 11 + 1, 7, false, COR.muted, quebrar(meta, 7, false, CW - 16, 1)[0]);
-          if (p.preco) {
-            // Até 2 linhas de preços extras (ex.: varejo e cartão); com 2, o preço principal sobe um pouco
-            const subs = p.precoSub ? p.precoSub.split(" · ").slice(0, 2).map((t) => quebrar(t, 6.8, false, CW - 16, 1)[0]) : [];
-            const yp = subs.length > 1 ? y + 198 : y + 204;
-            pg.txt(x + 8, yp, 12, true, p.esgotado ? COR.muted : COR.royal, p.preco);
-            if (p.precoNota) pg.txt(x + 11 + largura(p.preco, 12, true), yp, 7, false, COR.muted, p.precoNota);
-            subs.forEach((ln, j) => pg.txt(x + 8, yp + 12 + j * 9, 6.8, false, COR.muted, ln));
-          } else if (p.preco === "") {
-            pg.txt(x + 8, y + 204, 10, true, COR.muted, "Sob consulta");
-          }
-          if (p.url) pg.link(x, y, CW, CH, p.url);
-        });
-        paginas.push(pg);
-      }
+    for (let k = 0; k < nIdx; k++) {
+      const pg = new Pagina();
+      cabecalho(pg);
+      pg.txt(M, 70, 15, true, COR.navy, k ? "Índice (continuação)" : "Índice");
+      const larg = (W - 2 * M - 24) / 2;
+      indice.slice(k * POR_IDX, (k + 1) * POR_IDX).forEach((it, i) => {
+        const col = Math.floor(i / POR_COL), x = M + col * (larg + 24), y = IDX_TOPO + (i % POR_COL) * LH;
+        const pag = primeira + it.pg, xi = it.sub ? x + 12 : x;
+        if (!it.sub) pg.ret(x, y - 10, larg, LH - 1, "#EEF4FF");
+        pg.txt(xi + 3, y, it.sub ? 8.5 : 9, !it.sub, it.sub ? COR.text : COR.navy, quebrar(`${it.nome} (${it.n})`, it.sub ? 8.5 : 9, !it.sub, larg - (xi - x) - 40, 1)[0]);
+        pg.direita(x + larg - 3, y, it.sub ? 8.5 : 9, !it.sub, it.sub ? COR.muted : COR.navy, String(pag));
+        pg.link(x, y - 10, larg, LH - 1, pag);
+      });
+      rodape(pg, 2 + k);
+      paginas.push(pg);
     }
+
+    // 3) Páginas de produtos
+    plano.forEach((pl, idx) => {
+      const pg = new Pagina(), g = pl.grupo;
+      cabecalho(pg);
+      pg.txt(M, 64, 15, true, COR.navy, quebrar(g.nome, 15, true, 380, 1)[0]);
+      pg.direita(W - M, 64, 9, false, COR.muted, pl.cont ? "continuação" : `${g.produtos.length} produto${g.produtos.length === 1 ? "" : "s"}`);
+      rodape(pg, primeira + idx);
+      for (const it of pl.itens) {
+        if (it.tipo === "sub") {
+          pg.ret(M, it.y, W - 2 * M, SUBH - 6, COR.navy);
+          pg.ret(M, it.y, 4, SUBH - 6, COR.orange);
+          pg.txt(M + 12, it.y + 11.5, 9.5, true, COR.white, quebrar(it.nome, 9.5, true, W - 2 * M - 90, 1)[0]);
+          if (it.n) pg.direita(W - M - 8, it.y + 11.5, 8, false, "#CFD9EC", `${it.n} produto${it.n === 1 ? "" : "s"}`);
+          continue;
+        }
+        const { p, x, y } = it;
+        pg.ret(x, y, CW, CH, COR.white, COR.line);
+        const s = 124, ix = x + (CW - s) / 2, iy = y + 10;
+        const im = p.foto && nomeImg.get(p.foto);
+        if (im) pg.img(im, ix, iy, s, s);
+        else { pg.ret(ix, iy, s, s, COR.bg); pg.centro(iy + s / 2 + 14, 40, true, "#9DB5DD", limpar(p.nome).charAt(0).toUpperCase() || "?", ix, s); }
+        if (p.esgotado || p.ultimas || p.oferta) {
+          const t = p.esgotado ? "ESGOTADO" : p.ultimas ? "ÚLTIMAS UNIDADES" : "OFERTA";
+          const bw = largura(t, 6.5, true) + 10;
+          pg.ret(x + 6, y + 6, bw, 13, p.esgotado ? COR.err : COR.orange);
+          pg.txt(x + 11, y + 15.5, 6.5, true, p.esgotado ? COR.white : COR.navy, t);
+        }
+        const linhas = quebrar(p.nome, 9, true, CW - 16, 3);
+        linhas.forEach((ln, j) => pg.txt(x + 8, y + 148 + j * 11, 9, true, COR.text, ln));
+        const meta = [p.marca, p.sku && "Cód. " + p.sku].filter(Boolean).join(" · ");
+        if (meta) pg.txt(x + 8, y + 148 + linhas.length * 11 + 1, 7, false, COR.muted, quebrar(meta, 7, false, CW - 16, 1)[0]);
+        if (p.preco) {
+          // Até 2 linhas de preços extras (ex.: varejo e cartão); com 2, o preço principal sobe um pouco
+          const subs = p.precoSub ? p.precoSub.split(" · ").slice(0, 2).map((t) => quebrar(t, 6.8, false, CW - 16, 1)[0]) : [];
+          const yp = subs.length > 1 ? y + 198 : y + 204;
+          pg.txt(x + 8, yp, 12, true, p.esgotado ? COR.muted : COR.royal, p.preco);
+          if (p.precoNota) pg.txt(x + 11 + largura(p.preco, 12, true), yp, 7, false, COR.muted, p.precoNota);
+          subs.forEach((ln, j) => pg.txt(x + 8, yp + 12 + j * 9, 6.8, false, COR.muted, ln));
+        } else if (p.preco === "") {
+          pg.txt(x + 8, y + 204, 10, true, COR.muted, "Sob consulta");
+        }
+        if (p.url) pg.link(x, y, CW, CH, p.url);
+      }
+      paginas.push(pg);
+    });
     const blob = await escrever(paginas, imagens, `${L.nome || "Catálogo"} · ${opts.titulo}`);
     prog(1, "Pronto");
     return { blob, paginas: paginas.length };

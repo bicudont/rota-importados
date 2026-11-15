@@ -972,7 +972,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/js/config.js?v=23"></script>
-  <script src="/js/catalogo-pdf.js?v=7"></script>
+  <script src="/js/catalogo-pdf.js?v=8"></script>
   <script>
   (() => {
     const $ = (s, el = document) => el.querySelector(s);
@@ -3388,7 +3388,7 @@
       }
       return {
         nome: p.name, marca: p.brand || "", sku: p.sku, preco, precoNota, precoSub,
-        oferta: comPrecos() && emOfertaExp(p), esgotado: p.stock === 0, ultimas: p.stock > 0 && p.stock <= 3,
+        oferta: comPrecos() && emOfertaExp(p), sub: p.subsector || "", esgotado: p.stock === 0, ultimas: p.stock > 0 && p.stock <= 3,
         foto: p._fotos.length ? fotoURL(p._fotos[0]) : null,
         url: location.origin + "/#/produto/" + encodeURIComponent(p.sku),
       };
